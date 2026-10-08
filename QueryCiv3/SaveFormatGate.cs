@@ -245,9 +245,11 @@ namespace QueryCiv3 {
 
 		// BLOCKER: spec 28 section 5.1's "minor version < 4 (world/tile blocks)" row
 		// has two effects, and only the size half is ported. The row reads "skip 8 extra
-		// bytes and omit one sub-field"; the second effect is the sub-field the row says a
-		// minor < 4 save omits - the world/tile block's field that the eight skipped bytes
-		// carry, which the loader therefore never reads into its model. The size half is
+		// bytes and omit one sub-field"; the second effect is the sub-field the row refers
+		// to. The row's wording is oriented from the modern reader's side: in the file a
+		// minor < 4 save CARRIES the extra sub-field in those eight bytes and a modern save
+		// omits it (the block advances 0x108 rather than 0x100). It is the field those eight
+		// extra bytes carry, which the loader never reads into its model. The size half is
 		// implemented as <see cref="WorldTileBlockLengthBeforeMinor4"/>: move_game_data at
 		// 0x590030 copies the block's 0x100 bytes (0x40 dwords, 00590000.c:541-552) and
 		// then advances the cursor 0x108 instead of 0x100 for minor < 4 (00590000.c:558-560).

@@ -257,9 +257,13 @@ public class SaveFormatGateTests {
 
 	// ---- the per-field version rules, measured against the cached saves ----
 
-	[Fact]
+	[SkippableFact]
 	public void EveryCachedSaveCarriesItsVersionAtTheLiteralOffsets() {
-		foreach (string path in CachedSavePaths()) {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+		List<string> saves = CachedSavePaths();
+		Skip.If(saves.Count == 0, "No cached save fixtures are present.");
+
+		foreach (string path in saves) {
 			byte[] bytes = Util.ReadFile(path);
 
 			// The prologue, the NUL and the writer's marker, then the two version dwords.
@@ -303,9 +307,13 @@ public class SaveFormatGateTests {
 		Assert.Equal(expectedBodyOffset + 532, SaveFormatGate.EmbeddedBicStartOffset(header));
 	}
 
-	[Fact]
+	[SkippableFact]
 	public void EveryCachedSavesDerivedBodyOffsetPointsAtItsEmbeddedBic() {
-		foreach (string path in CachedSavePaths()) {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+		List<string> saves = CachedSavePaths();
+		Skip.If(saves.Count == 0, "No cached save fixtures are present.");
+
+		foreach (string path in saves) {
 			byte[] bytes = Util.ReadFile(path);
 			SaveHeader header = SaveFormatGate.Check(bytes);
 			Assert.Equal(24, header.MajorVersion);
@@ -365,9 +373,12 @@ public class SaveFormatGateTests {
 		Assert.Equal(0x100, nineteen.WorldTileBlockLength);
 	}
 
-	[Fact]
+	[SkippableFact]
 	public void MinorVersionBeforeFourReadsTheEightByteLongerBlockBeforeThePerPlayerArray() {
-		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/12345.SAV"));
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+		string savePath = PathUtils.getDataPath("saves/12345.SAV");
+		Skip.If(!File.Exists(savePath), "The sample save fixture is not present.");
+		byte[] modern = Util.ReadFile(savePath);
 		List<string> expected = Snapshot(ParseSave(modern));
 
 		// The same save as a format 24.3 file: the version pair in a header that is
@@ -383,9 +394,12 @@ public class SaveFormatGateTests {
 		Assert.Equal(expected, Snapshot(ParseSave(older)));
 	}
 
-	[Fact]
+	[SkippableFact]
 	public void MinorVersionBeforeFourCityRecordStoresNoDateSubRecord() {
-		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/multi-turn-deals/MultiTurnDeal_Save_A.SAV"));
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+		string savePath = PathUtils.getDataPath("saves/multi-turn-deals/MultiTurnDeal_Save_A.SAV");
+		Skip.If(!File.Exists(savePath), "The multi-turn-deal save fixture is not present.");
+		byte[] modern = Util.ReadFile(savePath);
 		List<string> expected = Snapshot(ParseSave(modern));
 
 		byte[] older = RestateHeader(modern, 24, 3);
@@ -401,9 +415,12 @@ public class SaveFormatGateTests {
 		Assert.Equal(expected, Snapshot(ParseSave(older)));
 	}
 
-	[Fact]
+	[SkippableFact]
 	public void MajorVersionBeforeTwentyCityRecordHasNoFormat20FieldOrTail() {
-		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/unit-availability/Middle Ages Scenario Abbasids, 843 AD.SAV"));
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+		string savePath = PathUtils.getDataPath("saves/unit-availability/Middle Ages Scenario Abbasids, 843 AD.SAV");
+		Skip.If(!File.Exists(savePath), "The unit-availability save fixture is not present.");
+		byte[] modern = Util.ReadFile(savePath);
 		List<string> expected = Snapshot(ParseSave(modern));
 
 		// This save's format-20 field really is non-zero for some cities, so the rule is
@@ -451,9 +468,10 @@ public class SaveFormatGateTests {
 	}
 
 	private static List<string> CachedSavePaths() {
-		List<string> paths = Directory.EnumerateFiles(PathUtils.getDataPath("saves"), "*.SAV", SearchOption.AllDirectories).ToList();
-		Assert.NotEmpty(paths);
-		return paths;
+		// Deliberately does not assert non-emptiness: these fixtures are downloaded, not
+		// committed, so the callers skip with a reason on a cold checkout rather than
+		// failing there (and hard-failing on CI, where no Civ3 install exists at all).
+		return Directory.EnumerateFiles(PathUtils.getDataPath("saves"), "*.SAV", SearchOption.AllDirectories).ToList();
 	}
 
 	/// <summary>
