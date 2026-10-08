@@ -57,6 +57,11 @@ namespace C7GameData.Save {
 		// The number of turns the player has been researching the current tech.
 		public int turnsResearched = 0;
 
+		// The number of free techs this player has remaining. Nullable so that
+		// the value is omitted from saved games when it is zero, which keeps
+		// saves that predate the field loadable.
+		public int? freeTechsRemaining;
+
 		// If the government is anarchy (or a govt with the transition bool set
 		// to true), the turn number at which switching governments is allowed.
 		public int inAnarchyUntilTurn = 0;
@@ -113,6 +118,9 @@ namespace C7GameData.Save {
 			player.SetCurrentlyResearchedTech(currentlyResearchedTech);
 			player.beakers = beakers;
 			player.turnsResearched = turnsResearched;
+			// Set after the researched tech, because the setter spends a free
+			// tech when one is available.
+			player.freeTechsRemaining = freeTechsRemaining ?? 0;
 
 			foreach (ID techId in researchQueue) {
 				Tech tech = techs.Find(x => x.id == techId);
@@ -153,6 +161,7 @@ namespace C7GameData.Save {
 			gold = player.gold;
 			beakers = player.beakers;
 			turnsResearched = player.turnsResearched;
+			freeTechsRemaining = player.freeTechsRemaining == 0 ? null : player.freeTechsRemaining;
 			inAnarchyUntilTurn = player.inAnarchyUntilTurn;
 			governmentId = player.government.id;
 
