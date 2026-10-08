@@ -119,6 +119,7 @@ namespace EngineTests.AI.UnitAI {
 			// add a settler whose destination is the one known tile
 			MapUnit settler = MakeLandUnit();
 			settler.unitType.name = "Settler";
+			settler.unitType.aiStrategies.Add(SaveUnitPrototype.AIStrategy.Settle);
 			SettlerAIData data = new();
 			data.destination = startTile;
 			settler.currentAI = new SettlerAI(data);

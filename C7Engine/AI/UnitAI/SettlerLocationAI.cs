@@ -22,7 +22,7 @@ namespace C7Engine {
 			List<MapUnit> playerUnits = player.units;
 			// TODO: handle settling other continents
 			IEnumerable<Tile> candidates = player.tileKnowledge.AllKnownTiles().Where(t => !IsInvalidCityLocation(t) && t.continent == start.continent);
-			Dictionary<Tile, float> scores = AssignTileScores(start, player, candidates, playerUnits.FindAll(u => u.unitType.name == "Settler"), excludedTiles);
+			Dictionary<Tile, float> scores = AssignTileScores(start, player, candidates, playerUnits.FindAll(u => u.unitType.isAISettler), excludedTiles);
 			return scores;
 		}
 
