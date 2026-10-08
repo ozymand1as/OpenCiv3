@@ -104,5 +104,11 @@ namespace C7Engine.Pathing {
 		public bool ConnectedToCapital(Player p, City c) {
 			return segments[p][c] == segments[p][p.cities[0]];
 		}
+
+		// Like ConnectedToCapital, but compares against an explicit capital
+		// city rather than assuming the player's first city is the capital.
+		public bool ConnectedToCapital(Player p, City c, City capital) {
+			return segments[p][c] == segments[p][capital];
+		}
 	}
 }

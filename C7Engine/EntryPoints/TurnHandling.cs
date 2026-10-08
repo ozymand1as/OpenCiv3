@@ -148,30 +148,28 @@ namespace C7Engine {
 			if (gameData.gameOver)
 				return; // Game is already over
 
-			List<Tuple<Player, IVictory>> winners = [];
+			List<Player> candidates = gameData.players
+				.Where(p => !p.isBarbarians && !p.defeated)
+				.ToList();
 
-			foreach (Player player in gameData.players) {
-				if (player.isBarbarians || player.defeated)
-					continue;
-
-				foreach (IVictory victory in gameData.victories) {
+			// Civ3 evaluates the conditions in a fixed order and awards only the
+			// first one satisfied by anyone, so this loop is condition-major. See
+			// re/specs/25_victory_score.md section 2.0 for the order - which the
+			// registration order in SaveGame.ConvertVictoryConditions matches -
+			// and section 5.4 for each condition's tie-break.
+			foreach (IVictory victory in gameData.victories) {
+				List<Player> satisfied = [];
+				foreach (Player player in candidates) {
 					VictoryStatus status = victory.Evaluate(player, gameData);
 					if (victory.HasVictory(status)) {
-						winners.Add(new Tuple<Player, IVictory>(player, victory));
-						break;
+						satisfied.Add(player);
 					}
 				}
-			}
 
-			if (winners.Count == 1) {
-				DeclareVictory(winners[0].Item1, winners[0].Item2, gameData);
-			} else if (winners.Count > 1) {
-				var topScoring = winners.OrderByDescending(pv => {
-					var player = pv.Item1;
-					HistTurnRecord lastTurn = gameData.history[player.id.ToString()].LastOrDefault();
-					return lastTurn?.Score ?? 0;
-				}).First();
-				DeclareVictory(topScoring.Item1, topScoring.Item2, gameData);
+				if (satisfied.Count > 0) {
+					DeclareVictory(victory.ChooseWinner(satisfied, gameData), victory, gameData);
+					return;
+				}
 			}
 		}
 

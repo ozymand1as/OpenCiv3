@@ -1,7 +1,11 @@
+using System.Collections.Generic;
+
 namespace C7GameData;
 
 public class VictoryConditions {
-	// TODO: default/preferred victory conditions
+	// The flags Civ3 reads from the BIQ GAME section. The shipped "civ3"
+	// ruleset turns on the five standard conditions; a scenario or save
+	// overrides every one of these from its own GAME section.
 	public bool AllowDominationVictory { get; set; }
 	public bool AllowSpaceRaceVictory { get; set; }
 	public bool AllowDiplomaticVictory { get; set; }
@@ -14,4 +18,23 @@ public class VictoryConditions {
 	public bool VictoryLocations { get; set; }
 	public bool CaptureTheFlag { get; set; }
 	public bool ReverseCaptureTheFlag { get; set; }
+
+	// The numeric victory parameters from the BIQ GAME section. Civ3 installs
+	// the defaults below when a BIQ stores 0, so a ruleset that leaves them
+	// out still behaves like the shipped game.
+	public int DominationTerrain { get; set; } = 66;
+	public int DominationPopulation { get; set; } = 66;
+	public int OneCityCultureWin { get; set; } = 20000;
+	public int AllCitiesCultureWin { get; set; } = 100000;
+	public int VictoryPointLimit { get; set; } = 50000;
+	public int WonderCost { get; set; } = 10;
+	public int DefeatingOpposingUnitCost { get; set; } = 5;
+	public int AdvancementCost { get; set; } = 5;
+	public int CityConquestPopulation { get; set; } = 100;
+	public int VictoryPointScoring { get; set; } = 25;
+	public int CapturingSpecialUnit { get; set; } = 1000;
+
+	// How many of each spaceship part a player must build to launch. Civ3's
+	// shipped rules require one of each of the ten parts.
+	public List<int> SpaceshipPartsNeeded { get; set; } = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 }

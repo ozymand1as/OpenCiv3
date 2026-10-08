@@ -88,6 +88,14 @@ terrain.river = TERRAIN .. "mtnRivers.pcx"
 
 terrain.river_delta = TERRAIN .. "deltaRivers.pcx"
 
+-- Vegetation overlays for flood plain tiles, composited over the desert
+-- terrain graphics. The sheet holds sixteen 128x64 variants in a 4x4 grid,
+-- indexed by which of the tile's edges the river runs along.
+terrain.flood_plain = {
+  path = TERRAIN .. "floodplains.pcx",
+  shadows = false,
+}
+
 terrain.tnt = TERRAIN .. "tnt.pcx"
 
 terrain.jungle = {

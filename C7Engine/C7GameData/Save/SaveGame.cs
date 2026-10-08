@@ -172,15 +172,34 @@ namespace C7GameData.Save {
 			}
 		}
 
-		private void ConvertVictoryConditions(GameData data) {
-			VictoryConditions conditions = data.victoryConditions;
+		internal static void ConvertVictoryConditions(GameData data) {
+			VictoryConditions conditions = data.victoryConditions ?? new VictoryConditions();
 
-			// TODO: add victory options to data.victories based on data.victoryConditions
-			// NOTE: Order matters
+			// The order of the conditions is the order in which the original
+			// awards them when more than one is satisfied in the same turn:
+			// conquest, space race, domination, cultural, then diplomatic. Each
+			// is gated by the matching BIQ flag.
 
 			// There is no "score victory", but we can treat score as if it were, so
 			// we can render the current score alongside the state of other conditions
 			data.victories.Add(new ScoreVictory());
+
+			if (conditions.AllowConquestVictory)
+				data.victories.Add(new ConquestVictory());
+			if (conditions.AllowSpaceRaceVictory)
+				data.victories.Add(new SpaceRaceVictory(conditions.SpaceshipPartsNeeded));
+			if (conditions.AllowDominationVictory)
+				data.victories.Add(new DominationVictory(conditions.DominationTerrain, conditions.DominationPopulation));
+			if (conditions.AllowCulturalVictory)
+				data.victories.Add(new CulturalVictory(conditions.OneCityCultureWin, conditions.AllCitiesCultureWin));
+			if (conditions.AllowDiplomaticVictory)
+				data.victories.Add(new DiplomaticVictory());
+
+			// TODO (re/specs/25_victory_score.md section 2.7): wonder victory
+			// (type 7) is deliberately deferred. Civ3 awards it once every Great
+			// Wonder has been built, to the highest-scoring (or highest
+			// victory-point) player, so VictoryConditions.AllowWonderVictory is
+			// imported and then ignored here.
 
 			// TODO: Does the original have a switch to have the game never end?
 			// Always add a time limit

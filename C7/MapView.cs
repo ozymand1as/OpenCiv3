@@ -354,6 +354,53 @@ public partial class MarshLayer : LooseLayer {
 	}
 }
 
+public partial class FloodPlainLayer : LooseLayer {
+	public static readonly Vector2 floodPlainSpriteSize = new Vector2(128, 64);
+
+	private ImageTexture floodPlainTexture;
+
+	public FloodPlainLayer() {
+		try {
+			floodPlainTexture = TextureLoader.Load("terrain.flood_plain");
+		} catch (Exception e) {
+			// Standalone mode has no replacement for the flood plain
+			// vegetation art yet. Draw flood plains as their bare base
+			// terrain instead of failing to render the map at all.
+			Log.Warning($"No flood plain vegetation texture: {e.Message}");
+		}
+	}
+
+	public override void drawObject(LooseView looseView, GameData gameData, Tile tile, Vector2 tileCenter) {
+		if (floodPlainTexture == null || tile.baseTerrainType.Key != "flood plain") {
+			return;
+		}
+
+		// Civ3's flood plain vegetation is a 4x4 sheet of 128x64 cells, one for
+		// each combination of the tile's four river edges. Tile picks the cell
+		// from the tile's own edge bits, which place each edge's vegetation in
+		// its own quadrant of the tile.
+		int index = tile.FloodPlainOverlayIndex();
+
+		int column = index % 4;
+		int row = index / 4;
+		Rect2 spriteRectangle = new Rect2(column * floodPlainSpriteSize.X, row * floodPlainSpriteSize.Y, floodPlainSpriteSize);
+
+		// Civ3 draws the vegetation from the same call as the river segments,
+		// so it is anchored on the tile's own cell and has no offset of its own.
+		// The terrain layer's (0, -cellSize.Y) shift belongs to that layer alone;
+		// inheriting it would leave the vegetation half a cell from the water.
+		//
+		// This is the tile's cell origin, which is not the rectangle RiverLayer
+		// uses: RiverLayer centres on the four-tile junction east of the tile
+		// (riverCenterOffset = half a cell east), and whether its texture-index
+		// selection compensates for that is unresolved. The two layers therefore
+		// differ by that offset, and whether the vegetation lines up with the
+		// drawn water still needs a look at the running game.
+		Rect2 screenTarget = new Rect2(tileCenter - (float)0.5 * floodPlainSpriteSize, floodPlainSpriteSize);
+		looseView.DrawTextureRectRegion(floodPlainTexture, screenTarget, spriteRectangle);
+	}
+}
+
 public partial class RiverLayer : LooseLayer {
 	public static readonly Vector2 riverSize = new Vector2(128, 64);
 	public static readonly Vector2 riverCenterOffset = new Vector2(riverSize.X / 2, 0);
@@ -691,6 +738,10 @@ public partial class MapView : Node2D {
 		// be drawn behind cities (which are child nodes).
 		LooseView terrainView = new(this);
 		terrainView.layers.Add(new TerrainLayer());
+		terrainView.layers.Add(new FloodPlainLayer());
+		// Rivers are drawn over the flood plain vegetation (Civ3 does the same),
+		// so the water stays visible crossing a flood plain. Forests, jungles and
+		// marshes still draw over the rivers.
 		terrainView.layers.Add(new RiverLayer());
 		terrainView.layers.Add(new ForestLayer());
 		terrainView.layers.Add(new MarshLayer());

@@ -32,6 +32,11 @@ namespace C7GameData {
 		public GreatWonderProperties? greatWonderProperties;
 
 		public bool isSmallWonder;
+
+		// The slot of the spaceship part this building completes, or -1 when the
+		// building is not a spaceship part. Completing it adds to the owner's
+		// Player.spaceshipPartsBuilt, which the space-race victory reads.
+		public int spaceshipPart { get; set; } = -1;
 		public bool isCenterOfEmpire;
 		public bool increasesLuxuryTrade;
 		public bool reducesCorruption;
@@ -109,6 +114,7 @@ namespace C7GameData {
 			shieldCost = building.shieldCost;
 			populationCost = building.populationCost;
 			isSmallWonder = building.isSmallWonder;
+			spaceshipPart = building.spaceshipPart;
 			culturePerTurn = building.culturePerTurn;
 			maintenanceCost = building.maintenanceCost;
 			iconRowIndex = building.iconRowIndex;

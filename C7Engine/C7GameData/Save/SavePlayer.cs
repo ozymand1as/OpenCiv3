@@ -84,6 +84,9 @@ namespace C7GameData.Save {
 
 		public string alliance;
 
+		// The spaceship parts this player has built, in rules order.
+		public List<int> spaceshipPartsBuilt = new();
+
 		// Used when importing from .biq, to make it easier to distinguish barbarians from other players.
 		// It's not meant to be saved in the json.
 		[JsonIgnore]
@@ -116,6 +119,7 @@ namespace C7GameData.Save {
 				inAnarchyUntilTurn = inAnarchyUntilTurn,
 				government = governments.Find(x => x.id == governmentId),
 				rules = rules,
+				spaceshipPartsBuilt = spaceshipPartsBuilt is not null ? new List<int>(spaceshipPartsBuilt) : new(),
 			};
 			foreach (TileLocation tile in tileKnowledge) {
 				player.tileKnowledge.AddTileToKnown(map.tileAt(tile.X, tile.Y));
@@ -185,6 +189,7 @@ namespace C7GameData.Save {
 			freeTechsRemaining = player.freeTechsRemaining == 0 ? null : player.freeTechsRemaining;
 			inAnarchyUntilTurn = player.inAnarchyUntilTurn;
 			governmentId = player.government.id;
+			spaceshipPartsBuilt = new List<int>(player.spaceshipPartsBuilt);
 
 			foreach (KeyValuePair<ID, PlayerRelationship> keyValuePair in player.playerRelationships) {
 				playerRelationships.Add(keyValuePair.Key.ToString(), keyValuePair.Value);

@@ -106,7 +106,9 @@ public partial class PlayerSetup : Control {
 	}
 
 	private void AddRules() {
-		victoryConditions = new VictoryConditions();
+		// Start from the conditions the ruleset ships with, which a scenario
+		// may have overridden.
+		victoryConditions = save.VictoryConditions;
 		rulesContainer.Columns = 2;
 		rulesContainer.AddThemeConstantOverride("v_separation", 0);
 

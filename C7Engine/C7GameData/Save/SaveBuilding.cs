@@ -47,6 +47,10 @@ namespace C7GameData.Save {
 		public string requiredBuilding;
 		public GreatWonderProperties? greatWonderProperties;
 		public bool isSmallWonder;
+
+		// The slot of the spaceship part this building completes, or -1 when the
+		// building is not a spaceship part.
+		public int spaceshipPart = -1;
 		public int culturePerTurn;
 		public int contentFacesInCity;
 		public double combatDefenseBonus;
