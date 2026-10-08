@@ -21,6 +21,9 @@ namespace C7GameData.Save {
 			ProvidesWalls,
 			CanOnlyBeBuiltInTowns,
 			TreasuryEarnsInterest,
+			AllowsWaterTrade,
+			AllowsAirTrade,
+			SafeSeaTravel,
 		}
 
 		public class GreatWonderProperties {

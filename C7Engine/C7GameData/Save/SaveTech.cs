@@ -10,6 +10,8 @@ namespace C7GameData.Save {
 			BonusTechToFirstCivThatResearches,
 			EnablesBridges,
 			DoublesWealthProduction,
+			EnablesTradeOverSea,
+			EnablesTradeOverOcean,
 		}
 
 		public ID id;
@@ -46,6 +48,8 @@ namespace C7GameData.Save {
 				BonusTechToFirstCivThatResearches = this.flags.Contains(Flag.BonusTechToFirstCivThatResearches),
 				EnablesBridges = this.flags.Contains(Flag.EnablesBridges),
 				DoublesWealthProduction = this.flags.Contains(Flag.DoublesWealthProduction),
+				EnablesTradeOverSea = this.flags.Contains(Flag.EnablesTradeOverSea),
+				EnablesTradeOverOcean = this.flags.Contains(Flag.EnablesTradeOverOcean),
 				EraCivilopediaName = this.EraCivilopediaName,
 				SmallIconPath = this.SmallIconPath,
 				X = this.X,

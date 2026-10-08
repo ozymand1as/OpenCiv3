@@ -307,6 +307,10 @@ namespace C7GameData {
 			} else if (producedItem is Building building) {
 				AddBuilding(building);
 
+				// A new harbour or airport can open trade routes, so the cached
+				// network is no longer valid.
+				gameData.InvalidateCachedTradeNetwork();
+
 				// If we completed a great wonder, mark it as completed so no
 				// other civ can build it. If any other cities are building the
 				// wonder then change production to the most expensive option,

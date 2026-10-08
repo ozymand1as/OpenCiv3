@@ -45,6 +45,15 @@ namespace C7GameData {
 		public bool providesVeteranGroundUnits;
 		public bool treasuryEarnsInterest;
 
+		// Whether the building lets its city send and receive trade over the
+		// water (a Harbour) or through the air (an Airport).
+		public bool allowsWaterTrade;
+		public bool allowsAirTrade;
+
+		// Whether the building is a wonder that lets its owner's sea trade
+		// enter Sea tiles without the relevant advance (the Great Lighthouse).
+		public bool safeSeaTravel;
+
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
 
@@ -96,6 +105,9 @@ namespace C7GameData {
 			onlyUsefulInTowns = building.flags.Contains(SaveBuilding.Flag.CanOnlyBeBuiltInTowns);
 			providesVeteranGroundUnits = building.flags.Contains(SaveBuilding.Flag.VeteranGroundUnits);
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
+			allowsWaterTrade = building.flags.Contains(SaveBuilding.Flag.AllowsWaterTrade);
+			allowsAirTrade = building.flags.Contains(SaveBuilding.Flag.AllowsAirTrade);
+			safeSeaTravel = building.flags.Contains(SaveBuilding.Flag.SafeSeaTravel);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();

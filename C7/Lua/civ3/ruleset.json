@@ -8469,7 +8469,8 @@
       "flags": [
         "mustBeCoastal",
         "veteranSeaUnits",
-        "increasesFoodInWater"
+        "increasesFoodInWater",
+        "allowsWaterTrade"
       ],
       "traits": [
         "militaristic",
@@ -8522,6 +8523,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 2,
       "iconRowIndex": 27,
+      "flags": [
+        "allowsAirTrade"
+      ],
       "traits": [
         "militaristic",
         "commercial"
@@ -8619,7 +8623,8 @@
       "iconRowIndex": 33,
       "renderedObsoleteBy": "tech-42",
       "flags": [
-        "mustBeCoastal"
+        "mustBeCoastal",
+        "safeSeaTravel"
       ],
       "traits": [
         "commercial",
@@ -11711,6 +11716,9 @@
       "smallIconPath": "Art\\tech chooser\\Icons\\03-Astronomy-small.pcx",
       "x": 526,
       "y": 429,
+      "flags": [
+        "enablesTradeOverSea"
+      ],
       "prerequisites": [
         "tech-30"
       ]
@@ -11768,6 +11776,9 @@
       "smallIconPath": "Art\\tech chooser\\Icons\\52-navigation-small.pcx",
       "x": 766,
       "y": 361,
+      "flags": [
+        "enablesTradeOverOcean"
+      ],
       "prerequisites": [
         "tech-33"
       ]
@@ -11839,6 +11850,9 @@
       "smallIconPath": "Art\\tech chooser\\Icons\\37-Magnetism-small.pcx",
       "x": 786,
       "y": 533,
+      "flags": [
+        "enablesTradeOverOcean"
+      ],
       "prerequisites": [
         "tech-38"
       ]

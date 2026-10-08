@@ -865,6 +865,12 @@ namespace C7GameData {
 			// trigger callback for techs that enable improvements to redraw map
 			TechImprovementCallback(this, tech);
 
+			// A trade advance can open (or, once the Great Lighthouse is obsolete,
+			// close) sea routes, so the cached network is no longer valid.
+			if (tech.EnablesTradeOverSea || tech.EnablesTradeOverOcean) {
+				gameData.InvalidateCachedTradeNetwork();
+			}
+
 			SetCurrentlyResearchedTech(null);
 
 			// remove completed tech from the current research queue
