@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using C7Engine;
@@ -21,7 +22,6 @@ namespace EngineTests.GameData;
 /// fails here.
 /// </summary>
 public class CorruptionTest : IClassFixture<SaveGameFixture> {
-	private readonly SaveGameFixture fixture;
 	private readonly C7GameData.GameData rules;
 
 	private const int MapSpan = 100;
@@ -30,7 +30,6 @@ public class CorruptionTest : IClassFixture<SaveGameFixture> {
 	private const int MaxDistance = (MapSpan + MapSpan) / 4;
 
 	public CorruptionTest(SaveGameFixture fixture) {
-		this.fixture = fixture;
 		rules = fixture.saveGame.ToGameData(fixture.behaviors);
 	}
 
@@ -48,6 +47,58 @@ public class CorruptionTest : IClassFixture<SaveGameFixture> {
 
 		Assert.True(unconnected > connected,
 			$"a city with no trade route to the capital should lose more commerce, but got {unconnected} vs {connected}");
+	}
+
+	[Fact]
+	public void CapitalIsFreeOfCorruptionBecauseItsDecorruptionPointsCapTheLoss() {
+		TestEmpire empire = MakeEmpire("Communism", cityX: 28);
+		AddRoadPath(empire);
+		empire.player.DoCorruptionCalculations(empire.gameData);
+
+		// Under Communism the capital still has a nonzero rank term, so only
+		// the capital's ten decorruption points (which force the cap to zero)
+		// can keep it corruption free.
+		Assert.Equal(0f, empire.capital.corruption);
+	}
+
+	[Fact]
+	public void CourthouseAddsAFractionOfTheMapOptimalCityCountToTheOptimalCityNumber() {
+		TestEmpire empire = MakeEmpire("Republic", cityX: 28);
+		AddRoadPath(empire);
+		empire.city.constructed_buildings.Add(new CityBuilding { building = FindBuilding("Courthouse") });
+		empire.player.DoCorruptionCalculations(empire.gameData);
+
+		// One decorruption point raises the optimal city number by a quarter of
+		// the map's optimal city count, and halves the distance term once.
+		int expectedNopt = Math.Max(1, empire.player.GetAdjustedOptimalCityNumber(empire.gameData))
+				+ empire.gameData.map.optimalNumberOfCities / 4;
+		int clampedDistance = Math.Max(2,
+			Math.Min(empire.capitalTile.RankDistanceTo(empire.cityTile), MaxDistance));
+		int halvedDistance = (clampedDistance + 1) / 2;
+		float expected = (float)halvedDistance / MaxDistance
+				+ empire.city.rankIndex / (2f * expectedNopt);
+
+		Assert.Equal(expected, empire.city.corruption, 5);
+	}
+
+	[Fact]
+	public void CourthouseReducesCorruption() {
+		TestEmpire empire = MakeEmpire("Despotism", cityX: 28);
+		AddRoadPath(empire);
+		empire.player.DoCorruptionCalculations(empire.gameData);
+		float withoutCourthouse = empire.city.corruption;
+
+		empire.city.constructed_buildings.Add(new CityBuilding { building = FindBuilding("Courthouse") });
+		empire.player.DoCorruptionCalculations(empire.gameData);
+		float withCourthouse = empire.city.corruption;
+
+		Assert.True(withCourthouse < withoutCourthouse,
+			$"a courthouse should reduce corruption, but got {withCourthouse} vs {withoutCourthouse}");
+	}
+
+	private Building FindBuilding(string name) {
+		return rules.Buildings.Find(b => b.name == name)
+			?? throw new System.InvalidOperationException($"the shipped ruleset has no building named {name}");
 	}
 
 	// The controlled empire the corruption tests run against. Distances and the

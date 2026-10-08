@@ -789,14 +789,50 @@ namespace C7GameData {
 			return result;
 		}
 
-		// See https://forums.civfanatics.com/threads/everything-about-corruption-c3c-edition.76619/
-		private float CalculateDistanceCorruption(GameData gameData, int numAntiCorruptionBuildings) {
-			float maxD = (location.map.numTilesWide + location.map.numTilesTall) / 4;
+		// Whether an improvement has been made obsolete by a technology the
+		// owner knows. Obsolete improvements no longer count towards
+		// corruption reduction.
+		private bool IsObsoleteForOwner(Building building) {
+			return building.renderedObsoleteBy != null
+					&& owner.knownTechs.Contains(building.renderedObsoleteBy.id);
+		}
 
-			float distanceToPalace = owner.citiesWithCorruptionWonders.Min(x => location.RankDistanceTo(x.location));
-			if (owner.government.corruptionType == Government.CorruptionType.Communal) {
-				distanceToPalace = maxD / 4;
+		// Civ3's "decorruption points" for this city. They raise the effective
+		// optimal city number and set the cap on how much of a yield the city
+		// can lose. See re/specs/14_commerce.md section 2, phase 1.
+		private int DecorruptionPoints() {
+			List<CityBuilding> buildings = GetBuildings();
+
+			// One point per non-obsolete corruption-reducing improvement type
+			// (the Courthouse and Police Station in the shipped rules).
+			int points = buildings
+				.Where(x => x.building.reducesCorruption && !IsObsoleteForOwner(x.building))
+				.Select(x => x.building)
+				.Distinct()
+				.Count();
+
+			// The capital's palace is worth ten points, which is what keeps the
+			// capital free of corruption through the cap.
+			if (IsCapital()) {
+				points += 10;
 			}
+
+			// Seven more for each corruption-reducing small wonder the city
+			// itself holds (the Forbidden Palace, and the Secret Police HQ in
+			// the shipped rules).
+			points += 7 * buildings.Count(x => x.building.isForbiddenPalace);
+
+			return points;
+		}
+
+		// See https://forums.civfanatics.com/threads/everything-about-corruption-c3c-edition.76619/
+		private float CalculateDistanceCorruption(GameData gameData, int decorruptionPoints) {
+			// Phase 5's cap on the distance term.
+			int maxD = (location.map.numTilesWide + location.map.numTilesTall) / 4;
+
+			// Phase 3: the distance to the nearest corruption-reducing centre,
+			// which is the capital or a city holding a Forbidden Palace.
+			int distanceToPalace = owner.citiesWithCorruptionWonders.Min(x => location.RankDistanceTo(x.location));
 
 			// Civ3 multiplies the distance term by 5/4 when the city is not
 			// trade-connected to its capital. The trade network is cached on
@@ -804,59 +840,74 @@ namespace C7GameData {
 			// current here.
 			bool connectedTocapital = gameData.GetTradeNetwork()
 				.ConnectedToCapital(owner, this, owner.GetCapitalCity());
-			float tradeFactor = connectedTocapital ? 1.0f : 5.0f/4.0f;
 
-			float govtFactor = owner.government.corruptionType switch {
-				Government.CorruptionType.Minimal => 3.0f/4.0f,
-				Government.CorruptionType.Nuisance => 1f,
-				Government.CorruptionType.Problematic => 1f,
-				Government.CorruptionType.Rampant => 3.0f/2.0f,
-				Government.CorruptionType.Catastrophic => 1f, // anarchy, special cased
-				Government.CorruptionType.Communal => 1f,
-				Government.CorruptionType.Off => 0f
+			// Some corruption models cap the loss outright. Civ3 uses the
+			// maximum distance term for a government whose corruption is "off";
+			// OpenCiv3 has always modelled it as no corruption and that is
+			// deliberately left unchanged here (14_commerce.md section 2, phase 4).
+			if (owner.government.corruptionType == Government.CorruptionType.Off) {
+				return 0;
+			}
+
+			// Phase 4: the government's corruption model scales the distance.
+			// Communal replaces it with a constant, distance-independent term.
+			int distance = owner.government.corruptionType switch {
+				Government.CorruptionType.Minimal => distanceToPalace * 3 / 4,
+				Government.CorruptionType.Rampant => distanceToPalace * 3 / 2,
+				Government.CorruptionType.Communal => maxD / 4,
+				_ => distanceToPalace
 			};
 
+			if (!connectedTocapital) {
+				distance = distance * 5 / 4;
+			}
 
-			float adjustedDistance =
-					(float)Math.Pow(0.5f, numAntiCorruptionBuildings)
-					* Math.Min(govtFactor * tradeFactor * distanceToPalace, maxD);
-			return adjustedDistance / maxD;
+			// Phase 5: clamp to [2, maxD].
+			distance = Math.Max(2, Math.Min(distance, maxD));
+
+			// Phase 6b: each decorruption point halves the distance, rounding
+			// up, so the term converges to 1 rather than to 0.
+			for (int i = 0; i < decorruptionPoints; ++i) {
+				distance = (distance + 1) / 2;
+			}
+
+			return (float)distance / maxD;
 		}
 
 		// See https://forums.civfanatics.com/threads/everything-about-corruption-c3c-edition.76619/
-		private float CalculateRankCorruption(GameData gameData, int numAntiCorruptionBuildings) {
+		private float CalculateRankCorruption(GameData gameData, int decorruptionPoints) {
 			int rank = rankIndex;
 			if (owner.government.corruptionType == Government.CorruptionType.Communal) {
 				rank = owner.cities.Count / 2;
 			}
 
-			float nOpt = Math.Max(
-				1,
-				owner.GetAdjustedOptimalCityNumber(gameData) + .25f * numAntiCorruptionBuildings);
+			// Phase 2: every decorruption point adds a quarter of the map's
+			// optimal city count to the effective optimal city number.
+			int nOpt = Math.Max(1, owner.GetAdjustedOptimalCityNumber(gameData))
+					+ gameData.map.optimalNumberOfCities * decorruptionPoints / 4;
 
 			if (rank < nOpt) {
-				return rank / (2 * nOpt);
+				return rank / (2f * nOpt);
 			} else {
-				return (2 * rank - nOpt) / (2 * nOpt);
+				return (2f * rank - nOpt) / (2f * nOpt);
 			}
 		}
 
 		public void CalculateCorruption(GameData gameData) {
-			List<CityBuilding> buildings = GetBuildings();
-			int numAntiCorruptionBuildings = buildings.Count(x => x.building.reducesCorruption);
+			// Phase 1: the city's decorruption points drive both the effective
+			// optimal city number and the cap on the loss.
+			int decorruptionPoints = DecorruptionPoints();
 
-			// TODO: Handle the SPHQ.
-			int numCorruptionReducingSmallWondersInCity = buildings.Count(x => x.building.isForbiddenPalace);
+			corruption = CalculateDistanceCorruption(gameData, decorruptionPoints)
+					+ CalculateRankCorruption(gameData, decorruptionPoints);
+			// TODO: re/specs/14_commerce.md section 2, phase 9 subtracts
+			// CitizenType.Corruption for each non-resisting policeman specialist
+			// before the cap. That needs the phase 8 arithmetic in yield units,
+			// not the fraction-of-gross model used here.
 
-			corruption = CalculateDistanceCorruption(gameData, numAntiCorruptionBuildings)
-					+ CalculateRankCorruption(gameData, numAntiCorruptionBuildings);
-			// TODO: apply policeman modifiers, before applying the max
-
-			// Corruption maxes out at 90%, and this max can be reduced further
-			// via courthouses/police stations, and the forbidden palace/SPHQ.
-			float maxCorruption = Math.Max(
-				0,
-				.9f - (.1f * numAntiCorruptionBuildings + .7f * numCorruptionReducingSmallWondersInCity));
+			// Phase 10: the loss is capped at max(0, 9 - points) tenths of the
+			// yield, so a capital's ten points make it immune.
+			float maxCorruption = Math.Max(0, 9 - decorruptionPoints) / 10.0f;
 			corruption = Math.Max(corruption, 0);
 			corruption = Math.Min(corruption, maxCorruption);
 		}
