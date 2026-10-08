@@ -30,6 +30,7 @@ namespace C7GameData.Save {
 			IncreasesLeaderChance,
 			AllowsBuildArmy,
 			AllowsLargerArmies,
+			RequiresVictoriousArmy,
 		}
 
 		public class GreatWonderProperties {

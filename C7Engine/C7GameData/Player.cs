@@ -81,6 +81,13 @@ namespace C7GameData {
 		public const int AgeOfScienceDuration = 20;
 		public const float AgeOfScienceResearchMultiplier = 1.25f;
 
+		// Set once when a unit carried inside one of this civ's armies wins a
+		// battle (Civ3's LSF_HAS_VICTORIOUS_ARMY, leader +0x40 bit 0). It is a
+		// one-way latch: Civ3 never clears it. The building flag that is expected
+		// to read it (Building.requiresVictoriousArmy) is imported but not yet
+		// consumed, because the read site is an open item.
+		public bool hasVictoriousArmy = false;
+
 		public Civilization civilization;
 
 		// Answers if this player-civ is simply included in the game.

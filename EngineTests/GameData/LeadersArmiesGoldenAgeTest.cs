@@ -5,6 +5,8 @@ using C7Engine;
 using C7GameData;
 using C7GameData.Save;
 using EngineTests.Utils;
+using QueryCiv3;
+using QueryCiv3.Biq;
 using Xunit;
 
 namespace EngineTests.GameData;
@@ -847,6 +849,281 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(5, city.CurrentCommerceYield().beakers);
 	}
 
+	// ---------- the flags the shipped rules carry ----------
+
+	[Fact]
+	public void TheArmyKeepsItsRadarFlagAlongsideItsArmyFlag() {
+		// Measured from PRTO 48 of the shipped conquests.biq: Flags1[0] bit 5
+		// (Radar) is set next to Flags1[2] bit 2 (Army). The type also carries
+		// Blitz, which the importer does not model (section 6.8 is a documented
+		// scope limit), so only the modelled flags are asserted here.
+		Assert.Equal(
+			new[] { SaveUnitPrototype.Flag.Radar, SaveUnitPrototype.Flag.Army },
+			armyType.flags.OrderBy(f => f).ToArray());
+
+		Assert.Equal(
+			new[] { SaveUnitPrototype.Flag.Leader },
+			leaderType.flags.OrderBy(f => f).ToArray());
+	}
+
+	[Fact]
+	public void TheStartsGoldenAgeCarriersAreTheUniqueUnitsAndNothingElse() {
+		// 31 of the ruleset's units carry StartsGoldenAge, the number of such
+		// carriers among BIQ PRTO 0..123, the range the ruleset holds.
+		Assert.Equal(31, gd.unitPrototypes.Count(p => p.startsGoldenAge));
+		Assert.All(gd.unitPrototypes.Where(p => p.startsGoldenAge), p => {
+			Assert.False(p.isArmy);
+			Assert.False(p.isLeader);
+		});
+	}
+
+	[Fact]
+	public void TheRulesetMarksOnlyTheHeroicEpicAndTheMilitaryAcademyAsVictoriousArmyBuildings() {
+		// Measured from BLDG 54 and 57 of the shipped conquests.biq.
+		Assert.Equal(
+			new[] { "Heroic Epic", "Military Academy" },
+			gd.Buildings.Where(b => b.requiresVictoriousArmy).Select(b => b.name).OrderBy(n => n).ToArray());
+	}
+
+	// The three tests above hold the checked-in ruleset to the flags the shipped
+	// BIQ sets, but they read the copy, not the source. These probes read the BIQ
+	// itself, so the copy cannot drift from the shipped data unnoticed. They need
+	// a Civ3 install and therefore skip in CI, exactly like every other
+	// Civ3-dependent test here; ran locally with CIV3_HOME they are the reference.
+	[SkippableFact]
+	public void LeaderArmyAndGoldenAgeUnitFlagsMatchTheShippedBiq() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		BiqData biq = BiqData.LoadFile(PathUtils.defaultBicPath);
+		List<PRTO> carriers = biq.Prto.Where(p => p.Army || p.Leader || p.StartsGoldenAge).ToList();
+
+		// The Army, the Leader and the 42 StartsGoldenAge carriers.
+		Assert.Equal(44, carriers.Count);
+
+		foreach (PRTO prto in carriers) {
+			UnitPrototype prototype = gd.unitPrototypes.FirstOrDefault(p => p.name == prto.Name);
+			Assert.NotNull(prototype);
+			Assert.Equal(
+				ModelledBiqFlags(prto).OrderBy(f => f).ToArray(),
+				prototype.flags.OrderBy(f => f).ToArray());
+		}
+	}
+
+	[SkippableFact]
+	public void VictoriousArmyBuildingFlagsMatchTheShippedBiq() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		BiqData biq = BiqData.LoadFile(PathUtils.defaultBicPath);
+		Assert.Equal(
+			biq.Bldg.Where(b => b.RequiresVictoriousArmy).Select(b => b.Name).OrderBy(n => n).ToArray(),
+			gd.Buildings.Where(b => b.requiresVictoriousArmy).Select(b => b.name).OrderBy(n => n).ToArray());
+	}
+
+	// The PRTO booleans the importer maps onto SaveUnitPrototype.Flag.
+	private static HashSet<SaveUnitPrototype.Flag> ModelledBiqFlags(PRTO prto) {
+		HashSet<SaveUnitPrototype.Flag> flags = [];
+		if (prto.TurnToAttack) flags.Add(SaveUnitPrototype.Flag.RotateBeforeAttack);
+		if (prto.CanCarryFootUnitsOnly) flags.Add(SaveUnitPrototype.Flag.CanCarryFootUnitsOnly);
+		if (prto.CanCarryAircraft) flags.Add(SaveUnitPrototype.Flag.CanCarryAircraft);
+		if (prto.CanCarryTacticalMissiles) flags.Add(SaveUnitPrototype.Flag.CanCarryTacticalMissiles);
+		if (prto.LethalLandBombardment) flags.Add(SaveUnitPrototype.Flag.LethalLandBombardment);
+		if (prto.LethalSeaBombardment) flags.Add(SaveUnitPrototype.Flag.LethalSeaBombardment);
+		if (prto.Radar) flags.Add(SaveUnitPrototype.Flag.Radar);
+		if (prto.Army) flags.Add(SaveUnitPrototype.Flag.Army);
+		if (prto.Leader) flags.Add(SaveUnitPrototype.Flag.Leader);
+		if (prto.StartsGoldenAge) flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
+		return flags;
+	}
+
+	// ---------- the leader's rush ----------
+
+	// A player whose shield cost is the building's own cost: the civ has no
+	// traits and, as a human, gets no AI discount.
+	private Player MakeRushingPlayer() {
+		Player player = MakePlayer();
+		player.isHuman = true;
+		return player;
+	}
+
+	private (Player player, City city, MapUnit leader) SetupCityLeader(MapUnit.LeaderKind kind, string buildingName) {
+		Player player = MakeRushingPlayer();
+		Tile tile = MakeTile();
+		City city = MakeCity(player, tile);
+		city.SetItemBeingProduced(gd.Buildings.First(b => b.name == buildingName));
+		MapUnit leader = MakeUnit(player, leaderType, tile, experience: "Regular");
+		leader.leaderKind = kind;
+		return (player, city, leader);
+	}
+
+	[Fact]
+	public void AMilitaryLeaderRushesAnImprovementAndIsConsumed() {
+		var (player, city, leader) = SetupCityLeader(MapUnit.LeaderKind.Military, "Temple");
+		Building temple = gd.Buildings.First(b => b.name == "Temple");
+
+		Assert.True(leader.CanHurryProduction());
+		Assert.True(leader.HurryProduction());
+
+		// The item's whole cost is in the box untouched, so it completes at the
+		// owner's next production phase: no gold was paid and nobody died, unlike
+		// the ordinary hurry.
+		Assert.Equal(player.ShieldCost(temple), city.shieldsStored);
+		Assert.True(city.shieldsStored >= player.ShieldCost(temple));
+		Assert.DoesNotContain(leader, player.units);
+		Assert.DoesNotContain(leader, city.location.unitsOnTile);
+	}
+
+	[Fact]
+	public void AMilitaryLeaderCannotRushAGreatWonder() {
+		var (player, city, leader) = SetupCityLeader(MapUnit.LeaderKind.Military, "The Pyramids");
+
+		Assert.False(leader.CanHurryProduction());
+		Assert.False(leader.HurryProduction());
+		Assert.Equal(0, city.shieldsStored);
+	}
+
+	[Fact]
+	public void AScientificLeaderRushesAGreatWonderAndAnImprovement() {
+		var (player, city, leader) = SetupCityLeader(MapUnit.LeaderKind.Scientific, "The Pyramids");
+		Assert.True(leader.CanHurryProduction());
+
+		// The shared improvement case works for a scientific leader too.
+		Building temple = gd.Buildings.First(b => b.name == "Temple");
+		city.SetItemBeingProduced(temple);
+		Assert.True(leader.CanHurryProduction());
+		Assert.True(leader.HurryProduction());
+		Assert.Equal(player.ShieldCost(temple), city.shieldsStored);
+	}
+
+	[Fact]
+	public void ALeaderNeverRushesAUnit() {
+		Player player = MakeRushingPlayer();
+		Tile tile = MakeTile();
+		City city = MakeCity(player, tile);
+		city.SetItemBeingProduced(gd.unitPrototypes.First(p => p.name == "Warrior"));
+
+		MapUnit military = MakeUnit(player, leaderType, tile, experience: "Regular");
+		military.leaderKind = MapUnit.LeaderKind.Military;
+		MapUnit scientific = MakeUnit(player, leaderType, tile, experience: "Regular");
+		scientific.leaderKind = MapUnit.LeaderKind.Scientific;
+
+		Assert.False(military.CanHurryProduction());
+		Assert.False(scientific.CanHurryProduction());
+		Assert.False(military.HurryProduction());
+	}
+
+	[Fact]
+	public void ALeaderCanOnlyRushInOneOfItsOwnCities() {
+		// A leader standing on a tile without a city.
+		MapUnit outside = MakeUnit(MakeRushingPlayer(), leaderType, MakeTile(), experience: "Regular");
+		outside.leaderKind = MapUnit.LeaderKind.Military;
+		Assert.False(outside.CanHurryProduction());
+
+		// A leader standing in another civ's city.
+		Player player = MakeRushingPlayer();
+		Tile tile = MakeTile();
+		City otherCity = MakeCity(MakeRushingPlayer(), tile);
+		otherCity.SetItemBeingProduced(gd.Buildings.First(b => b.name == "Temple"));
+		MapUnit guest = MakeUnit(player, leaderType, tile, experience: "Regular");
+		guest.leaderKind = MapUnit.LeaderKind.Military;
+		Assert.False(guest.CanHurryProduction());
+	}
+
+	[Fact]
+	public void TheRushShieldFloorAppliesOnlyWhenTheCallerAsksForIt() {
+		Player player = MakeRushingPlayer();
+		Tile tile = MakeTile();
+		City city = MakeCity(player, tile);
+		MapUnit leader = MakeUnit(player, leaderType, tile, experience: "Regular");
+		leader.leaderKind = MapUnit.LeaderKind.Military;
+
+		Building barracks = gd.Buildings.First(b => b.name == "Barracks");
+		Assert.True(player.ShieldCost(barracks) < MapUnit.MilitaryLeaderRushMinimumShields);
+		city.SetItemBeingProduced(barracks);
+		Assert.True(leader.CanHurryProduction());
+		Assert.False(leader.CanHurryProduction(requireMinimumShieldCost: true));
+
+		Building bank = gd.Buildings.First(b => b.name == "Bank");
+		Assert.True(player.ShieldCost(bank) >= MapUnit.MilitaryLeaderRushMinimumShields);
+		city.SetItemBeingProduced(bank);
+		Assert.True(leader.CanHurryProduction(requireMinimumShieldCost: true));
+
+		// The scientific floor is higher, so the Bank is still refused for a
+		// scientific leader while the University is not.
+		leader.leaderKind = MapUnit.LeaderKind.Scientific;
+		Assert.True(player.ShieldCost(bank) < MapUnit.ScientificLeaderRushMinimumShields);
+		Assert.False(leader.CanHurryProduction(requireMinimumShieldCost: true));
+
+		Building university = gd.Buildings.First(b => b.name == "University");
+		Assert.True(player.ShieldCost(university) >= MapUnit.ScientificLeaderRushMinimumShields);
+		city.SetItemBeingProduced(university);
+		Assert.True(leader.CanHurryProduction(requireMinimumShieldCost: true));
+	}
+
+	[Fact]
+	public void ALeaderOfUnsetKindRushesOnlyBuildingLikeItems() {
+		Player player = MakeRushingPlayer();
+		Tile tile = MakeTile();
+		City city = MakeCity(player, tile);
+		MapUnit leader = MakeUnit(player, leaderType, tile, experience: "Regular");
+		Assert.Equal(MapUnit.LeaderKind.None, leader.leaderKind);
+
+		// A plain improvement carries no wonder flag and no required building.
+		city.SetItemBeingProduced(gd.Buildings.First(b => b.name == "Temple"));
+		Assert.False(leader.CanHurryProduction());
+
+		// A small wonder is accepted, so is an improvement that requires
+		// another building, and so is a Great Wonder.
+		city.SetItemBeingProduced(gd.Buildings.First(b => b.name == "Heroic Epic"));
+		Assert.True(leader.CanHurryProduction());
+		city.SetItemBeingProduced(gd.Buildings.First(b => b.name == "Cathedral"));
+		Assert.True(leader.CanHurryProduction());
+		city.SetItemBeingProduced(gd.Buildings.First(b => b.name == "The Pyramids"));
+		Assert.True(leader.CanHurryProduction());
+	}
+
+	// ---------- the victorious-army status bit ----------
+
+	[Fact]
+	public void AVictoryByAUnitCarriedInAnArmySetsTheVictoriousArmyFlag() {
+		var (player, army) = SetupArmy();
+		MapUnit member = MakeUnit(player, MakeLandPrototype(4, 2), army.location);
+		Assert.True(member.LoadIntoArmy(army));
+		Assert.True(member.IsCarriedInsideArmy());
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = 1;
+		Assert.False(player.hasVictoriousArmy);
+
+		member.RollForCombatOutcome(MakeUnit(MakePlayer(), MakeLandPrototype(1, 1), MakeTile()), defeatedWasTheDefender: true);
+
+		Assert.True(player.hasVictoriousArmy);
+	}
+
+	[Fact]
+	public void OnlyAVictoryFromInsideAnArmySetsTheVictoriousArmyFlag() {
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = 1;
+
+		// A plain unit on the map never sets it.
+		Player player = MakePlayer();
+		MapUnit lone = MakeUnit(player, MakeLandPrototype(4, 2), MakeTile());
+		lone.RollForCombatOutcome(MakeUnit(MakePlayer(), MakeLandPrototype(1, 1), MakeTile()), defeatedWasTheDefender: true);
+		Assert.False(player.hasVictoriousArmy);
+
+		// Neither does a unit carried by an ordinary transport.
+		Player carried = MakePlayer();
+		Tile tile = MakeTile();
+		UnitPrototype sea = MakeLandPrototype(1, 1);
+		sea.categories.Clear();
+		sea.categories.Add("Sea");
+		MapUnit transport = MakeUnit(carried, sea, tile);
+		MapUnit passenger = MakeUnit(carried, MakeLandPrototype(4, 2), tile);
+		passenger.loadedOnUnitId = transport.id;
+		Assert.False(passenger.IsCarriedInsideArmy());
+		passenger.RollForCombatOutcome(MakeUnit(MakePlayer(), MakeLandPrototype(1, 1), MakeTile()), defeatedWasTheDefender: true);
+		Assert.False(carried.hasVictoriousArmy);
+	}
+
 	// ---------- persistence ----------
 
 	[Fact]
@@ -858,6 +1135,7 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		player.goldenAgeEndTurn = 27;
 		player.ageOfScienceActive = true;
 		player.ageOfScienceEndTurn = 12;
+		player.hasVictoriousArmy = true;
 
 		// A leader that has already produced one leader.
 		MapUnit leader = MakeUnit(player, leaderType, tile, experience: "Regular");
@@ -882,6 +1160,7 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 			Assert.Equal(27, reloadedPlayer.goldenAgeEndTurn);
 			Assert.True(reloadedPlayer.ageOfScienceActive);
 			Assert.Equal(12, reloadedPlayer.ageOfScienceEndTurn);
+			Assert.True(reloadedPlayer.hasVictoriousArmy);
 
 			MapUnit reloadedLeader = reloaded.mapUnits.First(u => u.id == leader.id);
 			Assert.Equal(MapUnit.LeaderKind.Scientific, reloadedLeader.leaderKind);

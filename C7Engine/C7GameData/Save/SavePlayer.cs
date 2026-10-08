@@ -24,6 +24,10 @@ namespace C7GameData.Save {
 		public bool ageOfScienceActive = false;
 		public int ageOfScienceEndTurn = 0;
 
+		// Whether a unit carried by one of this civ's armies has ever won a
+		// battle (Civ3's LSF_HAS_VICTORIOUS_ARMY).
+		public bool hasVictoriousArmy = false;
+
 		public string civilization;
 
 		public List<TileLocation> tileKnowledge = new List<TileLocation>();
@@ -98,6 +102,7 @@ namespace C7GameData.Save {
 				goldenAgeEndTurn = goldenAgeEndTurn,
 				ageOfScienceActive = ageOfScienceActive,
 				ageOfScienceEndTurn = ageOfScienceEndTurn,
+				hasVictoriousArmy = hasVictoriousArmy,
 				primaryColorIndex = primaryColorIndex,
 				secondaryColorIndex = secondaryColorIndex,
 				civilization = civilization is not null ? civilizations.Find(civ => civ.name == civilization) : null,
@@ -161,6 +166,7 @@ namespace C7GameData.Save {
 			goldenAgeEndTurn = player.goldenAgeEndTurn;
 			ageOfScienceActive = player.ageOfScienceActive;
 			ageOfScienceEndTurn = player.ageOfScienceEndTurn;
+			hasVictoriousArmy = player.hasVictoriousArmy;
 			civilization = player.civilization?.name;
 			// TODO: this should be computed by looking at cities defined in the save
 			// so that adding cities in the save structure doesn't require updating this value

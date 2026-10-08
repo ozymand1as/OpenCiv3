@@ -1415,7 +1415,6 @@ namespace C7GameData {
 			if (prto.AIKing) yield return SaveUnitPrototype.AIStrategy.King;
 		}
 
-		private static IEnumerable<TerraformKey> GetUnitTerraforms(PRTO prto) {
 		// internal rather than private so EngineTests can pin the BIQ-to-terraform
 		// mapping against the shipped conquests.biq (see
 		// PollutionBiqImportTest).
@@ -1743,6 +1742,7 @@ namespace C7GameData {
 				(bldg.IncreasesLeaderChance, SaveBuilding.Flag.IncreasesLeaderChance),
 				(bldg.AllowsBuildArmy, SaveBuilding.Flag.AllowsBuildArmy),
 				(bldg.AllowsLargerArmies, SaveBuilding.Flag.AllowsLargerArmies),
+				(bldg.RequiresVictoriousArmy, SaveBuilding.Flag.RequiresVictoriousArmy),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

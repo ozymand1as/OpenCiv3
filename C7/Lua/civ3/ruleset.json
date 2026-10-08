@@ -4698,6 +4698,7 @@
         "Maya"
       ],
       "flags": [
+        "radar",
         "army"
       ],
       "aiStrategies": [
@@ -9498,7 +9499,8 @@
         "seafaring"
       ],
       "flags": [
-        "increasesLeaderChance"
+        "increasesLeaderChance",
+        "requiresVictoriousArmy"
       ]
     },
     {
@@ -9549,7 +9551,8 @@
         "militaristic"
       ],
       "flags": [
-        "allowsBuildArmy"
+        "allowsBuildArmy",
+        "requiresVictoriousArmy"
       ]
     },
     {
