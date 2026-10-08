@@ -45,6 +45,12 @@ namespace C7GameData {
 		public bool providesVeteranGroundUnits;
 		public bool treasuryEarnsInterest;
 
+		// The building adds 50% to the science produced by its city, or doubles
+		// it. The two flags stack additively in halves, so a Library plus a
+		// Copernicus' Observatory gives 2.5x, not 3x.
+		public bool plus50PercentResearch;
+		public bool doublesResearchOutput;
+
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
 
@@ -96,6 +102,8 @@ namespace C7GameData {
 			onlyUsefulInTowns = building.flags.Contains(SaveBuilding.Flag.CanOnlyBeBuiltInTowns);
 			providesVeteranGroundUnits = building.flags.Contains(SaveBuilding.Flag.VeteranGroundUnits);
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
+			plus50PercentResearch = building.flags.Contains(SaveBuilding.Flag.Plus50PercentResearch);
+			doublesResearchOutput = building.flags.Contains(SaveBuilding.Flag.DoublesResearchOutput);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();

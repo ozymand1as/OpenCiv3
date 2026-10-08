@@ -1673,6 +1673,8 @@ namespace C7GameData {
 				(bldg.AllowsCitySize3, SaveBuilding.Flag.AllowsCitySize3),
 				(bldg.DoublesCityGrowthRate, SaveBuilding.Flag.DoublesCityGrowthRate),
 				(bldg.TreasuryEarnsInterest, SaveBuilding.Flag.TreasuryEarnsInterest),
+				(bldg.Plus50PercentResearch, SaveBuilding.Flag.Plus50PercentResearch),
+				(bldg.DoublesResearchOutput, SaveBuilding.Flag.DoublesResearchOutput),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

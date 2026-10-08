@@ -8130,6 +8130,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 1,
       "iconRowIndex": 5,
+      "flags": [
+        "plus50PercentResearch"
+      ],
       "traits": [
         "scientific"
       ]
@@ -8236,6 +8239,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 2,
       "iconRowIndex": 11,
+      "flags": [
+        "plus50PercentResearch"
+      ],
       "traits": [
         "scientific"
       ]
@@ -8376,6 +8382,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 2,
       "iconRowIndex": 20,
+      "flags": [
+        "plus50PercentResearch"
+      ],
       "traits": [
         "scientific"
       ]
@@ -8754,6 +8763,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 0,
       "iconRowIndex": 40,
+      "flags": [
+        "doublesResearchOutput"
+      ],
       "traits": [
         "expansionist"
       ]
@@ -8821,6 +8833,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 0,
       "iconRowIndex": 44,
+      "flags": [
+        "doublesResearchOutput"
+      ],
       "traits": [
         "scientific"
       ]
@@ -8980,6 +8995,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 0,
       "iconRowIndex": 53,
+      "flags": [
+        "doublesResearchOutput"
+      ],
       "traits": [
         "expansionist"
       ]

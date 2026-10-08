@@ -53,7 +53,7 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 	// A city whose commerce yield is exactly `commerce`, so the science slider
 	// splits it deterministically. The city center yields one commerce at size
 	// one; the rest comes from a worked tile.
-	private static City MakeCity(C7GameData.GameData gameData, Player player, int commerce) {
+	private static City MakeCity(C7GameData.GameData gameData, Player player, int commerce, params Building[] buildings) {
 		Tile center = new(ID.None("city-tile")) { overlayTerrainType = new TerrainType { Key = "grassland" } };
 		City city = new(center, player, "Test City", ID.None("city"));
 		center.cityAtTile = city;
@@ -64,7 +64,26 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 			overlayTerrainType = new TerrainType { Key = "grassland", baseCommerceProduction = commerce - 1 },
 		};
 		city.residents.Add(new CityResident { citizenType = new CitizenType(), tileWorked = worked });
+
+		foreach (Building building in buildings) {
+			city.constructed_buildings.Add(new CityBuilding { building = building, builtByPlayer = player });
+		}
+
 		return city;
+	}
+
+	// The beakers a commerce-8 city produces with the given shipped buildings.
+	// At a 50% science rate that is a base of four beakers before buildings.
+	private int BeakersFor(int commerce, params Building[] buildings) {
+		C7GameData.GameData gameData = MakeGame();
+		Player player = MakePlayer(gameData);
+		City city = MakeCity(gameData, player, commerce, buildings);
+		EngineStorage.InitializeGameDataForTests(gameData);
+		return city.CurrentCommerceYield().beakers;
+	}
+
+	private Building FindShippedBuilding(string name) {
+		return fixture.saveGame.ToGameData(fixture.behaviors).Buildings.Find(b => b.name == name);
 	}
 
 	private static Tech MakeTech(string id, int cost) {
@@ -162,5 +181,29 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 		Assert.Contains(philosophy.id, player.knownTechs);
 		Assert.Null(player.currentlyResearchedTech);
 		Assert.Equal(0, player.beakers);
+	}
+
+	[Fact]
+	public void LibraryGivesOneAndAHalfTimesTheBeakers() {
+		Building library = FindShippedBuilding("Library");
+
+		Assert.Equal(4, BeakersFor(8));
+		Assert.Equal(6, BeakersFor(8, library));
+	}
+
+	[Fact]
+	public void ResearchBuildingsStackAdditivelyInHalves() {
+		Building library = FindShippedBuilding("Library");
+		Building university = FindShippedBuilding("University");
+		Building researchLab = FindShippedBuilding("Research Lab");
+		Building copernicus = FindShippedBuilding("Copernicus' Observatory");
+
+		// Two +50% buildings are 2x, not 1.5 * 1.5 = 2.25x.
+		Assert.Equal(8, BeakersFor(8, library, university));
+		// All three +50% buildings are 2.5x, not 1.5^3 = 3.375x.
+		Assert.Equal(10, BeakersFor(8, library, university, researchLab));
+		// A doubling building is 2x, and adds a flat +100% to the same sum.
+		Assert.Equal(8, BeakersFor(8, copernicus));
+		Assert.Equal(10, BeakersFor(8, library, copernicus));
 	}
 }

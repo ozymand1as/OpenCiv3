@@ -21,6 +21,8 @@ namespace C7GameData.Save {
 			ProvidesWalls,
 			CanOnlyBeBuiltInTowns,
 			TreasuryEarnsInterest,
+			Plus50PercentResearch,
+			DoublesResearchOutput,
 		}
 
 		public class GreatWonderProperties {

@@ -555,9 +555,15 @@ namespace C7GameData {
 			// TODO: Science/Luxury commerce doesn't seem to be tabulating correctly, can be negative in some cases with specialists, might be ImportCiv3 issue?
 			CommerceBreakdown result = new();
 			result.corrupted = commerce.corrupt;
-			result.beakers = (int)Math.Floor(commerce.useful * owner.scienceRate / 10.0);
+
+			// The buildings that boost research multiply the city's slider share
+			// of its own commerce, after corruption. They add extra beakers
+			// rather than taking them from the tax income, so the tax share is
+			// still computed from the unmultiplied science share.
+			int sliderBeakers = (int)Math.Floor(commerce.useful * owner.scienceRate / 10.0);
+			result.beakers = sliderBeakers * ResearchMultiplierNumerator() / 2;
 			result.happiness = (int)Math.Floor(commerce.useful * owner.luxuryRate / 10.0);
-			result.taxes = commerce.useful - result.beakers - result.happiness;
+			result.taxes = commerce.useful - sliderBeakers - result.happiness;
 
 			foreach (CityResident cr in residents) {
 				result.beakers += cr.citizenType.Research;
@@ -566,6 +572,24 @@ namespace C7GameData {
 			}
 
 			return result;
+		}
+
+		// The research multiplier from the city's own buildings, with a
+		// denominator of two: (2 + n_plus50 + 2 * n_doubles) / 2. The bonus is
+		// additive in halves, so Library + University + Research Lab in one city
+		// is 2.5x, not 1.5 * 1.5 * 1.5, and a doubling building adds a flat
+		// +100% to that same sum.
+		private int ResearchMultiplierNumerator() {
+			int numerator = 2;
+			foreach (CityBuilding cb in constructed_buildings) {
+				if (cb.building.plus50PercentResearch) {
+					++numerator;
+				}
+				if (cb.building.doublesResearchOutput) {
+					numerator += 2;
+				}
+			}
+			return numerator;
 		}
 
 		[MoonSharpHidden]
