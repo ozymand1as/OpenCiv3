@@ -1861,6 +1861,7 @@ namespace C7GameData {
 				(bldg.AllowsBuildArmy, SaveBuilding.Flag.AllowsBuildArmy),
 				(bldg.AllowsLargerArmies, SaveBuilding.Flag.AllowsLargerArmies),
 				(bldg.RequiresVictoriousArmy, SaveBuilding.Flag.RequiresVictoriousArmy),
+				(bldg.BuildSpaceshipParts, SaveBuilding.Flag.BuildSpaceshipParts),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

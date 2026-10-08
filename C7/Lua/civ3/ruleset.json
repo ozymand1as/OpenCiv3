@@ -9595,6 +9595,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 0,
       "iconRowIndex": 60,
+      "flags": [
+        "buildSpaceshipParts"
+      ],
       "traits": [
         "scientific"
       ],
