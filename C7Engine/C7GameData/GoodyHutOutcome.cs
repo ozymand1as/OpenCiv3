@@ -108,7 +108,9 @@ namespace C7GameData {
 
 		/// <summary>
 		/// Makes the single uniform draw and resolves it against the table.
-		/// This is the whole of the roll: one draw, no re-rolls.
+		/// One call is one draw; whether the outcome is then rejected and the
+		/// roll repeated is up to the caller (see GoodyHutInteractions.Consume,
+		/// which is what Civ3 does).
 		/// </summary>
 		public static GoodyHutOutcome Roll(int row, Random rng, bool allowCities = true) {
 			int draw = rng.Next(20);

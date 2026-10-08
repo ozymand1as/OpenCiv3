@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using C7Engine.AI;
 using C7GameData;
 
 namespace C7Engine {
@@ -8,17 +10,41 @@ namespace C7Engine {
 	///
 	/// A unit entering a tile that carries a hut consumes it: the hut bit is
 	/// cleared first, so a hut always pops exactly once even if the outcome has
-	/// no effect, and then one outcome is chosen from the goody-hut table and
+	/// no effect, and then an outcome is chosen from the goody-hut table and
 	/// applied to the entering player.
 	///
-	/// Civ3 re-runs the roll when an outcome's own preconditions fail. This
-	/// implementation does not: a failed guard resolves to Nothing instead. The
-	/// reason is that the re-roll is unbounded and would live-lock for a
-	/// ruleset that lacks one of the prerequisites (no settler or mercenary
-	/// unit type, no barbarian player) while making the number of RNG draws per
-	/// hut depend on game state.
+	/// An outcome whose own preconditions fail does not simply fizzle. Civ3
+	/// re-runs the whole roll (spec section 4.4) until an outcome passes, so the
+	/// effective distribution is the table conditioned on the guards, and this
+	/// implementation re-rolls the same way. Sub-rolls are therefore ordinary
+	/// here: one pop can consume several draws, and how many depends on game
+	/// state. The loop still cannot hang, because the Maps outcome has no
+	/// precondition and so is always accepted; MaxRollsPerHut is a safety valve
+	/// for a ruleset that would somehow make every outcome fail.
 	/// </summary>
 	public static class GoodyHutInteractions {
+		/// <summary>
+		/// The last index of the square-ring enumerator that the Maps outcome
+		/// walks. The enumerator starts at the centre (index 0), so indices
+		/// 1..76 are the complete Chebyshev radius-3 block (48 tiles) plus 28 of
+		/// the 32 ring-4 tiles.
+		/// </summary>
+		public const int MapsRevealWindow = 76;
+
+		/// <summary>
+		/// The turn from which the late-game values apply: money is worth 50
+		/// rather than 25, and a hut-founded city gains its population roll.
+		/// </summary>
+		public const int LateGameTurn = 50;
+
+		/// <summary>
+		/// A safety valve on the rejection loop. With the shipped table the
+		/// Maps outcome has no precondition and ends the loop, so this bound is
+		/// never reached; it only exists so that a ruleset or mod that makes
+		/// every outcome unacceptable cannot spin forever.
+		/// </summary>
+		private const int MaxRollsPerHut = 1000;
+
 		/// <summary>
 		/// The table row used for a player: the player's difficulty, plus one
 		/// unless the civilization is Expansionist. Civ3 stores the difficulty
@@ -39,41 +65,58 @@ namespace C7Engine {
 		/// <summary>
 		/// Consumes the hut on <paramref name="tile"/> on behalf of
 		/// <paramref name="player"/> and returns the outcome that was applied.
+		/// A drawn outcome whose preconditions fail is re-rolled; the desert
+		/// village is a table result of its own and is not re-rolled.
 		/// </summary>
 		public static GoodyHutOutcome Consume(GameData gameData, Player player, Tile tile) {
 			// The hut is cleared before the outcome is chosen.
 			tile.hasGoodyHut = false;
 
-			GoodyHutOutcome outcome = GoodyHutTable.Roll(
-				RowIndexFor(gameData, player),
-				GameData.rng,
-				gameData.rules == null || gameData.rules.AllowCitiesFromGoodyHuts);
+			int row = RowIndexFor(gameData, player);
+			bool allowCities = gameData.rules == null || gameData.rules.AllowCitiesFromGoodyHuts;
 
-			return Apply(gameData, player, tile, outcome);
+			for (int attempt = 0; attempt < MaxRollsPerHut; ++attempt) {
+				GoodyHutOutcome drawn = GoodyHutTable.Roll(row, GameData.rng, allowCities);
+				GoodyHutOutcome applied = Apply(gameData, player, tile, drawn);
+				if (applied != GoodyHutOutcome.Nothing) {
+					return applied;
+				}
+				if (drawn == GoodyHutOutcome.Nothing) {
+					// The table itself returned the desert village, which is a
+					// result rather than a rejected outcome, so there is
+					// nothing to re-roll. The message was shown by Apply.
+					return applied;
+				}
+			}
+
+			return NothingMessage(player);
 		}
 
 		/// <summary>
-		/// Applies a chosen outcome, returning the outcome that actually took
-		/// effect. An outcome whose preconditions are not met resolves to
-		/// Nothing.
+		/// Applies one drawn outcome, returning the outcome when it took effect
+		/// and Nothing when its preconditions were not met. A caller that wants
+		/// Civ3's behaviour must treat Nothing as a rejected draw and roll again
+		/// (<see cref="Consume"/> does; it is the only production caller). The
+		/// deserted-village outcome itself shows its message here, so a rejected
+		/// draw is silent.
 		/// </summary>
 		public static GoodyHutOutcome Apply(GameData gameData, Player player, Tile tile, GoodyHutOutcome outcome) {
 			switch (outcome) {
 				case GoodyHutOutcome.City:
-					return ApplyCity(gameData, player, tile) ? GoodyHutOutcome.City : NothingMessage(player);
+					return ApplyCity(gameData, player, tile) ? GoodyHutOutcome.City : GoodyHutOutcome.Nothing;
 				case GoodyHutOutcome.Tech:
-					return ApplyTech(gameData, player) ? GoodyHutOutcome.Tech : NothingMessage(player);
+					return ApplyTech(gameData, player) ? GoodyHutOutcome.Tech : GoodyHutOutcome.Nothing;
 				case GoodyHutOutcome.Money:
-					return ApplyMoney(gameData, player, tile) ? GoodyHutOutcome.Money : NothingMessage(player);
+					return ApplyMoney(gameData, player, tile) ? GoodyHutOutcome.Money : GoodyHutOutcome.Nothing;
 				case GoodyHutOutcome.Settlers:
-					return ApplySettlers(gameData, player, tile) ? GoodyHutOutcome.Settlers : NothingMessage(player);
+					return ApplySettlers(gameData, player, tile) ? GoodyHutOutcome.Settlers : GoodyHutOutcome.Nothing;
 				case GoodyHutOutcome.Maps:
-					ApplyMaps(player, tile);
+					ApplyMaps(gameData, player, tile);
 					return GoodyHutOutcome.Maps;
 				case GoodyHutOutcome.Mercenaries:
-					return ApplyMercenaries(gameData, player, tile) ? GoodyHutOutcome.Mercenaries : NothingMessage(player);
+					return ApplyMercenaries(gameData, player, tile) ? GoodyHutOutcome.Mercenaries : GoodyHutOutcome.Nothing;
 				case GoodyHutOutcome.Barbarians:
-					return ApplyBarbarians(gameData, player, tile) ? GoodyHutOutcome.Barbarians : NothingMessage(player);
+					return ApplyBarbarians(gameData, player, tile) ? GoodyHutOutcome.Barbarians : GoodyHutOutcome.Nothing;
 				default:
 					return NothingMessage(player);
 			}
@@ -100,18 +143,50 @@ namespace C7Engine {
 				return false;
 			}
 
-			// The tile must be a legal city site for the civilization.
+			// The tile must be a legal city site for the civilization. Civ3
+			// also requires the global distance-to-the-nearest-city value to
+			// exceed 3; OpenCiv3 keeps no such global, so that guard is not
+			// modelled.
 			if (!tile.IsAllowCities() || tile.HasCity() || tile.hasBarbarianCamp) {
 				return false;
 			}
 
 			City city = CityInteractions.BuildCity(tile, player, player.GetNextCityName());
-			Notify(player, $"An advanced village has joined us! {city.name} is ours.", happy: true);
 
-			// Civ3 also adds rand_int(4) extra population when the turn number
-			// is 50 or more. That roll is deliberately omitted: the outcome
-			// roll is the only randomness a hut pop may consume.
+			// From turn 50 on the new city also receives rand_int(4) extra
+			// population (0..3).
+			int extraPopulation = HutCityPopulationBonus(gameData.turn);
+			for (int i = 0; i < extraPopulation; ++i) {
+				AddCitizen(gameData, city);
+			}
+
+			Notify(player, $"An advanced village has joined us! {city.name} is ours.", happy: true);
 			return true;
+		}
+
+		/// <summary>
+		/// The extra population a hut-founded city receives, and the roll that
+		/// decides it: nothing before turn 50, and a uniform draw of four
+		/// values (0..3) from turn 50 on.
+		///
+		/// The turn is compared as OpenCiv3 stores it, which is zero based,
+		/// against the spec's 50. Whether the two bases coincide for an imported
+		/// save is not statically provable, so the boundary keeps the spec's
+		/// literal turn number and is flagged here rather than silently
+		/// adjusted.
+		/// </summary>
+		public static int HutCityPopulationBonus(int turn) {
+			return turn >= LateGameTurn ? GameData.rng.Next(4) : 0;
+		}
+
+		private static void AddCitizen(GameData gameData, City city) {
+			CityResident resident = new() {
+				nationality = city.owner.civilization,
+				city = city,
+				citizenType = gameData.citizenTypes.Find(c => c.IsDefaultCitizen),
+			};
+			city.AddCitizen(resident);
+			CityTileAssignmentAI.AssignNewCitizenToTile(gameData, resident);
 		}
 
 		/// <summary>
@@ -124,21 +199,63 @@ namespace C7Engine {
 				return false;
 			}
 
-			List<Tech> candidates = player.GetAvailableTechsToResearch(gameData.techs)
+			// Walk the advances in the ruleset's own order, the way the engine
+			// walks its advance array, keeping the ones the player may research
+			// (unknown, era not ahead of the player, prerequisites known), the
+			// ones the player is not already researching, and the ones whose
+			// prerequisite tree is at most four levels deep.
+			HashSet<Tech> researchable = player.GetAvailableTechsToResearch(gameData.techs);
+			List<Tech> candidates = gameData.techs
+				.Where(researchable.Contains)
 				.Where(t => player.currentlyResearchedTech == null || t.id != player.currentlyResearchedTech)
+				.Where(t => PrerequisiteDepth(t) <= MaxPrerequisiteDepth)
 				.ToList();
 			if (candidates.Count == 0) {
 				return false;
 			}
 
-			// Civ3 scores candidates with a leader metric plus a rand_int(100)
-			// tiebreak. OpenCiv3 has no equivalent leader metric, so the
-			// cheapest available advance is chosen, and no tiebreak roll is
-			// made.
-			Tech granted = candidates.OrderBy(t => t.Cost).First();
+			// Civ3 scores every candidate with a per-leader metric plus a
+			// uniform rand_int(100) and keeps the lowest. The metric's meaning
+			// is not established (spec section 9.3), so the advance's cost
+			// stands in for it; the tiebreak is the same one-draw-per-candidate
+			// roll the engine makes.
+			Tech granted = null;
+			int bestScore = int.MaxValue;
+			foreach (Tech candidate in candidates) {
+				int score = candidate.Cost + GameData.rng.Next(100);
+				if (score < bestScore) {
+					bestScore = score;
+					granted = candidate;
+				}
+			}
+
 			player.GrantTech(gameData, granted);
 			Notify(player, $"The tribe has taught us {granted.Name}.", happy: true);
 			return true;
+		}
+
+		/// <summary>
+		/// The deepest prerequisite chain an advance may have for the Tech
+		/// outcome to hand it over: four levels. Zero means the advance has no
+		/// prerequisite at all.
+		/// </summary>
+		public const int MaxPrerequisiteDepth = 4;
+
+		/// <summary>
+		/// The height of an advance's prerequisite tree: zero without
+		/// prerequisites, otherwise one more than the tallest prerequisite.
+		/// Civ3's helper behind this guard is a pure recursion over the four
+		/// prerequisite slots, so it measures exactly this.
+		/// </summary>
+		public static int PrerequisiteDepth(Tech tech) {
+			int deepest = 0;
+			foreach (Tech prerequisite in tech.Prerequisites) {
+				if (prerequisite == null) {
+					continue;
+				}
+				deepest = Math.Max(deepest, 1 + PrerequisiteDepth(prerequisite));
+			}
+			return deepest;
 		}
 
 		/// <summary>
@@ -150,7 +267,10 @@ namespace C7Engine {
 				return false;
 			}
 
-			int amount = gameData.turn <= 49 ? 25 : 50;
+			// The turn is OpenCiv3's zero-based one; see
+			// HutCityPopulationBonus for why the spec's boundary is used
+			// literally.
+			int amount = gameData.turn >= LateGameTurn ? 50 : 25;
 			player.gold += amount;
 			Notify(player, $"We got {amount} gold from the village.", happy: true);
 
@@ -164,7 +284,10 @@ namespace C7Engine {
 		/// "A friendly tribe wants to join our government" - one settler.
 		/// </summary>
 		private static bool ApplySettlers(GameData gameData, Player player, Tile tile) {
-			// The civilization must own no settler and be building none.
+			// Civ3 tests the two per-leader AI strategy counters for the Settle
+			// strategy, which must both be zero. OpenCiv3 does not keep those
+			// Civ3 AI counters, so the closest available proxy is used instead:
+			// the civilization must own no settler and be building none.
 			if (player.units.Any(u => u.unitType.isSettler)) {
 				return false;
 			}
@@ -190,14 +313,13 @@ namespace C7Engine {
 		/// "The tribe gave us maps of their region" - reveals the hut's
 		/// neighbourhood.
 		/// </summary>
-		private static void ApplyMaps(Player player, Tile tile) {
-			// Civ3 walks the tiles after the centre of a square-ring
-			// enumerator, which covers the complete Chebyshev radius-3 block
-			// plus most of ring 4, and reveals each with probability 3/4. The
-			// per-tile roll is omitted here to keep a hut pop to a single RNG
-			// draw, so the whole block is revealed. A tile on another
-			// continent is only revealed if it is coast.
-			for (int i = 1; i <= 76; ++i) {
+		private static void ApplyMaps(GameData gameData, Player player, Tile tile) {
+			// Civ3 walks the tiles after the centre of the square-ring
+			// enumerator (indices 1..76, the Chebyshev radius-3 block plus most
+			// of ring 4) and reveals each with probability 3/4. A tile on
+			// another continent is only revealed if it is coast, and such a
+			// tile is skipped without a roll.
+			for (int i = 1; i <= MapsRevealWindow; ++i) {
 				Tile t = tile.GetTileAtNeighborIndex(i);
 				if (t == null || t == Tile.NONE) {
 					continue;
@@ -205,8 +327,16 @@ namespace C7Engine {
 				if (t.continent != tile.continent && !t.IsCoast()) {
 					continue;
 				}
+				if (GameData.rng.Next(4) >= 3) {
+					continue;
+				}
 				player.tileKnowledge.AddTileToKnown(t);
 			}
+
+			// The outcome also records globally that the map has been revealed.
+			// OpenCiv3 has no consumer for the flag yet, but the original sets
+			// it, so the state is kept faithful.
+			gameData.mapHasBeenRevealed = true;
 
 			player.tileKnowledge.RecomputeActiveTiles();
 			Notify(player, "The friendly tribe gave us maps of their region.", happy: true);
@@ -217,25 +347,44 @@ namespace C7Engine {
 		/// field.
 		/// </summary>
 		private static bool ApplyMercenaries(GameData gameData, Player player, Tile tile) {
-			UnitPrototype chosen = gameData.unitPrototypes.FirstOrDefault(p => IsMercenaryCandidate(gameData, player, tile, p));
-			if (chosen == null) {
+			// Civ3 starts its catalogue walk at a random unit-type index and
+			// wraps around. The whole catalogue is offered to the walk, so the
+			// start index alone decides which acceptable type is reached first.
+			int count = gameData.unitPrototypes.Count;
+			if (count == 0) {
 				return false;
 			}
 
-			gameData.SpawnUnit(player, chosen, tile);
-			Notify(player, $"This friendly village gave us a skilled {chosen.name}.", happy: true);
-			return true;
+			int start = GameData.rng.Next(count);
+			for (int i = 0; i < count; ++i) {
+				UnitPrototype candidate = gameData.unitPrototypes[(start + i) % count];
+				if (!IsMercenaryCandidate(gameData, player, tile, candidate)) {
+					continue;
+				}
+
+				gameData.SpawnUnit(player, candidate, tile);
+				Notify(player, $"This friendly village gave us a skilled {candidate.name}.", happy: true);
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>
 		/// The mercenary picker accepts a type that is available to the
 		/// player's civilization, matches the hut tile's land/water domain,
 		/// needs no technology or only one of the player's current era, and
-		/// is buildable-or-owned by every living player. Civ3 starts the walk
-		/// at a random catalogue index; a deterministic walk is used instead
-		/// so that the outcome roll stays the only RNG draw.
+		/// is buildable-or-owned by every living player. Civ3 steps through the
+		/// catalogue with a modulus-3 twist rather than one type at a time; that
+		/// particular stride is not modelled, but the random starting point is.
 		/// </summary>
 		private static bool IsMercenaryCandidate(GameData gameData, Player player, Tile tile, UnitPrototype proto) {
+			// A type nobody can ever build is not a mercenary. Civ3 checks the
+			// "unproducible" flag as part of its buildable-by-everyone test.
+			if (proto.unproducible) {
+				return false;
+			}
+
 			// Civ3 first rejects wheeled unit types. OpenCiv3 does not import
 			// the wheeled flag, so that condition is missing.
 			if (!proto.producibleBy.Contains(player.civilization)) {
@@ -282,6 +431,9 @@ namespace C7Engine {
 			}
 
 			// The player must own a city and field at least one military unit.
+			// Civ3 also requires the global distance-to-the-nearest-city value
+			// to be at least 2 and consults a unit-ability test whose operand is
+			// not the entering unit (spec section 9.2); neither is modelled.
 			if (player.cities.Count == 0 || !player.units.Any(u => u.IsCombatUnit())) {
 				return false;
 			}
@@ -294,9 +446,9 @@ namespace C7Engine {
 
 			// Civ3 rotates the eight neighbouring directions by the turn
 			// number, skips water and occupied tiles, and gives the first,
-			// second and third spawn a 3/4, 2/3 and 1/2 chance, capped at
-			// three units. The chances are omitted so that the outcome roll
-			// stays the only RNG draw, so the cap of three is what remains.
+			// second and third successful spawn a 3/4, 2/3 and 1/2 chance. A
+			// failed chance does not end the walk: the remaining neighbours
+			// keep trying at the same odds until three units have appeared.
 			int spawned = 0;
 			for (int k = 1; k <= 8 && spawned < 3; ++k) {
 				TileDirection direction = TileDirectionExtensions.All[(gameData.turn + k) % TileDirectionExtensions.All.Length];
@@ -310,15 +462,24 @@ namespace C7Engine {
 					continue;
 				}
 
+				bool spawn = spawned switch {
+					0 => GameData.rng.Next(4) < 3,
+					1 => GameData.rng.Next(3) < 2,
+					_ => GameData.rng.Next(2) < 1,
+				};
+				if (!spawn) {
+					continue;
+				}
+
 				gameData.SpawnUnit(barbarians, basic, neighbor);
 				++spawned;
 			}
 
-			if (spawned == 0) {
-				return false;
+			// The guards above passed, so the outcome took effect even when
+			// every chance roll failed; in that case Civ3 records no message.
+			if (spawned > 0) {
+				Notify(player, $"We have disturbed an angry tribe. {spawned} barbarians appeared!", happy: false);
 			}
-
-			Notify(player, $"We have disturbed an angry tribe. {spawned} barbarians appeared!", happy: false);
 			return true;
 		}
 

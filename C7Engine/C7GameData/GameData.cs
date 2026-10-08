@@ -59,6 +59,11 @@ namespace C7GameData {
 
 		public BarbarianInfo barbarianInfo = new BarbarianInfo();
 
+		// Set when a goody hut gives out maps ("the tribe gave us maps of
+		// their region"). Civ3 records the reveal in a global flag; OpenCiv3
+		// keeps it here for the same purpose. No consumer reads it yet.
+		public bool mapHasBeenRevealed = false;
+
 		public StrengthBonus fortificationBonus;
 		public StrengthBonus riverCrossingBonus;
 		public StrengthBonus cityLevel1DefenseBonus;
