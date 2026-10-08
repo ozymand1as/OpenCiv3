@@ -39,7 +39,7 @@ namespace C7GameData {
 		public int corrupt;
 	}
 
-	public class City {
+	public partial class City {
 		private static ILogger log = Log.ForContext<City>();
 
 		public ID id { get; set; }

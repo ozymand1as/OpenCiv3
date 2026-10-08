@@ -20,6 +20,7 @@
         "Oasis"
       ],
       "height": 0,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -43,6 +44,7 @@
         "Sugar"
       ],
       "height": 0,
+      "pollutionEffect": 0,
       "allowedFoliageAction": "plantForest"
     },
     {
@@ -65,6 +67,7 @@
         "Tobacco"
       ],
       "height": 0,
+      "pollutionEffect": 1,
       "allowedFoliageAction": "plantForest"
     },
     {
@@ -86,6 +89,7 @@
         "Game"
       ],
       "height": 0,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "plantForest"
     },
     {
@@ -104,6 +108,7 @@
         "Wheat"
       ],
       "height": 0,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -131,6 +136,7 @@
         "Tobacco"
       ],
       "height": 2,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -154,6 +160,7 @@
         "Gold"
       ],
       "height": 4,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -179,6 +186,7 @@
         "Game"
       ],
       "height": 1,
+      "pollutionEffect": 14,
       "allowedFoliageAction": "clearForest"
     },
     {
@@ -203,6 +211,7 @@
         "Tropical Fruit"
       ],
       "height": 1,
+      "pollutionEffect": 14,
       "allowedFoliageAction": "clearWetlands"
     },
     {
@@ -224,6 +233,7 @@
         "Fish"
       ],
       "height": -2,
+      "pollutionEffect": 11,
       "allowedFoliageAction": "clearWetlands"
     },
     {
@@ -239,6 +249,7 @@
         "amount": 0.8
       },
       "height": 4,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -257,6 +268,7 @@
         "Fish"
       ],
       "height": -2,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -276,6 +288,7 @@
         "Fish"
       ],
       "height": -2,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     },
     {
@@ -291,6 +304,7 @@
         "amount": 0.1
       },
       "height": -2,
+      "pollutionEffect": -1,
       "allowedFoliageAction": "none"
     }
   ],
@@ -949,6 +963,7 @@
         "Terraform-2",
         "Terraform-8",
         "Terraform-7",
+        "Terraform-9",
         "Terraform-13",
         "Terraform-3"
       ]
@@ -8254,6 +8269,7 @@
     },
     {
       "name": "Factory",
+      "pollution": 2,
       "shieldCost": 240,
       "populationCost": 0,
       "requiredTech": "tech-48",
@@ -8269,6 +8285,7 @@
     },
     {
       "name": "Manufacturing Plant",
+      "pollution": 2,
       "shieldCost": 320,
       "populationCost": 0,
       "requiredTech": "tech-80",
@@ -8282,6 +8299,7 @@
     },
     {
       "name": "Recycling Center",
+      "flags": ["reducesBuildingPollution"],
       "shieldCost": 200,
       "populationCost": 0,
       "requiredTech": "tech-68",
@@ -8297,6 +8315,7 @@
     },
     {
       "name": "Coal Plant",
+      "pollution": 2,
       "shieldCost": 160,
       "populationCost": 0,
       "requiredTech": "tech-48",
@@ -8366,6 +8385,7 @@
     },
     {
       "name": "Research Lab",
+      "pollution": 1,
       "shieldCost": 200,
       "populationCost": 0,
       "requiredTech": "tech-67",
@@ -8382,6 +8402,7 @@
     },
     {
       "name": "Mass Transit System",
+      "flags": ["removesPopulationPollution"],
       "shieldCost": 200,
       "populationCost": 0,
       "requiredTech": "tech-73",
@@ -8488,6 +8509,7 @@
     },
     {
       "name": "Offshore Platform",
+      "pollution": 2,
       "shieldCost": 240,
       "populationCost": 0,
       "requiredTech": "tech-72",
@@ -8513,6 +8535,7 @@
     },
     {
       "name": "Airport",
+      "pollution": 1,
       "shieldCost": 160,
       "populationCost": 0,
       "requiredTech": "tech-59",
@@ -9001,6 +9024,7 @@
     },
     {
       "name": "Iron Works",
+      "pollution": 4,
       "shieldCost": 300,
       "populationCost": 0,
       "isSmallWonder": true,
@@ -9348,6 +9372,7 @@
     },
     {
       "name": "Commercial Dock",
+      "pollution": 1,
       "shieldCost": 160,
       "populationCost": 0,
       "requiredTech": "tech-61",
@@ -12607,6 +12632,12 @@
       "name": "Clear Damage",
       "civilopediaEntry": "TFRM_Clear_Damage",
       "turnsToComplete": 24,
+      "validators": [
+        "terraforms.validators.clear_damage"
+      ],
+      "effects": [
+        "terraforms.effects.clear_damage"
+      ],
       "aiScore": "terraforms.ai_score.default",
       "uiAction": "unit_clear_damage",
       "buttonTexture": "ui.unit_control.unit_clear_damage"

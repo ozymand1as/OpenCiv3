@@ -22,6 +22,16 @@ namespace C7GameData {
 		public HashSet<string> allowedResources = new();
 		public int height = -1;
 
+		// The Civ3 TERR.PollutionEffect field, as read out of the BIQ's fixed
+		// terrain order: the terrain this tile becomes under global warming.
+		// -1 means the terrain is immune, 14 (0xE) means the tile falls back
+		// to its underlying terrain, and any other value is a Civ3 terrain id
+		// whose terrain must be a land terrain (the engine rejects every
+		// target id of 11 or greater).
+		public int pollutionEffect = -1;
+
+		public const int UnderlyingTerrainPollutionEffect = 0xE;
+
 		// These enum and field are kept for compatibility with CIV3 saves.
 		public enum Civ3FoliageAction {
 			None,
@@ -80,6 +90,7 @@ namespace C7GameData {
 					amount = civ3Terrain.DefenseBonus / 100.0
 				},
 				allowedFoliageAction = LoadFoliageAction(civ3Terrain),
+				pollutionEffect = civ3Terrain.PollutionEffect,
 			};
 
 			if (c7Terrain.Key == "mountains" || c7Terrain.Key == "volcano") {
@@ -103,6 +114,27 @@ namespace C7GameData {
 			if (civ3Terrain.CanPlantForest) return Civ3FoliageAction.PlantForest;
 
 			return Civ3FoliageAction.None;
+		}
+
+		/// <summary>
+		/// Maps a Civ3 terrain id (a TERR index) to the key OpenCiv3 uses for
+		/// that terrain, or null when the id is not a known Civ3 terrain.
+		/// </summary>
+		public static string KeyForCiv3TerrainId(int civ3TerrainId) {
+			return civTerrainKeyLookup.TryGetValue(civ3TerrainId, out string key) ? key : null;
+		}
+
+		/// <summary>
+		/// The Civ3 terrain id for an OpenCiv3 terrain key, or -1 when the key
+		/// does not name one of the shipped Civ3 terrains.
+		/// </summary>
+		public static int Civ3TerrainIdForKey(string key) {
+			foreach (KeyValuePair<int, string> entry in civTerrainKeyLookup) {
+				if (entry.Value == key) {
+					return entry.Key;
+				}
+			}
+			return -1;
 		}
 
 		//This only works for Conquests due to the new terrains being added in the middle of the list.

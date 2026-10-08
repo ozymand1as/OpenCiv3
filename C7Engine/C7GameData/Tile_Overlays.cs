@@ -38,6 +38,42 @@ public partial class Tile {
 		if (craters != null)
 			tile.overlays.Add(craters);
 	}
+	public static void TryAddPollution(Tile tile) {
+		var pollution =
+			EngineStorage.gameData.terrainImprovements.FirstOrDefault(i => i.key == POLLUTION);
+		if (pollution != null)
+			tile.overlays.Add(pollution);
+	}
+
+	/// <summary>
+	/// Applies Civ3's "clear damage" worker job to this tile
+	/// (18_terrain_improvement.md section 3.5 and section 5): the job's unset
+	/// mask always carries the pollution bit, and carries the craters bit only
+	/// when the tile is cratered and not polluted. So a tile that carries both
+	/// keeps its craters, and a tile that only carries craters loses them.
+	/// </summary>
+	public void ClearDamage() {
+		bool wasPolluted = HasPollution();
+		bool wasCratered = HasCraters();
+
+		if (wasPolluted) {
+			RemoveImprovementAtLayer(Layer.Pollution);
+		}
+		if (wasCratered && !wasPolluted) {
+			RemoveImprovementAtLayer(Layer.Craters);
+		}
+	}
+
+	/// <summary>
+	/// Removes whatever improvement occupies the given layer of this tile, if
+	/// any. Global warming uses it to clear mine and irrigation.
+	/// </summary>
+	public void RemoveImprovementAtLayer(Layer layer) {
+		TerrainImprovement improvement = overlays.ImprovementAtLayer(layer);
+		if (improvement != null) {
+			overlays.Remove(improvement);
+		}
+	}
 
 	public class TileOverlays {
 		public const string ROAD = "road";
