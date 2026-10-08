@@ -38,6 +38,13 @@ namespace C7Engine {
 	// The espionage subsystem, ported from the Civ3 Conquests engine. The rules
 	// follow re/specs/24_espionage.md: the nine-mission table, the cost formula,
 	// the success-probability formula and the per-mission resolutions.
+	//
+	// Not implemented here, and not fakeable without machinery the engine lacks:
+	// Initiate Propaganda's per-citizen subversion roll and city flip (no city
+	// capture path), the AI's per-turn espionage driver and its mood-weighted
+	// mission chooser (no AI espionage hook and no diplomatic-mood field -
+	// 24_espionage.md 8.4), and the human steal-technology pick through the
+	// science advisor (24_espionage.md 6.3, marked [?] in the spec).
 	public static class Espionage {
 		public const int BuildEmbassy = 0;
 		public const int InvestigateCity = 1;
@@ -110,6 +117,17 @@ namespace C7Engine {
 			return agent == EspionageAgent.Diplomat ? mission.diplomatAllowed : mission.spyAllowed;
 		}
 
+		// Whether the acting civ may currently use `agent` at all (spec 3.1,
+		// 3.2). The original keeps the two predicates in separate vtable slots
+		// of the two agent records; a mission may only be offered, and only run,
+		// by an agent the civ has. A mission whose ESPN mask admits the agent
+		// kind is still refused when this predicate says no.
+		public static bool AgentIsAvailable(GameData gameData, Player actor, EspionageAgent agent) {
+			return agent == EspionageAgent.Diplomat
+				? DiplomatIsAvailable(gameData, actor)
+				: SpyIsAvailable(gameData, actor);
+		}
+
 		// Whether the mission menu should offer `missionId` against `target`
 		// (spec 3.3). Missions 0 and 4 are self-scoped entries in the original
 		// UI; here they are offered against a real target and the per-civ
@@ -120,6 +138,9 @@ namespace C7Engine {
 				return false;
 			}
 			if (!MissionAllowsAgent(mission, agent)) {
+				return false;
+			}
+			if (!AgentIsAvailable(gameData, actor, agent)) {
 				return false;
 			}
 			if (!TryGetRelationship(actor, target, out PlayerRelationship relationship)) {
@@ -332,6 +353,13 @@ namespace C7Engine {
 				result.message = $"Unknown espionage mission id {missionId}.";
 				return result;
 			}
+			// The run path composes the agent predicate again, so a caller that
+			// bypasses the mission menu still cannot run a mission through an
+			// agent its civ does not have.
+			if (!AgentIsAvailable(gameData, actor, agent)) {
+				result.message = "The acting civ cannot use that agent.";
+				return result;
+			}
 			if (!MissionIsAvailable(gameData, actor, target, missionId, agent)) {
 				result.message = "The mission is not available.";
 				return result;
@@ -360,14 +388,14 @@ namespace C7Engine {
 			result.ran = true;
 
 			if (GameData.rng.Next(100) >= result.successChance) {
-				return FailMission(actor, target, agent, missionId, result);
+				return FailMission(gameData, actor, target, agent, missionId, result);
 			}
 
 			ApplyEffect(gameData, actor, target, targetCity, missionId, result);
 			return result;
 		}
 
-		private static EspionageMissionResult FailMission(Player actor, Player target, EspionageAgent agent, int missionId, EspionageMissionResult result) {
+		private static EspionageMissionResult FailMission(GameData gameData, Player actor, Player target, EspionageAgent agent, int missionId, EspionageMissionResult result) {
 			result.succeeded = false;
 			if (missionId == PlantSpy) {
 				// A caught plant attempt latches the target against any new
@@ -375,7 +403,7 @@ namespace C7Engine {
 				actor.playerRelationships[target.id].plantSpyAttemptWasCaught = true;
 			}
 			if (IsCatchableMission(missionId)) {
-				NotifySpyCaught(actor, target, agent == EspionageAgent.Spy);
+				NotifySpyCaught(gameData, actor, target, agent == EspionageAgent.Spy);
 				result.agentCaught = true;
 			}
 			result.message = "The mission failed.";
@@ -393,7 +421,7 @@ namespace C7Engine {
 
 		// The target caught a spy. `actor` is the civ whose spy was caught and
 		// `target` is the civ that caught it.
-		private static void NotifySpyCaught(Player actor, Player target, bool agentWasSpy) {
+		private static void NotifySpyCaught(GameData gameData, Player actor, Player target, bool agentWasSpy) {
 			// The target's reputation counter for the actor goes up.
 			target.playerRelationships[actor.id].caughtSpyCount++;
 
@@ -401,6 +429,15 @@ namespace C7Engine {
 			// running any further spy mission against this civ.
 			if (agentWasSpy) {
 				actor.playerRelationships[target.id].agentPlanted = false;
+			}
+
+			// The civ that caught the spy declares war on the spy's owner when
+			// that civ is not the human player and the two are still at peace
+			// (spec 7, step 3). The original also consults an AI willingness
+			// predicate; the engine has no diplomatic-mood field to weight
+			// (24_espionage.md 8.4), so an AI still at peace responds with war.
+			if (!target.isHuman && PlayerRelationship.AtPeace(actor, target)) {
+				target.DeclareWarOn(actor, gameData.turn);
 			}
 		}
 
@@ -471,7 +508,7 @@ namespace C7Engine {
 					actor.playerRelationships[target.id].stolenPlansUntilTurn = gameData.turn + 1;
 					result.succeeded = true;
 					if (GameData.rng.Next(100) < StealPlansExposureRoll) {
-						NotifySpyCaught(actor, target, true);
+						NotifySpyCaught(gameData, actor, target, true);
 						result.agentCaught = true;
 						result.message = "Stole plans, but the agent was caught.";
 					} else {
@@ -479,12 +516,17 @@ namespace C7Engine {
 					}
 					break;
 				case SabotageProduction: {
-						int itemCost = targetCity.itemBeingProduced == null ? 0
-						: targetCity.owner.ShieldCost(targetCity.itemBeingProduced);
-						targetCity.SetStoredShields(Math.Min(targetCity.shieldsStored / 2, itemCost));
+						// Halve the production box, never leaving more shields in it
+						// than the item in production costs. A city with nothing in
+						// production has no item cost to cap against, so the box is
+						// halved rather than emptied (spec 6.7).
+						int halved = targetCity.shieldsStored / 2;
+						int itemCost = targetCity.itemBeingProduced == null ? int.MaxValue
+							: targetCity.owner.ShieldCost(targetCity.itemBeingProduced);
+						targetCity.SetStoredShields(Math.Min(halved, itemCost));
 						result.succeeded = true;
 						if (GameData.rng.Next(100) < SabotageExposureRoll) {
-							NotifySpyCaught(actor, target, true);
+							NotifySpyCaught(gameData, actor, target, true);
 							result.agentCaught = true;
 							result.message = "Sabotaged production, but the agent was caught.";
 						} else {
@@ -498,7 +540,7 @@ namespace C7Engine {
 							// Nothing to expose; the attempt still runs the caught
 							// bookkeeping.
 							result.harmlessFailure = true;
-							NotifySpyCaught(actor, target, true);
+							NotifySpyCaught(gameData, actor, target, true);
 							result.agentCaught = true;
 							result.message = "No enemy agent was found, and our agent was caught.";
 							break;
@@ -506,7 +548,7 @@ namespace C7Engine {
 						targetToActor.agentPlanted = false;
 						result.succeeded = true;
 						if (GameData.rng.Next(100) < ExposeSpyExposureRoll) {
-							NotifySpyCaught(actor, target, true);
+							NotifySpyCaught(gameData, actor, target, true);
 							result.agentCaught = true;
 							result.message = "Removed the enemy agent, but our agent was exposed.";
 						} else {

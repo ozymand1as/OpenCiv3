@@ -79,6 +79,24 @@ internal static class EspionageTestGame {
 		};
 	}
 
+	// Writing is the only shipped technology whose advance flag bit 0 is set,
+	// so it is what unlocks the diplomat agent.
+	public static Tech AddWriting(C7GameData.GameData gameData, Player player) {
+		Tech writing = new() { id = gameData.ids.CreateID("tech"), Name = "Writing", EnablesDiplomats = true };
+		gameData.techs.Add(writing);
+		player.knownTechs.Add(writing.id);
+		return writing;
+	}
+
+	// The Intelligence Agency is the only shipped wonder carrying the "allows
+	// spy missions" building flag, so it is what unlocks the spy agent.
+	public static Building NewIntelligenceAgency(C7GameData.GameData gameData) {
+		return new Building(new SaveBuilding {
+			name = "Intelligence Agency",
+			flags = { SaveBuilding.Flag.AllowsSpyMissions },
+		}, gameData);
+	}
+
 	public static Player NewPlayer(C7GameData.GameData gameData, string key, int gold) {
 		return new Player {
 			id = gameData.ids.CreateID(key),
@@ -235,7 +253,10 @@ public class EspionageRulesetTest {
 public class EspionageTest {
 	private const int StealTechnology = Espionage.StealTechnology;
 
-	private static (C7GameData.GameData gameData, Player actor, Player target, City actorCity, City targetCity) SetupPair(int targetPopulation = 6, int distance = 8, int ownNationals = 0) {
+	// `agentsAvailable` unlocks both agents, so a test that is about something
+	// else (a cost, an effect) does not have to restate the eligibility gates.
+	// Tests that are about the gates pass false and unlock one agent at a time.
+	private static (C7GameData.GameData gameData, Player actor, Player target, City actorCity, City targetCity) SetupPair(int targetPopulation = 6, int distance = 8, int ownNationals = 0, bool agentsAvailable = true) {
 		C7GameData.GameData gameData = EspionageTestGame.NewGameData();
 		Player actor = EspionageTestGame.NewPlayer(gameData, "actor", 100000);
 		Player target = EspionageTestGame.NewPlayer(gameData, "target", 100000);
@@ -245,6 +266,10 @@ public class EspionageTest {
 		Tile targetTile = EspionageTestGame.NewTile(gameData, distance, distance);
 		City actorCity = EspionageTestGame.NewCity(gameData, actor, actorTile, "Capital", 1, actor.civilization);
 		actorCity.capital = true;
+		if (agentsAvailable) {
+			EspionageTestGame.AddWriting(gameData, actor);
+			actorCity.AddBuilding(EspionageTestGame.NewIntelligenceAgency(gameData));
+		}
 		City targetCity = EspionageTestGame.NewCity(gameData, target, targetTile, "Target", targetPopulation - ownNationals, target.civilization);
 		for (int i = 0; i < ownNationals; i++) {
 			targetCity.residents.Add(new CityResident { nationality = actor.civilization });
@@ -262,20 +287,16 @@ public class EspionageTest {
 
 	[Fact]
 	public void DiplomatIsAvailableWithCapitalEnablingTechAndPlayableGovernment() {
-		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair();
-		Tech writing = new() { id = gameData.ids.CreateID("tech"), Name = "Writing", EnablesDiplomats = true };
-		gameData.techs.Add(writing);
-		actor.knownTechs.Add(writing.id);
+		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair(agentsAvailable: false);
+		EspionageTestGame.AddWriting(gameData, actor);
 
 		Assert.True(Espionage.DiplomatIsAvailable(gameData, actor));
 	}
 
 	[Fact]
 	public void DiplomatIsUnavailableWithoutACapital() {
-		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair();
-		Tech writing = new() { id = gameData.ids.CreateID("tech"), Name = "Writing", EnablesDiplomats = true };
-		gameData.techs.Add(writing);
-		actor.knownTechs.Add(writing.id);
+		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair(agentsAvailable: false);
+		EspionageTestGame.AddWriting(gameData, actor);
 		actorCity.capital = false;
 
 		Assert.False(Espionage.DiplomatIsAvailable(gameData, actor));
@@ -283,7 +304,7 @@ public class EspionageTest {
 
 	[Fact]
 	public void DiplomatIsUnavailableWithoutATechnologyThatEnablesDiplomats() {
-		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair();
+		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair(agentsAvailable: false);
 		Tech bronzeWorking = new() { id = gameData.ids.CreateID("tech"), Name = "Bronze Working" };
 		gameData.techs.Add(bronzeWorking);
 		actor.knownTechs.Add(bronzeWorking.id);
@@ -293,10 +314,8 @@ public class EspionageTest {
 
 	[Fact]
 	public void DiplomatIsUnavailableInTheTransitionGovernment() {
-		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair();
-		Tech writing = new() { id = gameData.ids.CreateID("tech"), Name = "Writing", EnablesDiplomats = true };
-		gameData.techs.Add(writing);
-		actor.knownTechs.Add(writing.id);
+		(C7GameData.GameData gameData, Player actor, _, _, _) = SetupPair(agentsAvailable: false);
+		EspionageTestGame.AddWriting(gameData, actor);
 
 		// Anarchy is the shipped transition government.
 		actor.government = new Government { transitionType = true };
@@ -309,19 +328,15 @@ public class EspionageTest {
 
 	[Fact]
 	public void SpyIsAvailableWithASpyWonder() {
-		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair();
-		Building intelligenceAgency = new(new SaveBuilding {
-			name = "Intelligence Agency",
-			flags = { SaveBuilding.Flag.AllowsSpyMissions },
-		}, gameData);
-		actorCity.AddBuilding(intelligenceAgency);
+		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair(agentsAvailable: false);
+		actorCity.AddBuilding(EspionageTestGame.NewIntelligenceAgency(gameData));
 
 		Assert.True(Espionage.SpyIsAvailable(gameData, actor));
 	}
 
 	[Fact]
 	public void SpyIsUnavailableWithoutASpyWonder() {
-		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair();
+		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair(agentsAvailable: false);
 		Building courthouse = new(new SaveBuilding { name = "Courthouse" }, gameData);
 		actorCity.AddBuilding(courthouse);
 
@@ -330,12 +345,8 @@ public class EspionageTest {
 
 	[Fact]
 	public void SpyIsUnavailableInTheTransitionGovernment() {
-		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair();
-		Building intelligenceAgency = new(new SaveBuilding {
-			name = "Intelligence Agency",
-			flags = { SaveBuilding.Flag.AllowsSpyMissions },
-		}, gameData);
-		actorCity.AddBuilding(intelligenceAgency);
+		(C7GameData.GameData gameData, Player actor, _, City actorCity, _) = SetupPair(agentsAvailable: false);
+		actorCity.AddBuilding(EspionageTestGame.NewIntelligenceAgency(gameData));
 		actor.government = new Government { transitionType = true };
 
 		Assert.False(Espionage.SpyIsAvailable(gameData, actor));
@@ -362,6 +373,46 @@ public class EspionageTest {
 		Assert.False(Espionage.MissionIsAvailable(gameData, actor, actor, Espionage.InvestigateCity, EspionageAgent.Diplomat));
 		Assert.False(Espionage.MissionIsAvailable(gameData, actor, target, 42, EspionageAgent.Spy));
 		Assert.NotNull(targetCity);
+	}
+
+	[Fact]
+	public void MissionAvailabilityRequiresTheActingAgentsPredicate() {
+		// Every per-civ prerequisite is met, but the civ has neither Writing
+		// (the diplomat agent) nor the Intelligence Agency (the spy agent), so
+		// neither agent may be offered a mission at all.
+		(C7GameData.GameData gameData, Player actor, Player target, City actorCity, City targetCity) = SetupPair(agentsAvailable: false);
+		Relationship(actor, target).embassyEstablished = true;
+		Relationship(actor, target).agentPlanted = true;
+
+		Assert.False(Espionage.MissionIsAvailable(gameData, actor, target, Espionage.InvestigateCity, EspionageAgent.Diplomat));
+		Assert.False(Espionage.MissionIsAvailable(gameData, actor, target, Espionage.StealWorldMap, EspionageAgent.Spy));
+
+		// The Intelligence Agency unlocks the spy agent alone; the diplomat
+		// mission stays refused.
+		actorCity.AddBuilding(EspionageTestGame.NewIntelligenceAgency(gameData));
+		Assert.True(Espionage.MissionIsAvailable(gameData, actor, target, Espionage.StealWorldMap, EspionageAgent.Spy));
+		Assert.False(Espionage.MissionIsAvailable(gameData, actor, target, Espionage.InvestigateCity, EspionageAgent.Diplomat));
+
+		// Writing unlocks the diplomat agent.
+		EspionageTestGame.AddWriting(gameData, actor);
+		Assert.True(Espionage.MissionIsAvailable(gameData, actor, target, Espionage.InvestigateCity, EspionageAgent.Diplomat));
+
+		Assert.NotNull(targetCity);
+	}
+
+	[Fact]
+	public void RunMissionIsRefusedWithoutTheActingAgentsPredicate() {
+		// The run path composes the same gate: a spy mission without the
+		// Intelligence Agency never starts and never spends gold.
+		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair(agentsAvailable: false);
+		Relationship(actor, target).agentPlanted = true;
+		C7GameData.GameData.rng = new FixedRandom(0);
+
+		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, Espionage.StealWorldMap, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
+
+		Assert.False(result.ran);
+		Assert.False(result.succeeded);
+		Assert.Equal(100000, actor.gold);
 	}
 
 	[Fact]
@@ -653,7 +704,7 @@ public class EspionageTest {
 		Assert.False(result.succeeded);
 		Assert.True(result.harmlessFailure);
 		Assert.False(result.agentCaught);
-		Assert.Empty(actor.knownTechs);
+		Assert.DoesNotContain(tech.id, actor.knownTechs);
 		Assert.True(Relationship(actor, target).agentPlanted);
 	}
 
@@ -674,7 +725,7 @@ public class EspionageTest {
 		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, StealTechnology, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
 		Assert.False(result.succeeded);
 		Assert.True(result.harmlessFailure);
-		Assert.Empty(actor.knownTechs);
+		Assert.DoesNotContain(tech.id, actor.knownTechs);
 	}
 
 	[Fact]
@@ -714,6 +765,22 @@ public class EspionageTest {
 	}
 
 	[Fact]
+	public void SabotageProductionWithNothingInProductionHalvesTheBox() {
+		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair();
+		Relationship(actor, target).agentPlanted = true;
+		// A city with no item in production has no item cost to cap against, so
+		// the box is halved rather than emptied.
+		targetCity.itemBeingProduced = null;
+		targetCity.SetStoredShields(12);
+		C7GameData.GameData.rng = new FixedRandom(50);
+
+		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, Espionage.SabotageProduction, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
+
+		Assert.True(result.succeeded);
+		Assert.Equal(6, targetCity.shieldsStored);
+	}
+
+	[Fact]
 	public void ExposeEnemySpyRemovesTheEnemyAgent() {
 		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair();
 		Relationship(actor, target).agentPlanted = true;
@@ -741,6 +808,55 @@ public class EspionageTest {
 		Assert.True(result.agentCaught);
 		Assert.False(Relationship(actor, target).agentPlanted);
 		Assert.Equal(1, Relationship(target, actor).caughtSpyCount);
+	}
+
+	[Fact]
+	public void CatchingASpyMakesANonHumanTargetDeclareWar() {
+		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair();
+		Relationship(actor, target).agentPlanted = true;
+		// The mission roll fails, so the agent is caught.
+		C7GameData.GameData.rng = new FixedRandom(99);
+
+		Assert.True(PlayerRelationship.AtPeace(actor, target));
+		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, StealTechnology, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
+
+		Assert.False(result.succeeded);
+		Assert.True(result.agentCaught);
+		// The civ that caught the spy declares war on the spy's owner.
+		Assert.True(PlayerRelationship.AtWar(actor, target));
+		Assert.Equal(1, Relationship(actor, target).warDeclarationCount);
+	}
+
+	[Fact]
+	public void CatchingASpyDoesNotMakeAHumanTargetDeclareWar() {
+		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair();
+		target.isHuman = true;
+		Relationship(actor, target).agentPlanted = true;
+		C7GameData.GameData.rng = new FixedRandom(99);
+
+		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, StealTechnology, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
+
+		Assert.True(result.agentCaught);
+		Assert.True(PlayerRelationship.AtPeace(actor, target));
+		Assert.Equal(0, Relationship(actor, target).warDeclarationCount);
+	}
+
+	[Fact]
+	public void CatchingASpyDoesNotRedeclareWarOnACivAlreadyAtWar() {
+		(C7GameData.GameData gameData, Player actor, Player target, _, City targetCity) = SetupPair();
+		Relationship(actor, target).agentPlanted = true;
+		PlayerRelationship.DeclareWar(actor, target, false, 0);
+		C7GameData.GameData.rng = new FixedRandom(99);
+
+		EspionageMissionResult result = Espionage.RunMission(gameData, actor, target, targetCity, StealTechnology, EspionageAgent.Spy, EspionageSafetyLevel.Carefully);
+
+		Assert.True(result.agentCaught);
+		// The two are already at war, so catching the spy is not a new war
+		// declaration: the catcher must not declare war on the actor a second
+		// time, and must not overwrite the existing war's bookkeeping.
+		Assert.True(PlayerRelationship.AtWar(actor, target));
+		Assert.Equal(0, Relationship(actor, target).warDeclarationCount);
+		Assert.Equal(1, Relationship(target, actor).warDeclarationCount);
 	}
 
 	[Fact]
