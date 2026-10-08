@@ -242,6 +242,22 @@ namespace C7GameData {
 			}
 		}
 
+		// Whether a river runs along the edge this tile shares with the
+		// neighbour in the given direction. A map Civ3 generates records the
+		// crossing on both of the tiles sharing the edge, while one it imported
+		// may record it on only one of them, so either side counts.
+		public bool HasRiverOnEdge(TileDirection dir) {
+			if (HasRiverCrossing(dir)) {
+				return true;
+			}
+
+			if (neighbors.TryGetValue(dir, out Tile neighbor) && neighbor != NONE) {
+				return neighbor.HasRiverCrossing(dir.Reversed());
+			}
+
+			return false;
+		}
+
 		public bool IsLand() {
 			return !baseTerrainType.isWater();
 		}
