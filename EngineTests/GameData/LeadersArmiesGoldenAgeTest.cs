@@ -572,6 +572,20 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(0, fast.movementPoints.remaining);
 	}
 
+	[Fact]
+	public void AnArmyTakesItsMembersWithItWhenItDies() {
+		var (player, army) = SetupArmy();
+		MapUnit member = MakeUnit(player, MakeLandPrototype(1, 1), army.location, experience: "Regular");
+		Assert.True(member.LoadIntoArmy(army));
+
+		army.RemoveFromPlay();
+
+		Assert.DoesNotContain(army, gd.mapUnits);
+		Assert.DoesNotContain(member, gd.mapUnits);
+		Assert.DoesNotContain(member, player.units);
+		Assert.DoesNotContain(member, army.location.unitsOnTile);
+	}
+
 	// ---------- army strength in combat ----------
 
 	private MapUnit MakeArmyWith(params (int attack, int defense)[] members) {

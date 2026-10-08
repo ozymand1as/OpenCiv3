@@ -308,6 +308,10 @@ namespace C7GameData {
 		}
 
 		internal void RemoveUnit(MapUnit unit) {
+			// An army takes its members with it. The cascade is recursive so that a
+			// member's own cargo goes as well.
+			List<MapUnit> members = unit.IsArmy ? unit.Members() : [];
+
 			// Set unit's hit points to zero to indicate that it's no longer alive. Ultimately we may not want to do this. I'm only doing it right
 			// now since this way all the UI needs to do to check if the selected unit has been destroyed is to check its hit points.
 			unit.hitPointsRemaining = 0;
@@ -334,6 +338,10 @@ namespace C7GameData {
 			// and end up introducing a bunch of bugs.
 			// If it ends up being a problem, we could certainly look into this more.
 			owner.tileKnowledge.RecomputeActiveTiles();
+
+			foreach (MapUnit member in members) {
+				RemoveUnit(member);
+			}
 
 			if (!owner.defeated)
 				CheckForCivDestructionAndNotifyUi(unit.owner);
