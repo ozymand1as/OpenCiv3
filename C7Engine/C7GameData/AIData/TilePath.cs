@@ -110,13 +110,23 @@ namespace C7GameData {
 			// the cost should always be 1.
 			if (from.IsWater() && newLocation.HasCity()) return 1;
 
-			// Movement costs of terrain improvements (roads and railroads)
-			float fromCost = from.overlays.MovementCost();
-			float toCost = newLocation.overlays.MovementCost();
+			// Movement costs of terrain improvements (roads and railroads). A road
+			// or railroad only discounts a step when both the source and the
+			// destination carry the improvement; when only one end does, the
+			// destination's terrain cost applies. A tile with no improvement at
+			// all - including a city tile with no road on it - yields null rather
+			// than a cost, so it cannot be mistaken for a cheap end.
+			float? fromRoadCost = from.overlays.RoadMovementCost();
+			float? toRoadCost = newLocation.overlays.RoadMovementCost();
 
-			return (fromCost == -1 || toCost == -1)
-				? newLocation.MovementCost() // terrain movement cost
-				: Math.Max(fromCost, toCost);
+			if (fromRoadCost.HasValue && toRoadCost.HasValue) {
+				// Railroads are free and also count as roads, so the slower end
+				// determines the step: rail-to-rail is free, while rail-to-road
+				// and road-to-road cost the road improvement's movement cost.
+				return Math.Max(fromRoadCost.Value, toRoadCost.Value);
+			}
+
+			return newLocation.MovementCost(); // terrain movement cost
 		}
 	}
 }

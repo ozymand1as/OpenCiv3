@@ -157,6 +157,7 @@ public class MapBase {
 	}
 
 	protected TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, movementCost: 1.0f / 3);
+	protected TerrainImprovement railroad = new("railroad", TerrainImprovement.Layer.Roads, movementCost: 0);
 
 	protected Tile MakeMountainTile() {
 		return new(ID.None("")) {

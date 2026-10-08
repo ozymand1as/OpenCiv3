@@ -147,21 +147,19 @@ public partial class Tile {
 			return canBeReplaced;
 		}
 
-		// Will return a -1 if the tile movement cost is unaffected by the improvements
-		public float MovementCost() {
-			if (terrainImprovementByLayer.TryGetValue(Layer.Roads, out TerrainImprovement road)) {
-				return road.movementCost;
+		// The movement cost of this tile's road or railroad improvement, or null
+		// when the tile carries neither. Roads and railroads share the Roads
+		// layer, so this returns the cost of whichever is present.
+		//
+		// Returning null for "no improvement" (rather than a sentinel cost such
+		// as -1) keeps callers from mistaking a tile without an improvement for
+		// a cheap one.
+		public float? RoadMovementCost() {
+			if (terrainImprovementByLayer.TryGetValue(Layer.Roads, out TerrainImprovement roads)) {
+				return roads.movementCost;
 			}
 
-			// since we added roads & railroads on city tiles, this is probably not needed
-			// I am only leaving this here, because it doesn't seem to affect the game
-			// and it's also related to the tile path algorithm, and I think I want to favourite 
-			// going through cities if possible, for better defense.
-			if (tile.HasCity()) {
-				return 0;
-			}
-
-			return -1;
+			return null;
 		}
 
 		public int GetBaseYieldBonus(YieldType type) {
