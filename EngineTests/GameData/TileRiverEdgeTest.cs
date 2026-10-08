@@ -94,6 +94,57 @@ public class TileRiverEdgeTest : MapBase {
 		Assert.False(tile.HasRiverOnEdge(TileDirection.SOUTHWEST));
 	}
 
+	// The flood plain vegetation sheet holds one 128x64 cell per combination of
+	// river edges; Tile.FloodPlainOverlayIndex is the index of the cell, laid
+	// out as column index % 4, row index / 4. Cell 1 puts its opaque pixels in
+	// the upper left quadrant of the cell and cell 4 in the lower left one, so
+	// a river on the north-west edge is index 1, the tile's own upper left
+	// corner, and not the vertically mirrored index 4.
+	[Theory]
+	[InlineData(TileDirection.NORTHWEST, 1)]
+	[InlineData(TileDirection.NORTHEAST, 2)]
+	[InlineData(TileDirection.SOUTHWEST, 4)]
+	[InlineData(TileDirection.SOUTHEAST, 8)]
+	public void OneRiverEdgeSelectsItsOwnQuadrantOfTheSheet(TileDirection dir, int expectedIndex) {
+		Tile tile = MakeDesertTile();
+		SetRiverOnEdge(tile, dir);
+
+		Assert.Equal(expectedIndex, tile.FloodPlainOverlayIndex());
+	}
+
+	[Fact]
+	public void TwoRiverEdgesSelectTheSumOfTheirQuadrants() {
+		Tile tile = MakeDesertTile();
+		SetRiverOnEdge(tile, TileDirection.NORTHWEST);
+		SetRiverOnEdge(tile, TileDirection.SOUTHWEST);
+
+		Assert.Equal(5, tile.FloodPlainOverlayIndex());
+	}
+
+	[Fact]
+	public void AllFourRiverEdgesSelectTheLastCellOfTheSheet() {
+		Tile tile = MakeDesertTile();
+		foreach (TileDirection dir in diagonalDirections) {
+			SetRiverOnEdge(tile, dir);
+		}
+
+		Assert.Equal(15, tile.FloodPlainOverlayIndex());
+	}
+
+	[Fact]
+	public void ATileWithoutARiverDrawsNoFloodPlainVegetation() {
+		Assert.Equal(0, MakeDesertTile().FloodPlainOverlayIndex());
+	}
+
+	[Fact]
+	public void ACrossingRecordedOnlyOnTheNeighbourStillSelectsTheQuadrant() {
+		Tile tile = MakeDesertTile();
+		Tile neighbor = AddNeighborsAndUpdateMap(tile, MakeDesertTile(), TileDirection.SOUTHWEST);
+		SetRiverOnEdge(neighbor, TileDirection.NORTHEAST);
+
+		Assert.Equal(4, tile.FloodPlainOverlayIndex());
+	}
+
 	private static void SetRiverOnEdge(Tile tile, TileDirection dir) {
 		switch (dir) {
 			case TileDirection.NORTH: tile.riverNorth = true; break;

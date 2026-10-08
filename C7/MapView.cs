@@ -376,37 +376,26 @@ public partial class FloodPlainLayer : LooseLayer {
 		}
 
 		// Civ3's flood plain vegetation is a 4x4 sheet of 128x64 cells, one for
-		// each combination of the tile's four river edges. The sheet's rows run
-		// opposite to the tile's north/south: the cell whose vegetation sits on
-		// a tile's upper-left edge is the one drawn for a river on the LOWER-left
-		// edge. So each edge selects its cell through the vertically opposite
-		// bit:
-		//
-		//     NW edge -> bit 4   NE edge -> bit 8
-		//     SW edge -> bit 1   SE edge -> bit 2
-		int index = 0;
-		if (tile.HasRiverOnEdge(TileDirection.NORTHWEST)) {
-			index |= 4;
-		}
-		if (tile.HasRiverOnEdge(TileDirection.NORTHEAST)) {
-			index |= 8;
-		}
-		if (tile.HasRiverOnEdge(TileDirection.SOUTHWEST)) {
-			index |= 1;
-		}
-		if (tile.HasRiverOnEdge(TileDirection.SOUTHEAST)) {
-			index |= 2;
-		}
+		// each combination of the tile's four river edges. Tile picks the cell
+		// from the tile's own edge bits, which place each edge's vegetation in
+		// its own quadrant of the tile.
+		int index = tile.FloodPlainOverlayIndex();
 
 		int column = index % 4;
 		int row = index / 4;
 		Rect2 spriteRectangle = new Rect2(column * floodPlainSpriteSize.X, row * floodPlainSpriteSize.Y, floodPlainSpriteSize);
 
 		// Civ3 draws the vegetation from the same call as the river segments,
-		// at the same screen position and with the same 128x64 cell, so it is
-		// anchored on the tile's own cell and has no offset of its own. The
-		// terrain layer's (0, -cellSize.Y) shift belongs to that layer alone;
+		// so it is anchored on the tile's own cell and has no offset of its own.
+		// The terrain layer's (0, -cellSize.Y) shift belongs to that layer alone;
 		// inheriting it would leave the vegetation half a cell from the water.
+		//
+		// This is the tile's cell origin, which is not the rectangle RiverLayer
+		// uses: RiverLayer centres on the four-tile junction east of the tile
+		// (riverCenterOffset = half a cell east), and whether its texture-index
+		// selection compensates for that is unresolved. The two layers therefore
+		// differ by that offset, and whether the vegetation lines up with the
+		// drawn water still needs a look at the running game.
 		Rect2 screenTarget = new Rect2(tileCenter - (float)0.5 * floodPlainSpriteSize, floodPlainSpriteSize);
 		looseView.DrawTextureRectRegion(floodPlainTexture, screenTarget, spriteRectangle);
 	}

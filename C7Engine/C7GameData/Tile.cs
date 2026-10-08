@@ -258,6 +258,38 @@ namespace C7GameData {
 			return false;
 		}
 
+		// Which cell of Civ3's 4x4 flood plain vegetation sheet shows this tile's
+		// vegetation: the cell at column index % 4, row index / 4. The sheet
+		// identifies an edge by the quadrant it occupies on the tile, so bit 1 is
+		// the north-west edge, 2 the north-east, 4 the south-west and 8 the
+		// south-east. Any subset of the four edges can carry a river, and the
+		// vegetation for the chosen edges sits in the corresponding quadrants of
+		// the cell, so the bits combine by addition.
+		//
+		// The art fixes the direction of each bit: cell 1 (row 0, column 1) has
+		// its opaque pixels centred near (34, 23) of the 128x64 cell, the upper
+		// left quadrant, and cell 4 (row 1, column 0) near (34, 42), the lower
+		// left one. A river on the north-west edge therefore selects cell 1, not
+		// cell 4: the tile's own upper left corner, not the vertically mirrored
+		// lower left.
+		public int FloodPlainOverlayIndex() {
+			int index = 0;
+			if (HasRiverOnEdge(TileDirection.NORTHWEST)) {
+				index |= 1;
+			}
+			if (HasRiverOnEdge(TileDirection.NORTHEAST)) {
+				index |= 2;
+			}
+			if (HasRiverOnEdge(TileDirection.SOUTHWEST)) {
+				index |= 4;
+			}
+			if (HasRiverOnEdge(TileDirection.SOUTHEAST)) {
+				index |= 8;
+			}
+
+			return index;
+		}
+
 		public bool IsLand() {
 			return !baseTerrainType.isWater();
 		}
