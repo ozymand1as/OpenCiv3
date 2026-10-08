@@ -138,6 +138,9 @@ namespace C7GameData {
 				if (civ3Tile.BarbarianCamp >= 0) {
 					tile.features.Add(BARBARIAN_CAMP);
 				}
+				if (civ3Tile.GoodyHut) {
+					tile.features.Add(GOODY_HUT);
+				}
 				if (civ3Tile.HasRuins) {
 					tile.overlays.Add(RUINS);
 				}
@@ -294,6 +297,9 @@ namespace C7GameData {
 				};
 				if (civ3Tile.BarbarianCamp) {
 					tile.features.Add(BARBARIAN_CAMP);
+				}
+				if (civ3Tile.GoodyHut) {
+					tile.features.Add(GOODY_HUT);
 				}
 				if (civ3Tile.Ruin > 0) {
 					tile.overlays.Add(RUINS);
