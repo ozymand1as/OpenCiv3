@@ -123,6 +123,21 @@ namespace C7GameData {
 			return true;
 		}
 
+		/// <summary>
+		/// The tile this city's pollution lands on, or null when none is
+		/// eligible.
+		///
+		/// OPEN ITEM: the candidate set is OpenCiv3's
+		/// GetTilesWithinRankDistance(MaxRankOfWorkableTiles), which yields the
+		/// city's own tile first followed by the rest of its radius - twenty
+		/// tiles in total for the shipped rank of 2, matching the spec's "at
+		/// most twenty candidates". That identity as Civ3's candidate set is
+		/// unproven: the spec's step 3 does not say how Civ3 orders the twenty
+		/// tiles, and OpenCiv3's spiral order and RNG stream differ, so the
+		/// specific tile chosen is not the same as Civ3's. The count and the
+		/// eligibility rules (same landmass, not water, not already polluted)
+		/// are what is modelled here.
+		/// </summary>
 		private static Tile ChoosePollutionTile(City city) {
 			List<Tile> radius = city.location.GetTilesWithinRankDistance(city.owner.rules.MaxRankOfWorkableTiles);
 
@@ -153,6 +168,49 @@ namespace C7GameData {
 		}
 
 		/// <summary>
+		/// The accumulated pollution P that drives global warming (section 7 step
+		/// 1): the total pollution of every city in the game plus the square of
+		/// the number of nuclear weapons used. Civ3 keeps this in a global and
+		/// resets it on scenario load; here it is recomputed from the game state
+		/// each turn, which is equivalent while the nuke counter is never
+		/// incremented (no code launches a nuclear weapon yet, so that term is
+		/// always zero - see GameData.nukesUsed).
+		/// </summary>
+		public static int AccumulatedPollution(GameData gameData) {
+			return gameData.cities.Sum(c => c.TotalPollution())
+				+ (gameData.nukesUsed * gameData.nukesUsed);
+		}
+
+		/// <summary>
+		/// Civ3's global-warming severity indicator (section 7 step 2), the value
+		/// the engine publishes at 0xa5269c for the UI: 3 once the accumulated
+		/// pollution exceeds half the map's tiles, 2 past a quarter, 1 for any
+		/// pollution at all, and 0 for a clean world. It has no gameplay effect;
+		/// the per-turn warming pass records it in
+		/// GameData.globalWarmingSeverity so the figure the engine computed is
+		/// available to the UI.
+		///
+		/// The comparisons are against integer halves and quarters of the tile
+		/// count. Integer and real division agree here because P is an integer:
+		/// P > floor(n/2) and P > n/2 select the same P.
+		/// </summary>
+		public static int GlobalWarmingSeverity(GameData gameData) {
+			int tileCount = gameData.map?.tiles?.Count ?? 0;
+			int accumulated = AccumulatedPollution(gameData);
+
+			if (accumulated > tileCount / 2) {
+				return 3;
+			}
+			if (accumulated > tileCount / 4) {
+				return 2;
+			}
+			if (accumulated > 0) {
+				return 1;
+			}
+			return 0;
+		}
+
+		/// <summary>
 		/// Runs Civ3's once-per-turn global-warming pass (section 7): sum the
 		/// pollution of every city plus the square of the number of nuclear
 		/// weapons used, make floor(sum / 10) + 1 attempts, and on each attempt
@@ -161,13 +219,13 @@ namespace C7GameData {
 		/// irrigation as it does so.
 		/// </summary>
 		public static void DoPerTurnGlobalWarming(GameData gameData) {
+			int accumulated = AccumulatedPollution(gameData);
+			gameData.globalWarmingSeverity = GlobalWarmingSeverity(gameData);
+
 			int tileCount = gameData.map.tiles.Count;
 			if (tileCount <= 0) {
 				return;
 			}
-
-			int accumulated = gameData.cities.Sum(c => c.TotalPollution())
-				+ (gameData.nukesUsed * gameData.nukesUsed);
 
 			int attempts = accumulated / GlobalWarmingAttemptDivisor + 1;
 			for (int i = 0; i < attempts; ++i) {
@@ -190,14 +248,20 @@ namespace C7GameData {
 				return;
 			}
 
-			// Civ3 changes the tile's terrain and then clears the mine and
-			// irrigation bits (0xC). In OpenCiv3's layered model mine and
-			// irrigation share the ResourceDevelopment layer, so at most one of
-			// them is present. When the target is the tile's own underlying
-			// terrain (how forests and jungles are stripped) the underlying
-			// assignment is simply a no-op.
+			// Civ3's Map_change_tile_terrain only changes the tile's rule/visible
+			// terrain (Tile + 0xC8, OpenCiv3's overlayTerrainType, the field the
+			// TERR record is selected by and the yields are computed from). The
+			// tile's underlying terrain (Tile + 0xC4, baseTerrainType) is
+			// preserved: that is exactly why the 0xE PollutionEffect sentinel
+			// still finds the original underlying terrain, which is how clearing
+			// a forest or jungle works. So warming a grassland to plains leaves
+			// grassland underneath, as Civ3 does - baseTerrainType must not be
+			// overwritten here.
+			//
+			// Civ3 then clears the mine and irrigation bits (0xC). In OpenCiv3's
+			// layered model mine and irrigation share the ResourceDevelopment
+			// layer, so at most one of them is present.
 			tile.overlayTerrainType = target;
-			tile.baseTerrainType = target;
 			tile.RemoveImprovementAtLayer(TerrainImprovement.Layer.ResourceDevelopment);
 
 			Player human = gameData.players.FirstOrDefault(p => p.id == EngineStorage.uiControllerID)

@@ -18,9 +18,16 @@ namespace C7GameData {
 
 		// How many nuclear weapons have been used in this game. Civ3 tracks
 		// this in a global and adds its square to the pollution that drives
-		// global warming (18_terrain_improvement.md section 7). No code
-		// launches a nuclear weapon yet, so this stays at zero.
+		// global warming (18_terrain_improvement.md section 7 step 1). Nothing
+		// in OpenCiv3 launches a nuclear weapon yet, so nothing increments this
+		// and the nukes^2 term of AccumulatedPollution is always zero. That is a
+		// known consequence of the missing nuclear-launch path, not a defect in
+		// the warming rule, which is implemented in full.
 		public int nukesUsed = 0;
+
+		// Civ3's UI-only global-warming severity indicator (0xa5269c), 0-3, as
+		// recomputed by Pollution.DoPerTurnGlobalWarming. No UI consumes it yet.
+		public int globalWarmingSeverity = 0;
 		public static Random rng; // TODO: Is GameData really the place for this?
 		public ID.Factory ids = new();
 		public GameMap map { get; set; }
