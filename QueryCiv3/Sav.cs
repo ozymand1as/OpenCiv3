@@ -82,14 +82,16 @@ namespace QueryCiv3 {
 		private const int CITY_LEN_2 = 12;
 		private const int CITY_LEN_3 = 140;
 
+		// The per-field version rules of the file being read: which city fields are
+		// present and how long the block before the per-player array is.
+		private SaveFieldLayout layout;
+
 		public Turn[] HistTurn;
 		public int[][] TurnCiv;
 		public int[][] TurnPower;
 		public int[][] TurnScore;
 		public int[][] TurnCulture;
 		public int[][] TurnVP;
-
-		private const int BIQ_SECTION_START = 562;
 
 		public SavData(byte[] savBytes, byte[] biqBytes) {
 			Bic = new BiqData(biqBytes);
@@ -119,13 +121,25 @@ namespace QueryCiv3 {
 
 		public unsafe void Load(byte[] savBytes) {
 			Sav = new Civ3File(savBytes);
+			// The version the file declares decides which per-field rules apply while its
+			// body is read. Civ3File reports the values the loader behaves by, so a file
+			// whose major version predates the stored minor version reads as minor 0, the
+			// same value the original save reader forces.
+			int majorVersion = Sav.Civ3Version.MajorVersion;
+			int minorVersion = Sav.Civ3Version.MinorVersion;
+			layout = SaveFormatGate.FieldLayout(majorVersion, minorVersion);
 			// Load in any biq sections contained in Sav file, overwriting existing biq sections:
-			int BiqSectionLength = Sav.ReadInt32(38);
-			Bic.Load(Sav.GetBytes(BIQ_SECTION_START, BiqSectionLength));
+			// The body does not start at a fixed offset: section 2.1's header table gives the
+			// minor version only from major 17 on and the GUID only from minor 7 on, so the
+			// body's start follows the version too. The embedded BIQ's length dword and its
+			// first byte sit at fixed distances inside that body, so both move with it.
+			int biqSectionLength = Sav.ReadInt32(SaveFormatGate.EmbeddedBicLengthOffset(majorVersion, minorVersion));
+			int biqSectionStart = SaveFormatGate.EmbeddedBicStartOffset(majorVersion, minorVersion);
+			Bic.Load(Sav.GetBytes(biqSectionStart, biqSectionLength));
 
 			fixed (byte* bytePtr = savBytes) {
 				int* header;
-				scan = bytePtr + BIQ_SECTION_START + BiqSectionLength;
+				scan = bytePtr + biqSectionStart + biqSectionLength;
 				byte* end = bytePtr + savBytes.Length;
 
 				while (scan < end) {
@@ -265,13 +279,28 @@ namespace QueryCiv3 {
 							break;
 						case 0x59544943: // CITY
 										 // Sav files contain many "bad" City headers. In fact, there are more bad ones than valid ones
-										 // The purpose behind these headers is yet to be determined, but for now, they can be skipped
+										 // They are the version-gated tail of the record that precedes them, which the
+										 // case for a valid city consumes; this branch is the safety net for a file
+										 // whose records do not line up, so a bad header is skipped rather than
+										 // misread as the start of a city.
 							if (scan[4] == VALID_CITY_LENGTH) {
+								// The city array is sized by the save's own count. A file with more city
+								// records than that would write past the array and corrupt whatever
+								// follows it, so refuse instead of guessing.
+								if (CityIndex >= City.Length) {
+									throw new Exception("An error occured while parsing the SAV file: the file holds more city records than its city count states.");
+								}
 								Copy(ref City[CityIndex], CITY_LEN_1);
 								CopyArray(ref CityCtzn[CityIndex], City[CityIndex].Popd.CitizenCount);
 								Copy(ref City[CityIndex], CITY_LEN_2, CITY_LEN_1);
 								CopyArray(ref CityBuilding[CityIndex], City[CityIndex].Binf.BuildingCount);
-								Copy(ref City[CityIndex], CITY_LEN_3, CITY_LEN_1 + CITY_LEN_2);
+								// The date sub-record is the last part of the fixed record, but only from
+								// save format 17.04 on: older files do not carry its 92 bytes at all, and
+								// reading them would consume the city's version-gated tail and lose the
+								// reader's place in the file.
+								int fixedTailLength = layout.CityStoresDateSubRecord ? CITY_LEN_3 : CITY_LEN_3 - sizeof(DATE);
+								Copy(ref City[CityIndex], fixedTailLength, CITY_LEN_1 + CITY_LEN_2);
+								ReadCityFormat20FieldAndTail(end);
 								CityIndex++;
 							} else {
 								scan = scan + scan[4] + 8; // Skip ahead header length (4) + length integer length (4) + length integer (scan[4])
@@ -349,8 +378,10 @@ namespace QueryCiv3 {
 							// Thoroughly magic
 							if (header[2] == 0x4c534e43) {
 								scan += 8;
-							} else if (header[64] == 0x564c4150) {
-								scan += 256;
+							} else if (header[layout.WorldTileBlockLength / sizeof(int)] == 0x564c4150) {
+								// The block between the city data and the per-player array. Older saves
+								// carry 8 more bytes, so the array starts at 0x108 rather than 0x100.
+								scan += layout.WorldTileBlockLength;
 							} else if (header[1] == 0x52454550) {
 								scan += 4;
 							} else {
@@ -361,5 +392,74 @@ namespace QueryCiv3 {
 				}
 			}
 		}
+
+		/// <summary>
+		/// Reads the version-gated tail of a city record: the field added in save format
+		/// 20, the revision that field's chunk carries, and the arrays and objects that
+		/// revision gates. From save format 20 on the field lives in its own chunk of two
+		/// dwords - the field and the record revision - and the rest of the tail follows
+		/// the revision: from 2 the loader reads a count followed by that many 4-byte
+		/// entries, from 3 a two-chunk object, and from 4 one more 4-byte field. Below save
+		/// format 20 the loader zeroes the field and behaves as revision 0, so a file in
+		/// that format stores none of this and the record ends after the date sub-record
+		/// (city reader `FUN_004bbed0` at 0x4bc39b).
+		/// </summary>
+		private unsafe void ReadCityFormat20FieldAndTail(byte* end) {
+			if (!layout.CityStoresFormat20Field) {
+				// The field is absent. Both it and the revision stay at the default the
+				// freshly read record already has, and no bytes are consumed.
+				return;
+			}
+
+			if (scan + 16 > end) {
+				throw new Exception("An error occured while parsing the SAV file: the city's format-20 field runs past the end of the file.");
+			}
+			if (!IsFourcc(0x59544943)) { // CITY
+				throw new Exception("An error occured while parsing the SAV file: the city's format-20 field does not carry the expected chunk tag.");
+			}
+			City[CityIndex].Format20Value = *(int*)(scan + 8);
+			City[CityIndex].Revision = *(int*)(scan + 12);
+			scan += 16;
+
+			if (City[CityIndex].Revision >= 2) {
+				int entryCount = ReadChunkInt(end);
+				for (int i = 0; i < entryCount; i++) {
+					SkipChunk(end);
+				}
+			}
+			if (City[CityIndex].Revision >= 3) {
+				// The object read by the city's own reader is itself two chunks long.
+				SkipChunk(end);
+				SkipChunk(end);
+			}
+			if (City[CityIndex].Revision >= 4) {
+				SkipChunk(end);
+			}
+		}
+
+		/// <summary>Reads one 4-byte-payload chunk and returns its value.</summary>
+		private unsafe int ReadChunkInt(byte* end) {
+			if (scan + 12 > end) {
+				throw new Exception("An error occured while parsing the SAV file: a city record's tail runs past the end of the file.");
+			}
+			int value = *(int*)(scan + 8);
+			scan += 12;
+			return value;
+		}
+
+		/// <summary>Skips one chunk by the length its own header states.</summary>
+		private unsafe void SkipChunk(byte* end) {
+			if (scan + 8 > end) {
+				throw new Exception("An error occured while parsing the SAV file: a city record's tail runs past the end of the file.");
+			}
+			int length = *(int*)(scan + 4);
+			if (length < 0 || scan + 8 + length > end) {
+				throw new Exception("An error occured while parsing the SAV file: a city record's tail states a chunk length that does not fit in the file.");
+			}
+			scan += 8 + length;
+		}
+
+		/// <summary>True when the four bytes at the cursor are this ASCII tag.</summary>
+		private unsafe bool IsFourcc(int fourcc) => *(int*)scan == fourcc;
 	}
 }
