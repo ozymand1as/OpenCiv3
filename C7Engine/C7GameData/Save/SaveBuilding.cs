@@ -21,6 +21,8 @@ namespace C7GameData.Save {
 			ProvidesWalls,
 			CanOnlyBeBuiltInTowns,
 			TreasuryEarnsInterest,
+			RemovesPopulationPollution,
+			ReducesBuildingPollution,
 		}
 
 		public class GreatWonderProperties {
@@ -40,6 +42,10 @@ namespace C7GameData.Save {
 		public int culturePerTurn;
 		public int contentFacesInCity;
 		public double combatDefenseBonus;
+
+		// The amount of pollution this building adds to its city each turn,
+		// from the BIQ's BLDG.Pollution field.
+		public int pollution;
 		public int maintenanceCost;
 		public int iconRowIndex;
 		public ID? renderedObsoleteBy;

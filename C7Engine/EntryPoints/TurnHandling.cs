@@ -83,6 +83,11 @@ namespace C7Engine {
 
 				CheckVictory(gameData);
 
+				// Civ3 runs its pollution-driven global-warming pass once per
+				// interturn, after every city has been updated
+				// (18_terrain_improvement.md section 7).
+				Pollution.DoPerTurnGlobalWarming(gameData);
+
 				// Now that the turn is ending, do all the bookkeeping for the
 				// start of the next turn. We don't put the "hasPlayedThisTurn"
 				// logic in OnBeginTurn because OnBeginTurn is called when a

@@ -15,6 +15,12 @@ namespace C7GameData {
 
 		public int seed = -1;   //change here to set a hard-coded seed
 		public int turn { get; set; }
+
+		// How many nuclear weapons have been used in this game. Civ3 tracks
+		// this in a global and adds its square to the pollution that drives
+		// global warming (18_terrain_improvement.md section 7). No code
+		// launches a nuclear weapon yet, so this stays at zero.
+		public int nukesUsed = 0;
 		public static Random rng; // TODO: Is GameData really the place for this?
 		public ID.Factory ids = new();
 		public GameMap map { get; set; }

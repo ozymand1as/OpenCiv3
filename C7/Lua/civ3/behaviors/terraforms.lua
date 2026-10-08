@@ -19,6 +19,9 @@ terraforms.validators = {
   clear_forest = function(context)
     return context.tile.overlayTerrainType.allowedFoliageAction == Civ3FoliageAction.ClearForest
   end,
+  clear_damage = function(context)
+    return context.tile:HasPollution() or context.tile:HasCraters()
+  end,
 }
 
 terraforms.effects = {
@@ -28,6 +31,9 @@ terraforms.effects = {
   clear_forest = function(context)
     context.tile:MaybeAwardForestClearingShields()
     context.tile:ClearTerrainOverlay()
+  end,
+  clear_damage = function(context)
+    context.tile:ClearDamage()
   end,
 }
 

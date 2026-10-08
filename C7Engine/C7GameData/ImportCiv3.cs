@@ -1416,6 +1416,7 @@ namespace C7GameData {
 			if (prto.ClearForest) yield return TerraformKey.ClearForest;
 			if (prto.BuildBarricade) yield return TerraformKey.BuildBarricade;
 			if (prto.BuildFortress) yield return TerraformKey.BuildFortress;
+			if (prto.ClearPollution) yield return TerraformKey.ClearDamage;
 		}
 
 		private static bool IsUnproducible(PRTO prto) {
@@ -1650,6 +1651,7 @@ namespace C7GameData {
 					iconRowIndex=pediaIcons.buildingToRowNumberMapping[bldg.CivilopediaEntry],
 					combatDefenseBonus=bldg.DefenseBonus / 100.0,
 					maintenanceCost=bldg.MaintenanceCost,
+					pollution=bldg.Pollution,
 				};
 
 				if (bldg.RequiredAdvance != -1) {
@@ -1711,6 +1713,8 @@ namespace C7GameData {
 				(bldg.AllowsCitySize3, SaveBuilding.Flag.AllowsCitySize3),
 				(bldg.DoublesCityGrowthRate, SaveBuilding.Flag.DoublesCityGrowthRate),
 				(bldg.TreasuryEarnsInterest, SaveBuilding.Flag.TreasuryEarnsInterest),
+				(bldg.RemovesPopulationPollution, SaveBuilding.Flag.RemovesPopulationPollution),
+				(bldg.ReducesBuildingPollution, SaveBuilding.Flag.ReducesBuildingPollution),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

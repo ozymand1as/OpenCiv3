@@ -812,6 +812,10 @@ namespace C7GameData {
 
 				c.HandleCityGrowth(gameData);
 				c.HandleCityProduction(gameData);
+
+				// Civ3 rolls for a new polluted tile once per city per turn
+				// (18_terrain_improvement.md section 6.3).
+				Pollution.SpawnPollution(c);
 			}
 		}
 

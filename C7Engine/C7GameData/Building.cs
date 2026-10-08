@@ -48,11 +48,18 @@ namespace C7GameData {
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
 
-		// The number of unhappy faces that become content in the city with this
-		// building.
+		// The pollution added to the city each turn by this building.
+		public int pollution = 0;
+
+		// Whether this building caps the pollution the city generates, from
+		// the ITF_Removes_Population_Pollution and
+		// ITF_Reduces_Buildings_Pollution flags.
+		public bool removesPopulationPollution;
+		public bool reducesBuildingPollution;
+
 		public int contentFacesInCity = 0;
 
-		// The number of happy faces that become content in the city with this
+		// The number of unhappy faces that become content in the city with this
 		// building. Note that this is less powerful than other sources of
 		// unhappiness, like drafting or poprushing, which converts happy faces
 		// to sad faces.
@@ -74,6 +81,7 @@ namespace C7GameData {
 			culturePerTurn = building.culturePerTurn;
 			maintenanceCost = building.maintenanceCost;
 			iconRowIndex = building.iconRowIndex;
+			pollution = building.pollution;
 
 			if (building.contentFacesInCity < 0) {
 				unhappyFacesInCity = -building.contentFacesInCity;
@@ -96,6 +104,8 @@ namespace C7GameData {
 			onlyUsefulInTowns = building.flags.Contains(SaveBuilding.Flag.CanOnlyBeBuiltInTowns);
 			providesVeteranGroundUnits = building.flags.Contains(SaveBuilding.Flag.VeteranGroundUnits);
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
+			removesPopulationPollution = building.flags.Contains(SaveBuilding.Flag.RemovesPopulationPollution);
+			reducesBuildingPollution = building.flags.Contains(SaveBuilding.Flag.ReducesBuildingPollution);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();
