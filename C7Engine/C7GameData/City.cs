@@ -763,6 +763,11 @@ namespace C7GameData {
 			// Age.
 			owner.CheckGoldenAgeFromWonders();
 			RecordSpaceshipPartBuilt(building);
+
+			// Completing a Great Wonder also awards victory points (spec 25 section
+			// 4). Civ3 does this in the same function that adds the improvement, so
+			// it runs for every path that completes a building.
+			owner.AwardVictoryPointsForGreatWonder(EngineStorage.gameData, building);
 		}
 
 		// Civ3 models the ten spaceship parts as ordinary buildings that carry a

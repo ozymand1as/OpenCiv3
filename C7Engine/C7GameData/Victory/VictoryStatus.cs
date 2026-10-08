@@ -36,4 +36,8 @@ public class VictoryStatus {
 	// them have been built by anyone.
 	public int GreatWondersBuilt { get; set; }
 	public int GreatWondersTotal { get; set; }
+	// Victory points: the player's (or the player's alliance's) total and the
+	// limit the rules require to win.
+	public int VictoryPoints { get; set; }
+	public int VictoryPointLimit { get; set; }
 }

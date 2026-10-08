@@ -387,6 +387,10 @@ public partial class MapUnit {
 
 		if ((result == CombatResult.AttackerKilled) || (result == CombatResult.DefenderKilled)) {
 			var (dead, alive) = (result == CombatResult.AttackerKilled) ? (attacker, defender) : (defender, attacker);
+			// Destroying another civilization's unit awards the killer victory
+			// points (spec 25 section 4). Civ3 credits this in its unit death
+			// handler, which is where this combat outcome leads.
+			alive.owner.AwardVictoryPointsForUnitKill(EngineStorage.gameData, dead);
 			alive.RollForCombatOutcome(dead, defeatedWasTheDefender: result == CombatResult.DefenderKilled);
 			await dead.animateAsync(MapUnit.AnimatedAction.DEATH);
 			dead.RemoveFromPlay();

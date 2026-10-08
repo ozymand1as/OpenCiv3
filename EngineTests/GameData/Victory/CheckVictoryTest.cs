@@ -287,6 +287,126 @@ public class CheckVictoryTest : IClassFixture<SaveGameFixture> {
 		Assert.Empty(VictoryMessages());
 	}
 
+	// ---------------------------------------------------------------- victory points
+
+	[Fact]
+	public void CheckVictory_WhenVictoryPointsAndConquestBothHold_AwardsTheVictoryPoints() {
+		// Section 2.0: type 8 is evaluated before conquest. Rome is the last
+		// civilization standing and has also reached the victory-point limit, so
+		// both conditions hold and only the first one is awarded.
+		var game = MakeRegisteredGame(1, new VictoryConditions {
+			VictoryLocations = true,
+			VictoryPointLimit = 100,
+			AllowConquestVictory = true,
+		});
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece", defeated: true);
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		rome.victoryPoints = 100;
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<VictoryPointVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_WithTheVictoryPointGroupOff_AwardsConquestInstead() {
+		// The same state without the 0x26000 group: the type-8 condition is not
+		// registered, so conquest is the first satisfied condition.
+		var game = MakeRegisteredGame(1, new VictoryConditions {
+			VictoryPointLimit = 100,
+			AllowConquestVictory = true,
+		});
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece", defeated: true);
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		rome.victoryPoints = 100;
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<ConquestVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_VictoryPointsBelowTheLimit_DoNotEndTheGame() {
+		var game = MakeRegisteredGame(1, new VictoryConditions {
+			VictoryLocations = true,
+			VictoryPointLimit = 100,
+		});
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, greece, 20);
+		rome.victoryPoints = 99;
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Null(game.winner);
+		Assert.False(game.gameOver);
+	}
+
+	[Fact]
+	public void CheckVictory_AtLimit_WithVictoryPointsEnabled_HighestVictoryPointsBeatAHigherScore() {
+		// Section 5.4: with the victory-point group on and a player at one or
+		// more points, the turn-limit winner is the highest victory-point total,
+		// not the highest score.
+		var game = MakeRegisteredGame(TurnLimit, new VictoryConditions { VictoryLocations = true });
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, greece, 90);
+		rome.victoryPoints = 50;
+		greece.victoryPoints = 10;
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+	}
+
+	[Fact]
+	public void CheckVictory_AtLimit_WithVictoryPointsEnabled_TiesAreBrokenByScore() {
+		var game = MakeRegisteredGame(TurnLimit, new VictoryConditions { VictoryLocations = true });
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, greece, 90);
+		rome.victoryPoints = 50;
+		greece.victoryPoints = 50;
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(greece, game.winner);
+	}
+
+	[Fact]
+	public void CheckVictory_AtLimit_WithVictoryPointsEnabledButNobodyHasAny_HighestScoreWins() {
+		// Civ3 only switches to the victory-point metric when some player has at
+		// least one point.
+		var game = MakeRegisteredGame(TurnLimit, new VictoryConditions { VictoryLocations = true });
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		game.players.AddRange([rome, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, greece, 90);
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(greece, game.winner);
+	}
+
 	// ---------------------------------------------------------------- condition-major awarding and ties
 
 	[Fact]

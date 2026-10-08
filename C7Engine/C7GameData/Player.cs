@@ -206,6 +206,12 @@ namespace C7GameData {
 		// part's slot in VictoryConditions.SpaceshipPartsNeeded.
 		public List<int> spaceshipPartsBuilt = new();
 
+		// This player's Conquests victory-point total (spec 25 section 4). Civ3
+		// keeps it as a running total at leader +0x11cc and awards to it from the
+		// six categories in that section. It is only ever changed while the rules
+		// have the victory-point group turned on.
+		public int victoryPoints = 0;
+
 		public int EraIndex() {
 			return GetEraIndex(eraCivilopediaName);
 		}
@@ -1035,6 +1041,8 @@ namespace C7GameData {
 			// trigger callback for techs that enable improvements to redraw map
 			TechImprovementCallback(this, tech);
 
+			AwardVictoryPointsForAdvance(gameData, tech);
+
 			SetCurrentlyResearchedTech(null);
 
 			// The tech's full cost, ignoring progress. Progress is only subtracted
@@ -1065,6 +1073,8 @@ namespace C7GameData {
 
 			knownTechs.Add(tech.id);
 			TechImprovementCallback(this, tech);
+
+			AwardVictoryPointsForAdvance(gameData, tech);
 
 			if (CanAdvanceToNextEra(gameData)) {
 				eraCivilopediaName = GetNextEraNameByIndex(EraIndex());
@@ -1337,6 +1347,54 @@ namespace C7GameData {
 			return producible.ShieldCost(civilization.traits, costFactor);
 		}
 
+		// ---------------------------------------------------------------- victory points
+
+		/// Awards the victory points for discovering a technology (spec 25 section
+		/// 4: `tech_value x AdvancementCost`). Civ3 guards this one on a non-zero
+		/// turn number as well as on the victory-point group, so a technology
+		/// granted while the game is still being set up awards nothing.
+		public void AwardVictoryPointsForAdvance(GameData gameData, Tech tech) {
+			if (gameData is null || !gameData.VictoryPointsEnabled || tech is null || gameData.turn <= 0) {
+				return;
+			}
+
+			AddVictoryPoints(VictoryPoints.ForAdvance(tech, gameData.victoryConditions));
+		}
+
+		/// Awards the victory points for destroying another civilization's unit
+		/// (spec 25 section 4: `(unit_value / 10) x DefeatingOpposingUnitCost`).
+		/// Civ3 credits the killer's player, and only when the killer is a real
+		/// opponent - a barbarian killer (player slot 0) and a unit destroyed by
+		/// its own side both award nothing.
+		public void AwardVictoryPointsForUnitKill(GameData gameData, MapUnit killedUnit) {
+			if (gameData is null || !gameData.VictoryPointsEnabled || killedUnit is null || isBarbarians) {
+				return;
+			}
+
+			if (killedUnit.owner == this) {
+				return;
+			}
+
+			AddVictoryPoints(VictoryPoints.ForUnitKill(killedUnit.unitType, gameData.victoryConditions));
+		}
+
+		/// Awards the victory points for completing a Great Wonder (spec 25
+		/// section 4: `wonder_value x WonderCost`). Small wonders and ordinary
+		/// buildings award nothing.
+		public void AwardVictoryPointsForGreatWonder(GameData gameData, Building wonder) {
+			if (gameData is null || !gameData.VictoryPointsEnabled || wonder is null || !wonder.IsGreatWonder()) {
+				return;
+			}
+
+			AddVictoryPoints(VictoryPoints.ForGreatWonder(wonder, gameData.victoryConditions));
+		}
+
+		private void AddVictoryPoints(int amount) {
+			if (amount > 0) {
+				victoryPoints += amount;
+			}
+		}
+
 		public void UpdateHistory(GameData gameData) {
 			if (!gameData.history.ContainsKey(id.ToString()))
 				return;
@@ -1369,7 +1427,13 @@ namespace C7GameData {
 				Power = power,
 				Score = score,
 				Culture = totalCulture,
-				VP = 0 // TODO: victory points
+				// The histograph's "Victory Points" series is the running total at
+				// the end of the turn, the same way Score is the running average
+				// (spec 25 section 5.3). Which of the two the save's TurnVP column
+				// holds is not established by the spec (its writer is open item
+				// 7.3), so this is the reading that makes the series a "Victory
+				// Points" curve rather than a per-turn delta.
+				VP = victoryPoints
 			});
 		}
 	}
