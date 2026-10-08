@@ -229,6 +229,31 @@ public class GoodyHutTest {
 	}
 
 	/// <summary>
+	/// The shipped conquests.biq has eight difficulty levels - Chieftain,
+	/// Warlord, Regent, Monarch, Emperor, Demigod, Deity, Sid, as read out of
+	/// the BIQ with QueryCiv3 - not the seven spec section 4.3 lists, so the
+	/// table's last row is reachable in a normal game.
+	/// </summary>
+	[Fact]
+	public void TheShippedEightDifficultyLevelsReachTheLastTableRow() {
+		C7GameData.GameData gd = SetupHut(out Player player, out Tile tile);
+		gd.difficulties = new List<Difficulty> { new(), new(), new(), new(), new(), new(), new(), new() };
+
+		// Sid, non-Expansionist: row 8, the last row of the table.
+		gd.gameDifficulty = gd.difficulties[7];
+		Assert.Equal(8, GoodyHutInteractions.RowIndexFor(gd, player));
+
+		// Sid, Expansionist: one row better.
+		player.civilization.traits.Add(Civilization.Trait.Expansionist);
+		Assert.Equal(7, GoodyHutInteractions.RowIndexFor(gd, player));
+
+		// Demigod, non-Expansionist: row 6.
+		player.civilization.traits.Clear();
+		gd.gameDifficulty = gd.difficulties[5];
+		Assert.Equal(6, GoodyHutInteractions.RowIndexFor(gd, player));
+	}
+
+	/// <summary>
 	/// A drawn outcome whose preconditions fail must be re-rolled, not turned
 	/// into a desert village. Here only the Maps outcome can take effect: the
 	/// City toggle is off, the player is in the Middle Ages, the tile carries a

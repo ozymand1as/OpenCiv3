@@ -50,6 +50,11 @@ namespace C7Engine {
 		/// unless the civilization is Expansionist. Civ3 stores the difficulty
 		/// per leader; OpenCiv3 stores a single game difficulty, so every
 		/// player uses that level.
+		///
+		/// The shipped conquests.biq defines eight difficulty levels
+		/// (Chieftain, Warlord, Regent, Monarch, Emperor, Demigod, Deity, Sid),
+		/// so row 8 - Sid without the Expansionist trait - is reachable. Spec
+		/// section 4.3 lists only seven levels and omits Demigod.
 		/// </summary>
 		public static int RowIndexFor(GameData gameData, Player player) {
 			int difficulty = gameData.difficulties.IndexOf(gameData.gameDifficulty);
