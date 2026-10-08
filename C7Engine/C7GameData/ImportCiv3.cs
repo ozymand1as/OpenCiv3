@@ -1879,6 +1879,9 @@ namespace C7GameData {
 				(bldg.AllowsLargerArmies, SaveBuilding.Flag.AllowsLargerArmies),
 				(bldg.RequiresVictoriousArmy, SaveBuilding.Flag.RequiresVictoriousArmy),
 				(bldg.BuildSpaceshipParts, SaveBuilding.Flag.BuildSpaceshipParts),
+				(bldg.AllowsWaterTrade, SaveBuilding.Flag.AllowsWaterTrade),
+				(bldg.AllowsAirTrade, SaveBuilding.Flag.AllowsAirTrade),
+				(bldg.SafeSeaTravel, SaveBuilding.Flag.SafeSeaTravel),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
@@ -2105,6 +2108,8 @@ namespace C7GameData {
 				(t.EnablesBridges, SaveTech.Flag.EnablesBridges),
 				(t.DoublesWealthProduction, SaveTech.Flag.DoublesWealthProduction),
 				(t.EnablesDiplomats, SaveTech.Flag.EnablesDiplomats),
+				(t.EnablesTradeOverSea, SaveTech.Flag.EnablesTradeOverSea),
+				(t.EnablesTradeOverOcean, SaveTech.Flag.EnablesTradeOverOcean),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

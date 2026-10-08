@@ -1068,6 +1068,12 @@ namespace C7GameData {
 
 			AwardVictoryPointsForAdvance(gameData, tech);
 
+			// A trade advance can open (or, once the Great Lighthouse is obsolete,
+			// close) sea routes, so the cached network is no longer valid.
+			if (tech.EnablesTradeOverSea || tech.EnablesTradeOverOcean) {
+				gameData.InvalidateCachedTradeNetwork();
+			}
+
 			SetCurrentlyResearchedTech(null);
 
 			// The tech's full cost, ignoring progress. Progress is only subtracted

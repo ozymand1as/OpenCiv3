@@ -16,6 +16,11 @@ namespace C7GameData {
 		// Knowing a technology with this flag lets a civ use diplomats.
 		public bool EnablesDiplomats;
 
+		// Whether this advance unlocks sea trade (Coast/Sea tiles) or ocean
+		// trade (Ocean tiles) for a civ that knows it.
+		public bool EnablesTradeOverSea;
+		public bool EnablesTradeOverOcean;
+
 		// The civilopedia name of the era this tech is part of
 		// (like ERA_Ancient_Times). This is what art lookups are based on.
 		public string EraCivilopediaName { get; set; }

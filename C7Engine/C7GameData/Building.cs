@@ -82,6 +82,15 @@ namespace C7GameData {
 		// nothing gates on it yet.
 		public bool requiresVictoriousArmy;
 
+		// Whether the building lets its city send and receive trade over the
+		// water (a Harbour) or through the air (an Airport).
+		public bool allowsWaterTrade;
+		public bool allowsAirTrade;
+
+		// Whether the building is a wonder that lets its owner's sea trade
+		// enter Sea tiles without the relevant advance (the Great Lighthouse).
+		public bool safeSeaTravel;
+
 		// The traits this building has. For a Great Wonder this is the set of
 		// civ traits the wonder is associated with, which is what the Golden Age
 		// wonder trigger checks.
@@ -182,6 +191,9 @@ namespace C7GameData {
 			allowsBuildArmy = building.flags.Contains(SaveBuilding.Flag.AllowsBuildArmy);
 			allowsLargerArmies = building.flags.Contains(SaveBuilding.Flag.AllowsLargerArmies);
 			requiresVictoriousArmy = building.flags.Contains(SaveBuilding.Flag.RequiresVictoriousArmy);
+			allowsWaterTrade = building.flags.Contains(SaveBuilding.Flag.AllowsWaterTrade);
+			allowsAirTrade = building.flags.Contains(SaveBuilding.Flag.AllowsAirTrade);
+			safeSeaTravel = building.flags.Contains(SaveBuilding.Flag.SafeSeaTravel);
 			traits = new HashSet<Civilization.Trait>(building.traits);
 
 			if (building.greatWonderProperties != null) {

@@ -32,6 +32,9 @@ namespace C7GameData.Save {
 			AllowsLargerArmies,
 			RequiresVictoriousArmy,
 			BuildSpaceshipParts,
+			AllowsWaterTrade,
+			AllowsAirTrade,
+			SafeSeaTravel,
 		}
 
 		public class GreatWonderProperties {

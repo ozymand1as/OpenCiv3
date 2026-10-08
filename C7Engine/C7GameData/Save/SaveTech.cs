@@ -11,6 +11,8 @@ namespace C7GameData.Save {
 			EnablesBridges,
 			DoublesWealthProduction,
 			EnablesDiplomats,
+			EnablesTradeOverSea,
+			EnablesTradeOverOcean,
 		}
 
 		public ID id;
@@ -48,6 +50,8 @@ namespace C7GameData.Save {
 				EnablesBridges = this.flags.Contains(Flag.EnablesBridges),
 				DoublesWealthProduction = this.flags.Contains(Flag.DoublesWealthProduction),
 				EnablesDiplomats = this.flags.Contains(Flag.EnablesDiplomats),
+				EnablesTradeOverSea = this.flags.Contains(Flag.EnablesTradeOverSea),
+				EnablesTradeOverOcean = this.flags.Contains(Flag.EnablesTradeOverOcean),
 				EraCivilopediaName = this.EraCivilopediaName,
 				SmallIconPath = this.SmallIconPath,
 				X = this.X,
