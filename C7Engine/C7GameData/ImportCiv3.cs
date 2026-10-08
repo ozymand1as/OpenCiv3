@@ -476,8 +476,10 @@ namespace C7GameData {
 
 				SpaceshipPartsNeeded = ImportSpaceshipPartsNeeded(),
 
-				// The SAV GAME section does not store the victory point limit.
-				VictoryPointLimit = DefaultVictoryPointLimit,
+				// The SAV GAME section carries its own victory point limit
+				// (QueryCiv3's SavSections/Game.cs reads it); fall back to the
+				// shipped default when the file leaves it at 0.
+				VictoryPointLimit = OrDefault(game.VPLimit, DefaultVictoryPointLimit),
 				DominationTerrain = OrDefault(game.DominationTerrain, DefaultDominationTerrain),
 				DominationPopulation = OrDefault(game.DominationPopulation, DefaultDominationPopulation),
 				OneCityCultureWin = OrDefault(game.OneCityCultureWin, DefaultOneCityCultureWin),

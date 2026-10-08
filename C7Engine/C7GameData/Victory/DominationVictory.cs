@@ -63,9 +63,17 @@ public class DominationVictory : IVictory {
 	}
 
 	public Player ChooseWinner(List<Player> candidates, GameData gameData) {
-		// Section 5.4: the human member of the qualifying alliance if there is
-		// one, otherwise the lowest-index member.
-		return candidates.FirstOrDefault(p => p.isHuman) ?? candidates[0];
+		// Section 2.2 and 5.4: an alliance wins as a unit and is represented by
+		// its human member if it has one, otherwise its first (lowest-index)
+		// member. An unallied player is a team of one, so the first satisfying
+		// player in scan order wins and no human preference is applied - the
+		// human preference belongs to the alliance branch alone.
+		List<Player> team = VictorySupport.TeamOf(candidates[0], gameData);
+		if (team.Count <= 1) {
+			return candidates[0];
+		}
+
+		return team.FirstOrDefault(p => p.isHuman) ?? team[0];
 	}
 
 	private static string[] RequirementPrint(string label, string value) {

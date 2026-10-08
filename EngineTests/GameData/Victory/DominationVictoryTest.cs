@@ -100,6 +100,56 @@ public class DominationVictoryTest {
 	}
 
 	[Fact]
+	public void ChooseWinner_UnalliedPlayers_AwardsTheFirstInScanOrderNotTheHuman() {
+		C7GameData.GameData game = VictoryTestHelpers.MakeGame();
+		Player rome = VictoryTestHelpers.MakePlayer("player-2", "Rome");
+		Player greece = VictoryTestHelpers.MakePlayer("player-3", "Greece");
+		greece.isHuman = true;
+		game.players.Add(rome);
+		game.players.Add(greece);
+
+		// Both satisfy the condition, but neither is in an alliance, so section
+		// 2.2 awards the first satisfying player in scan order. Preferring the
+		// human here would be wrong: that preference is the alliance branch's.
+		Player winner = new DominationVictory(66, 66).ChooseWinner([rome, greece], game);
+
+		Assert.Same(rome, winner);
+	}
+
+	[Fact]
+	public void ChooseWinner_Alliance_PrefersItsHumanMember() {
+		C7GameData.GameData game = VictoryTestHelpers.MakeGame();
+		Player rome = VictoryTestHelpers.MakePlayer("player-2", "Rome");
+		Player greece = VictoryTestHelpers.MakePlayer("player-3", "Greece");
+		Alliance alliance = new Alliance(1, "Team");
+		rome.alliance = alliance;
+		greece.alliance = alliance;
+		greece.isHuman = true;
+		game.players.Add(rome);
+		game.players.Add(greece);
+
+		Player winner = new DominationVictory(66, 66).ChooseWinner([rome, greece], game);
+
+		Assert.Same(greece, winner);
+	}
+
+	[Fact]
+	public void ChooseWinner_AllianceWithoutAHuman_UsesItsFirstMember() {
+		C7GameData.GameData game = VictoryTestHelpers.MakeGame();
+		Player rome = VictoryTestHelpers.MakePlayer("player-2", "Rome");
+		Player greece = VictoryTestHelpers.MakePlayer("player-3", "Greece");
+		Alliance alliance = new Alliance(1, "Team");
+		rome.alliance = alliance;
+		greece.alliance = alliance;
+		game.players.Add(rome);
+		game.players.Add(greece);
+
+		Player winner = new DominationVictory(66, 66).ChooseWinner([rome, greece], game);
+
+		Assert.Same(rome, winner);
+	}
+
+	[Fact]
 	public void HasVictory_NoTilesOnTheMap_DoesNotAwardVictory() {
 		var game = VictoryTestHelpers.MakeGame();
 		Player player = VictoryTestHelpers.MakePlayer("player-2", "Rome");
