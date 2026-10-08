@@ -193,6 +193,12 @@ namespace C7GameData.Save {
 			if (conditions.AllowDiplomaticVictory)
 				data.victories.Add(new DiplomaticVictory());
 
+			// TODO (re/specs/25_victory_score.md section 2.7): wonder victory
+			// (type 7) is deliberately deferred. Civ3 awards it once every Great
+			// Wonder has been built, to the highest-scoring (or highest
+			// victory-point) player, so VictoryConditions.AllowWonderVictory is
+			// imported and then ignored here.
+
 			// TODO: Does the original have a switch to have the game never end?
 			// Always add a time limit
 			data.victories.Add(new TimeLimitVictory(data.timeOptions.turnLimit));

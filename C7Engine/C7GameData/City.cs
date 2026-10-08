@@ -729,6 +729,24 @@ namespace C7GameData {
 				year = 1, // TODO: Implement in-game year tracking
 				totalCulture = 0
 			});
+
+			RecordSpaceshipPartBuilt(building);
+		}
+
+		// Civ3 models the ten spaceship parts as ordinary buildings that carry a
+		// part index. Completing one adds it to the owner's ship, which is what
+		// the space-race victory counts. A part can be completed more than once
+		// when the rules require a quantity above one.
+		private void RecordSpaceshipPartBuilt(Building building) {
+			if (building is null || building.spaceshipPart < 0) {
+				return;
+			}
+
+			while (owner.spaceshipPartsBuilt.Count <= building.spaceshipPart) {
+				owner.spaceshipPartsBuilt.Add(0);
+			}
+
+			owner.spaceshipPartsBuilt[building.spaceshipPart] += 1;
 		}
 		public void RemoveBuilding(CityBuilding building) {
 			constructed_buildings.Remove(building);

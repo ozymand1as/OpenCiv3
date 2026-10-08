@@ -456,6 +456,9 @@ namespace C7GameData {
 			var game = savData.Game;
 
 			save.VictoryConditions = new VictoryConditions {
+				// The SAV's own GAME section stores the victory flags the engine
+				// resolved when the game was created, so unlike a BIQ there is no
+				// GAME.DefaultVictoryConditions to expand here.
 				AllowDominationVictory = game.DominationVictory,
 				AllowSpaceRaceVictory = game.SpaceRaceVictory,
 				AllowDiplomaticVictory = game.DiplomaticVictory,
@@ -470,6 +473,8 @@ namespace C7GameData {
 				VictoryLocations = game.VictoryLocations,
 				CaptureTheFlag = game.CaptureTheFlag, // 'Capture the Unit', 'Capture the Princess'
 				ReverseCaptureTheFlag = game.ReverseCaptureTheFlag,
+
+				SpaceshipPartsNeeded = ImportSpaceshipPartsNeeded(),
 
 				// The SAV GAME section does not store the victory point limit.
 				VictoryPointLimit = DefaultVictoryPointLimit,
@@ -498,14 +503,24 @@ namespace C7GameData {
 		// The victory flags and parameters the BIQ GAME section stores, with the
 		// same zero-substitution Civ3 applies when it installs the rules.
 		private void ImportBiqVictory() {
-			var game = biq.Game[0];
+			save.VictoryConditions = VictoryConditionsFromBiqGame(biq.Game[0], ImportSpaceshipPartsNeeded());
+		}
 
-			save.VictoryConditions = new VictoryConditions {
-				AllowDominationVictory = game.DominationVictory,
-				AllowSpaceRaceVictory = game.SpaceRaceVictory,
-				AllowDiplomaticVictory = game.DiplomaticVictory,
-				AllowConquestVictory = game.ConquestVictory,
-				AllowCulturalVictory = game.CulturalVictory,
+		// GAME.DefaultVictoryConditions means "use the standard victory
+		// conditions". The shipped conquests.biq sets it and leaves all five
+		// per-condition flags clear, yet Civ3 plays that game with domination,
+		// space race, diplomatic, conquest and cultural enabled; the five flags
+		// are only authoritative when the default flag is clear. Wonder victory
+		// is not one of the standard conditions.
+		internal static VictoryConditions VictoryConditionsFromBiqGame(QueryCiv3.Biq.GAME game, List<int> spaceshipPartsNeeded) {
+			bool usesDefaultVictoryConditions = game.DefaultVictoryConditions != 0;
+
+			return new VictoryConditions {
+				AllowDominationVictory = usesDefaultVictoryConditions || game.DominationVictory,
+				AllowSpaceRaceVictory = usesDefaultVictoryConditions || game.SpaceRaceVictory,
+				AllowDiplomaticVictory = usesDefaultVictoryConditions || game.DiplomaticVictory,
+				AllowConquestVictory = usesDefaultVictoryConditions || game.ConquestVictory,
+				AllowCulturalVictory = usesDefaultVictoryConditions || game.CulturalVictory,
 
 				AllowWonderVictory = game.WonderVictory,
 
@@ -515,6 +530,8 @@ namespace C7GameData {
 				VictoryLocations = game.VictoryLocations,
 				CaptureTheFlag = game.CaptureTheFlag,
 				ReverseCaptureTheFlag = game.ReverseCaptureTheFlag,
+
+				SpaceshipPartsNeeded = spaceshipPartsNeeded,
 
 				VictoryPointLimit = OrDefault(game.VictoryPointLimit, DefaultVictoryPointLimit),
 				DominationTerrain = OrDefault(game.DominationTerrain, DefaultDominationTerrain),
@@ -528,6 +545,22 @@ namespace C7GameData {
 				VictoryPointScoring = game.VictoryPointScoring,
 				CapturingSpecialUnit = game.CapturingSpecialUnit,
 			};
+		}
+
+		// The BIQ RULE section stores how many of each spaceship part a player
+		// must build; the shipped rules require one of each of the ten parts.
+		// A ruleset with no spaceship yields an empty list, which never awards a
+		// space-race victory.
+		private List<int> ImportSpaceshipPartsNeeded() {
+			return SpaceshipPartsNeededFrom(biq?.RuleSpaceship);
+		}
+
+		internal static List<int> SpaceshipPartsNeededFrom(int[][] ruleSpaceship) {
+			if (ruleSpaceship is not null && ruleSpaceship.Length > 0 && ruleSpaceship[0] is not null) {
+				return new List<int>(ruleSpaceship[0]);
+			}
+
+			return [];
 		}
 
 		private static int OrDefault(int value, int defaultValue) {
@@ -708,11 +741,29 @@ namespace C7GameData {
 			}
 		}
 
+		// The spaceship parts a leader has already built, in rules order. Civ3
+		// stores one short per part, so a mid-game save carries the progress the
+		// space-race victory reads. Indexed by the leader's slot in the SAV, not
+		// by its position among the playable civilizations.
+		private List<int> ImportSavSpaceshipParts(int leadIndex) {
+			return SpaceshipPartsBuiltFrom(savData.LeadSpaceshipParts[leadIndex]);
+		}
+
+		internal static List<int> SpaceshipPartsBuiltFrom(short[] parts) {
+			if (parts is null) {
+				return [];
+			}
+
+			return parts.Select(part => (int)part).ToList();
+		}
+
 		private void ImportSavLeaders() {
 			BiqData theBiq = biq.Eras is null ? defaultBiq : biq;
 			int currentTurn = save.TurnNumber;
 			int i = 0;
+			int leadIndex = 0;
 			foreach (QueryCiv3.Sav.LEAD leader in savData.Lead) {
+				int thisLead = leadIndex++;
 				if (leader.RaceID == -1) {
 					continue; // can probably break here
 				}
@@ -753,6 +804,8 @@ namespace C7GameData {
 				player.primaryColorIndex = leader.Color;
 
 				player.defeated = IsDefeated(player, leader);
+
+				player.spaceshipPartsBuilt = ImportSavSpaceshipParts(thisLead);
 
 				save.Players.Add(player);
 				i++;
@@ -1668,6 +1721,7 @@ namespace C7GameData {
 					shieldCost=bldg.Cost * 10, // In Civ3 files, building costs are stored at 1/10th of their actual value
 					populationCost=0, // In Civ3, a building cannot have a population cost
 					isSmallWonder=bldg.SmallWonder,
+					spaceshipPart=bldg.SpaceshipPart,
 					greatWonderProperties=bldg.Wonder ? new SaveBuilding.GreatWonderProperties() : null,
 					culturePerTurn=bldg.Culture,
 					contentFacesInCity=bldg.ContentFaces - bldg.UnhappyFaces,
