@@ -1273,15 +1273,25 @@ namespace C7GameData {
 		// Call once at turn advance, decrement penalty turns of unhappiness for drafting / whipping
 		public void DecrementCityUnhappinessPenalties(GameData gameData) {
 			foreach (City c in cities) {
-				// TODO: Add drafting unhappiness decrement when implemented
 				c.turnsOfUnhappinessDueToPopRushing -= (c.turnsOfUnhappinessDueToPopRushing > 0) ? 1 : 0;
+				c.turnsOfUnhappinessDueToDrafting -= (c.turnsOfUnhappinessDueToDrafting > 0) ? 1 : 0;
 			}
 		}
 
 		public void RecalculateCitizenMoods(GameData gameData, bool goIntoDisorderIfUnhappy = false) {
 			foreach (City c in cities) {
+				bool wasInDisorder = c.isInCivilDisorder;
 				City.Mood cityMood = c.RecalculateCitizenMoods(gameData);
-				c.isInCivilDisorder = cityMood == City.Mood.Unhappy && goIntoDisorderIfUnhappy;
+				bool isInDisorder = cityMood == City.Mood.Unhappy && goIntoDisorderIfUnhappy;
+				c.isInCivilDisorder = isInDisorder;
+
+				// A city that was already rioting last turn can lose an
+				// improvement this turn (spec 15 §6.2). We only do this on the
+				// per-turn call, not on the mood recalcs triggered by a city
+				// being added or a specialist being cycled.
+				if (wasInDisorder && isInDisorder) {
+					c.MaybeLootOnRiot(gameData);
+				}
 			}
 		}
 

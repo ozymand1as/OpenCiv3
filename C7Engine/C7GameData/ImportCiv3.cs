@@ -1763,6 +1763,7 @@ namespace C7GameData {
 
 		private void ImportBuildings() {
 			BLDG[] Bldg = biq.Bldg ?? defaultBiq.Bldg;
+			GOVT[] GovernmentRules = biq.Govt ?? defaultBiq.Govt;
 
 			foreach (BLDG bldg in Bldg) {
 				if (bldg.Name == "Wealth") {
@@ -1786,6 +1787,8 @@ namespace C7GameData {
 					greatWonderProperties=bldg.Wonder ? new SaveBuilding.GreatWonderProperties() : null,
 					culturePerTurn=bldg.Culture,
 					contentFacesInCity=bldg.ContentFaces - bldg.UnhappyFaces,
+					contentFacesAllCities=bldg.ContentFacesAllCities - bldg.UnhappyFacesAllCities,
+					continentalMoodEffects=bldg.ContinentalMoodEffects,
 					iconRowIndex=pediaIcons.buildingToRowNumberMapping[bldg.CivilopediaEntry],
 					combatDefenseBonus=bldg.DefenseBonus / 100.0,
 					maintenanceCost=bldg.MaintenanceCost,
@@ -1810,6 +1813,17 @@ namespace C7GameData {
 
 				if (bldg.RenderedObsoleteBy != -1) {
 					building.renderedObsoleteBy = save.Techs[bldg.RenderedObsoleteBy].id;
+				}
+
+				// The happiness effects of a great wonder are gated on the owner's
+				// government, and a wonder can double the faces of one building
+				// type (The Oracle doubles Temples). Both fields are BIQ indices
+				// with -1 as the "none" sentinel.
+				if (bldg.RequiredGovernment != -1) {
+					building.requiredGovernment = GovernmentRules[bldg.RequiredGovernment].Name;
+				}
+				if (bldg.DoublesHappiness >= 0) {
+					building.doublesHappinessFor = Bldg[bldg.DoublesHappiness].Name;
 				}
 
 				if (bldg.GainInEveryCity >= 0) {
@@ -2314,6 +2328,10 @@ namespace C7GameData {
 			save.Rules.ForestValueInShields = rule.ForestValueInShields;
 			save.Rules.CitizenValueInShields = rule.CitizenValueInShields;
 			save.Rules.TurnPenaltyForEachHurrySacrifice = rule.TurnPenaltyForEachHurrySacrifice;
+			save.Rules.ChanceOfRioting = rule.ChanceOfRioting;
+			save.Rules.TurnPenaltyForEachDraftedCitizen = rule.TurnPenaltyForEachDraftedCitizen;
+			save.Rules.CitizensAffectedByEachHappyFace = rule.CitizensAffectedByEachHappyFace;
+			save.Rules.MinimumPopulationForWeLoveTheKing = rule.MinimumPopulationForWeLoveTheKing;
 			save.GameDifficulty = save.Difficulties[rule.DefaultDifficultyLevel];
 			if (rule.StartUnitType1 >= 0) {
 				save.Rules.StartUnitType1 = theBiq.Prto[rule.StartUnitType1].Name;

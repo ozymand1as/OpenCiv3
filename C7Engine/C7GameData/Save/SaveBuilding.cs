@@ -53,7 +53,21 @@ namespace C7GameData.Save {
 		// building is not a spaceship part.
 		public int spaceshipPart = -1;
 		public int culturePerTurn;
+		// The net content faces this building contributes to the city that has
+		// it. A negative value means the building has more unhappy faces than
+		// content faces, matching the existing convention.
 		public int contentFacesInCity;
+		// The net content faces this building contributes to every other city
+		// of the owner (or every other city on the same continent when
+		// continentalMoodEffects is set).
+		public int contentFacesAllCities;
+		public bool continentalMoodEffects;
+		// The name of the building type whose content faces this great wonder
+		// doubles. Null when this wonder does not double any happiness.
+		public string doublesHappinessFor;
+		// The name of the government a great wonder requires to have any
+		// happiness effect. Null when the wonder has no government requirement.
+		public string requiredGovernment;
 		public double combatDefenseBonus;
 
 		// The amount of pollution this building adds to its city each turn,

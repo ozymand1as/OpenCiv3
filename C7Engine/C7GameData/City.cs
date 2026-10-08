@@ -78,6 +78,15 @@ namespace C7GameData {
 
 		public bool isInCivilDisorder = false;
 
+		// The number of turns of unhappiness this city will experience due to
+		// drafting. Larger values result in larger numbers of citizens being
+		// unhappy as well, in addition to the time penalty (spec 15 §4.2).
+		public int turnsOfUnhappinessDueToDrafting = 0;
+
+		// Whether this city is currently celebrating We Love The King Day
+		// (spec 15 §5).
+		public bool isWeLoveTheKingDay = false;
+
 		public static City NONE = new City(Tile.NONE, null, "Dummy City", ID.None("city"));
 
 		public static bool IsValidCity(City city) {
@@ -1072,23 +1081,21 @@ namespace C7GameData {
 			int unhappyToContentMoves = 0;
 
 			// Each citizen lost to pop rushing has a 20 turn penalty, so
-			// multiple citizens lost causes multiple unhappy faces.
+			// multiple citizens lost causes multiple unhappy faces. Drafting
+			// works the same way (spec 15 §4.2/§4.3).
 			if (turnsOfUnhappinessDueToPopRushing > 0) {
 				contentToHappyMoves -= (turnsOfUnhappinessDueToPopRushing - 1) / gameData.rules.TurnPenaltyForEachHurrySacrifice + 1;
 			}
+			if (turnsOfUnhappinessDueToDrafting > 0) {
+				contentToHappyMoves -= (turnsOfUnhappinessDueToDrafting - 1) / gameData.rules.TurnPenaltyForEachDraftedCitizen + 1;
+			}
 
-			// TODO: add penalty for drafting
 			// TODO: add penalty for war weariness
 			// TODO: add penalty for aggression against home country
 
 			// Building happiness/unhappiness, which only affects the unhappy to
 			// content transition, nothing with happy faces.
-			//
-			// TODO: account for wonders and buildings with global/continental effects.
-			foreach (CityBuilding cb in GetBuildings()) {
-				unhappyToContentMoves -= cb.building.unhappyFacesInCity;
-				unhappyToContentMoves += cb.building.contentFacesInCity;
-			}
+			unhappyToContentMoves += CalculateContentFacesFromBuildings(gameData);
 
 			// Depending on the government type, land defensive units can serve
 			// as military police.
@@ -1100,7 +1107,12 @@ namespace C7GameData {
 			// we are currently in civil disorder our commerce is all corrupt,
 			// but we still need to be able to calculate whether a certain
 			// luxury slider value would get us out of civil disorder.
-			contentToHappyMoves += CurrentCommerceYield(respectCivilDisorder: false).happiness;
+			// Civ3 divides the city's entertainment output (the luxury-rate share
+			// of commerce plus the luxuries specialists produce) by
+			// RULE.CitizensAffectedByEachHappyFace before it becomes happy faces
+			// (spec 15 §3.2).
+			contentToHappyMoves += CurrentCommerceYield(respectCivilDisorder: false).happiness
+				/ Math.Max(1, gameData.rules.CitizensAffectedByEachHappyFace);
 
 			// As do luxury resources, which can be boosted by marketplaces.
 			int effectiveLux = GetLuxuries(gameData).Keys.Count;
@@ -1165,6 +1177,8 @@ namespace C7GameData {
 				}
 			}
 
+			UpdateWeLoveTheKingDay(gameData);
+
 			int happyCount = 0;
 			int unhappyCount = 0;
 			foreach (CityResident cr in residents) {
@@ -1175,6 +1189,143 @@ namespace C7GameData {
 				return Mood.Unhappy;
 			} else {
 				return Mood.Happy;
+			}
+		}
+
+		// Applies Civ3's City_add_happiness_from_buildings (spec 15 §3.1) and
+		// returns the net content faces the owner's buildings contribute to this
+		// city. Two sets of faces exist for every building: the faces the city
+		// itself gets, and the faces every *other* city of the owner gets. The
+		// AllCities faces are counted once per other city that has the building,
+		// or once per other city on the same continent when the building has
+		// ContinentalMoodEffects. Great wonders only work under their required
+		// government, nothing works once it is obsolete, and a wonder whose
+		// DoublesHappiness names a building type doubles all of its faces.
+		private int CalculateContentFacesFromBuildings(GameData gameData) {
+			HashSet<Building> thisCityHas = GetBuildings().Select(cb => cb.building).ToHashSet();
+
+			// Count, once per building type, how many of the owner's cities have
+			// it - empire-wide and on this city's continent. GetBuildings includes
+			// buildings granted by wonders such as the Pyramids.
+			Dictionary<Building, int> ownerCityCounts = new();
+			Dictionary<Building, int> continentCityCounts = new();
+			foreach (City c in owner.cities) {
+				foreach (Building b in c.GetBuildings().Select(cb => cb.building).ToHashSet()) {
+					ownerCityCounts[b] = ownerCityCounts.GetValueOrDefault(b) + 1;
+					if (c.location.continent == location.continent) {
+						continentCityCounts[b] = continentCityCounts.GetValueOrDefault(b) + 1;
+					}
+				}
+			}
+
+			int faces = 0;
+			foreach (Building b in gameData.Buildings) {
+				// Obsolescence and the wonder government gate (spec 15 §3.1
+				// steps 2-3).
+				if (b.renderedObsoleteBy != null && owner.knownTechs.Contains(b.renderedObsoleteBy.id)) {
+					continue;
+				}
+				if (b.IsGreatWonder() && b.requiredGovernment != null && b.requiredGovernment != owner.government) {
+					continue;
+				}
+
+				bool hasHere = thisCityHas.Contains(b);
+				int citiesWithBuilding = ownerCityCounts.GetValueOrDefault(b);
+				if (!hasHere && citiesWithBuilding == 0) {
+					continue;
+				}
+
+				int buildingFaces = hasHere ? b.contentFacesInCity - b.unhappyFacesInCity : 0;
+				if (b.contentFacesAllCities != 0 || b.unhappyFacesAllCities != 0) {
+					int otherCities = citiesWithBuilding - (hasHere ? 1 : 0);
+					if (b.continentalMoodEffects) {
+						otherCities = continentCityCounts.GetValueOrDefault(b) - (hasHere ? 1 : 0);
+					}
+					buildingFaces += otherCities * (b.contentFacesAllCities - b.unhappyFacesAllCities);
+				}
+
+				if (IsHappinessDoubledByAWonder(b)) {
+					buildingFaces *= 2;
+				}
+				faces += buildingFaces;
+			}
+
+			return faces;
+		}
+
+		// Leader_has_wonder_doubling_happiness_from (spec 15 §3.1 step 5): a
+		// building's faces are doubled when the owner has a great wonder whose
+		// DoublesHappiness names that building type and which itself passes the
+		// obsolete and government tests. GetActiveWonders already drops the
+		// obsolete ones.
+		private bool IsHappinessDoubledByAWonder(Building b) {
+			foreach ((City _, CityBuilding cb) in owner.GetActiveWonders()) {
+				Building wonder = cb.building;
+				if (wonder.doublesHappinessFor != b) {
+					continue;
+				}
+				if (wonder.requiredGovernment != null && wonder.requiredGovernment != owner.government) {
+					continue;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		// The We Love The King Day trigger (spec 15 §5): the city celebrates
+		// while its population is at least the rule's minimum, no citizen is
+		// unhappy, more citizens are happy than content and the city is not
+		// starving. The flag is re-derived every time the moods are recomputed,
+		// so it clears itself as soon as a condition stops holding.
+		private void UpdateWeLoveTheKingDay(GameData gameData) {
+			int happy = residents.Count(r => r.citizenType.IsDefaultCitizen && r.mood == CityResident.Mood.Happy);
+			int content = residents.Count(r => r.citizenType.IsDefaultCitizen && r.mood == CityResident.Mood.Content);
+			int unhappy = residents.Count(r => r.citizenType.IsDefaultCitizen && r.mood == CityResident.Mood.Unhappy);
+
+			isWeLoveTheKingDay = residents.Count >= gameData.rules.MinimumPopulationForWeLoveTheKing
+				&& unhappy == 0
+				&& happy > content
+				&& FoodGrowthPerTurn() >= 0;
+		}
+
+		// Spec 15 §6.2: on the second and later turns of civil disorder a city
+		// can lose an improvement. Both rolls are rand_int(100); the second is
+		// only consulted when neither of the city-size gates already allows the
+		// loot.
+		public bool RiotLootRollSucceeds(int firstRoll, int secondRoll) {
+			Rules rules = owner.rules;
+			if (firstRoll >= rules.ChanceOfRioting) {
+				return false;
+			}
+			if (capital) {
+				return false;
+			}
+			if (residents.Count > rules.MaximumLevel2CitySize || residents.Count > rules.MaximumLevel1CitySize) {
+				return true;
+			}
+			return secondRoll < 2 * rules.ChanceOfRioting;
+		}
+
+		// Rolls for and applies the disorder loot: one improvement that is not a
+		// great or small wonder, the palace, or a city-size improvement is
+		// destroyed after at most population + 20 random picks (spec 15 §6.2).
+		public void MaybeLootOnRiot(GameData gameData) {
+			if (!RiotLootRollSucceeds(GameData.rng.Next(100), GameData.rng.Next(100))) {
+				return;
+			}
+
+			for (int attempt = 0; attempt <= residents.Count + 20; ++attempt) {
+				Building candidate = gameData.Buildings[GameData.rng.Next(gameData.Buildings.Count)];
+				CityBuilding owned = constructed_buildings.Find(cb => cb.building == candidate);
+				if (owned == null) {
+					continue;
+				}
+				if (candidate.IsGreatWonder() || candidate.isSmallWonder || candidate.isCenterOfEmpire
+					|| candidate.allowsCitySize2 || candidate.allowsCitySize3) {
+					continue;
+				}
+				RemoveBuilding(owned);
+				return;
 			}
 		}
 

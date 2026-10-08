@@ -49,6 +49,7 @@ namespace C7GameData.Save {
 		public int shieldsStored;
 		public int foodStored;
 		public int turnsOfUnhappinessDueToPopRushing;
+		public int turnsOfUnhappinessDueToDrafting;
 		public List<SaveCityResident> residents = new List<SaveCityResident>();
 		public List<SaveCityBuilding> buildings = [];
 
@@ -69,6 +70,7 @@ namespace C7GameData.Save {
 			shieldsStored = city.shieldsStored;
 			foodStored = city.foodStored;
 			turnsOfUnhappinessDueToPopRushing = city.turnsOfUnhappinessDueToPopRushing;
+			turnsOfUnhappinessDueToDrafting = city.turnsOfUnhappinessDueToDrafting;
 			residents = city.residents.ConvertAll(resident => {
 				return new SaveCityResident {
 					nationality = resident.nationality?.name,
@@ -103,6 +105,7 @@ namespace C7GameData.Save {
 				},
 				foodStored = foodStored,
 				turnsOfUnhappinessDueToPopRushing = turnsOfUnhappinessDueToPopRushing,
+				turnsOfUnhappinessDueToDrafting = turnsOfUnhappinessDueToDrafting,
 				capital = capital,
 				constructed_buildings = this.buildings.ConvertAll(building => building.ToCityBuilding(buildings, players)),
 			};

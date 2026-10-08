@@ -334,6 +334,7 @@ namespace C7GameData.Save {
 			var buildingDict = data.Buildings.ToDictionary(b => b.name);
 			var techDict = data.techs.ToDictionary(t => t.id);
 			var resDict = data.Resources.ToDictionary(r => r.Key);
+			var govDict = data.governments.ToDictionary(g => g.name);
 
 			foreach (SaveBuilding saveBuilding in Buildings) {
 				Building building = buildingDict[saveBuilding.name];
@@ -347,6 +348,12 @@ namespace C7GameData.Save {
 				}
 				if (saveBuilding.renderedObsoleteBy != null) {
 					building.renderedObsoleteBy = techDict[saveBuilding.renderedObsoleteBy];
+				}
+				if (saveBuilding.requiredGovernment != null) {
+					building.requiredGovernment = govDict[saveBuilding.requiredGovernment];
+				}
+				if (saveBuilding.doublesHappinessFor != null) {
+					building.doublesHappinessFor = buildingDict[saveBuilding.doublesHappinessFor];
 				}
 				if (saveBuilding.greatWonderProperties?.buildingGainedInEveryCity?.Length > 0) {
 					building.greatWonderProperties.buildingGainedInEveryCity = buildingDict[saveBuilding.greatWonderProperties.buildingGainedInEveryCity];

@@ -107,6 +107,22 @@ namespace C7GameData {
 		// to sad faces.
 		public int unhappyFacesInCity = 0;
 
+		// The same two faces, but applied to every other city of the owner.
+		// When continentalMoodEffects is set only the owner's other cities on
+		// the same continent are counted (spec 15 §3.1).
+		public int contentFacesAllCities = 0;
+		public int unhappyFacesAllCities = 0;
+		public bool continentalMoodEffects = false;
+
+		// The building type whose content faces this wonder doubles (The Oracle
+		// doubles Temples, the Sistine Chapel Cathedrals). Null for everything
+		// else.
+		public Building doublesHappinessFor;
+
+		// The government a great wonder requires for its happiness effects to
+		// apply. Null when the wonder has no government requirement.
+		public Government requiredGovernment;
+
 		public HashSet<Resource> requiredResources { get; set; } = [];
 
 		public int iconRowIndex = 0;
@@ -132,6 +148,14 @@ namespace C7GameData {
 			} else {
 				contentFacesInCity = building.contentFacesInCity;
 			}
+
+			if (building.contentFacesAllCities < 0) {
+				unhappyFacesAllCities = -building.contentFacesAllCities;
+			} else {
+				contentFacesAllCities = building.contentFacesAllCities;
+			}
+
+			continentalMoodEffects = building.continentalMoodEffects;
 
 			if (building.combatDefenseBonus > 0) {
 				combatDefenseBonus = new(name, building.combatDefenseBonus);
