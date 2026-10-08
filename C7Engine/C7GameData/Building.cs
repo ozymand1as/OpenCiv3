@@ -53,6 +53,13 @@ namespace C7GameData {
 		public bool allowsBuildArmy;
 		public bool allowsLargerArmies;
 
+		// The building may only be built by a civ whose army has won a battle
+		// (LSF_HAS_VICTORIOUS_ARMY). The shipped rules set it on the Heroic Epic
+		// and the Military Academy. It is imported as data only: the site that
+		// consumes it was not located in the binary (spec 23 section 8.1), so
+		// nothing gates on it yet.
+		public bool requiresVictoriousArmy;
+
 		// The traits this building has. For a Great Wonder this is the set of
 		// civ traits the wonder is associated with, which is what the Golden Age
 		// wonder trigger checks.
@@ -112,6 +119,7 @@ namespace C7GameData {
 			increasesLeaderChance = building.flags.Contains(SaveBuilding.Flag.IncreasesLeaderChance);
 			allowsBuildArmy = building.flags.Contains(SaveBuilding.Flag.AllowsBuildArmy);
 			allowsLargerArmies = building.flags.Contains(SaveBuilding.Flag.AllowsLargerArmies);
+			requiresVictoriousArmy = building.flags.Contains(SaveBuilding.Flag.RequiresVictoriousArmy);
 			traits = new HashSet<Civilization.Trait>(building.traits);
 
 			if (building.greatWonderProperties != null) {

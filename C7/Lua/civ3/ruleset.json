@@ -4539,6 +4539,7 @@
         "Maya"
       ],
       "flags": [
+        "radar",
         "army"
       ],
       "categories": [
@@ -9084,7 +9085,8 @@
         "seafaring"
       ],
       "flags": [
-        "increasesLeaderChance"
+        "increasesLeaderChance",
+        "requiresVictoriousArmy"
       ]
     },
     {
@@ -9134,7 +9136,8 @@
         "militaristic"
       ],
       "flags": [
-        "allowsBuildArmy"
+        "allowsBuildArmy",
+        "requiresVictoriousArmy"
       ]
     },
     {

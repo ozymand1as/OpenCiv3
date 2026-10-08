@@ -1682,6 +1682,7 @@ namespace C7GameData {
 				(bldg.IncreasesLeaderChance, SaveBuilding.Flag.IncreasesLeaderChance),
 				(bldg.AllowsBuildArmy, SaveBuilding.Flag.AllowsBuildArmy),
 				(bldg.AllowsLargerArmies, SaveBuilding.Flag.AllowsLargerArmies),
+				(bldg.RequiresVictoriousArmy, SaveBuilding.Flag.RequiresVictoriousArmy),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

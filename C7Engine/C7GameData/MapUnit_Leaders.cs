@@ -51,11 +51,33 @@ public partial class MapUnit {
 		return location.unitsOnTile.Where(u => u.loadedOnUnitId == id).ToList();
 	}
 
+	// The container this unit is loaded into, if any.
+	private MapUnit Container() {
+		if (!IsLoaded() || location == null) {
+			return null;
+		}
+		return location.unitsOnTile.FirstOrDefault(u => u.id == loadedOnUnitId);
+	}
+
+	/// Whether this unit is carried by an army, as opposed to an ordinary
+	/// transport. Civ3 sets its victorious-army status bit when a unit in this
+	/// position wins a battle.
+	public bool IsCarriedInsideArmy() {
+		return Container()?.IsArmy == true;
+	}
+
 	// The two branches of Civ3's Unit_score_kill: an elite winner rolls for a
 	// great leader, a non-elite winner rolls to promote, and any winner whose
 	// type starts a Golden Age may open one. defeatedWasTheDefender selects the
 	// leader's spawn tile, matching the "the defender was destroyed" call site.
 	public void RollForCombatOutcome(MapUnit defeated, bool defeatedWasTheDefender) {
+		// A unit carried inside an army that wins a battle marks its civ: Civ3
+		// sets LSF_HAS_VICTORIOUS_ARMY (leader +0x40 bit 0) in Unit_score_kill for
+		// any winner whose container is an army. The bit is a one-way latch.
+		if (IsCarriedInsideArmy()) {
+			owner.hasVictoriousArmy = true;
+		}
+
 		if (IsElite()) {
 			RollForMilitaryLeader(defeated, defeatedWasTheDefender);
 		} else {
@@ -105,6 +127,67 @@ public partial class MapUnit {
 	public bool StartScienceAge() {
 		if (!CanStartScienceAge()) return false;
 		owner.StartAgeOfScience();
+		RemoveFromPlay();
+		return true;
+	}
+
+	// A leader's rush applies a shield-cost floor only when the caller asks for
+	// one; Civ3's own availability test and its AI path both pass zero.
+	public const int MilitaryLeaderRushMinimumShields = 100;
+	public const int ScientificLeaderRushMinimumShields = 200;
+
+	/// Whether this leader may rush the city's current production. The leader
+	/// must stand in one of its own cities. A leader rushes buildings only (never
+	/// a unit), and a military leader may not rush a Great Wonder. When
+	/// requireMinimumShieldCost is set the caller is asking for Civ3's shield
+	/// floor - 100 for a military leader, 200 for a scientific one - which
+	/// refuses cheaper items.
+	public bool CanHurryProduction(bool requireMinimumShieldCost = false) {
+		if (!unitType.isLeader) return false;
+		if (location == null || !location.HasCity()) return false;
+
+		City city = location.cityAtTile;
+		if (city.owner != owner) return false;
+		if (city.itemBeingProduced is not Building building) return false;
+
+		switch (leaderKind) {
+			case LeaderKind.Military:
+				// Improvements and small wonders; a Great Wonder is refused.
+				if (building.IsGreatWonder()) return false;
+				break;
+			case LeaderKind.Scientific:
+				// Any improvement, small wonder or Great Wonder.
+				break;
+			default:
+				// A kind of unset is a wildcard over items that look like
+				// buildings: a Great or Small Wonder, or one that needs another
+				// building first.
+				if (!building.IsGreatWonder() && !building.isSmallWonder && building.requiredBuilding == null) return false;
+				break;
+		}
+
+		if (requireMinimumShieldCost) {
+			int minimum = leaderKind switch {
+				LeaderKind.Military => MilitaryLeaderRushMinimumShields,
+				LeaderKind.Scientific => ScientificLeaderRushMinimumShields,
+				_ => 0,
+			};
+			if (owner.ShieldCost(building) < minimum) return false;
+		}
+
+		return true;
+	}
+
+	/// Rush the city's current production. The item's own shield cost is placed
+	/// in the production box, so the item completes at the owner's next
+	/// production phase; no gold is paid and no citizen is lost, unlike the
+	/// ordinary hurry. The leader is consumed. Civ3 also sets a per-city "rushed"
+	/// status bit at the same time; C7 has no city status word to hold it.
+	public bool HurryProduction(bool requireMinimumShieldCost = false) {
+		if (!CanHurryProduction(requireMinimumShieldCost)) return false;
+
+		City city = location.cityAtTile;
+		city.SetStoredShields(owner.ShieldCost(city.itemBeingProduced));
 		RemoveFromPlay();
 		return true;
 	}
