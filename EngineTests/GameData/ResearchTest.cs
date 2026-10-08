@@ -184,6 +184,70 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 	}
 
 	[Fact]
+	public void AHumanFreeTechIsNotAutoSpent() {
+		Tech philosophy = MakeTech("tech-philosophy", 40);
+		philosophy.BonusTechToFirstCivThatResearches = true;
+		Tech pottery = MakeTech("tech-pottery", 10);
+		pottery.RequiredForEraAdvancement = true;
+		Tech bronzeWorking = MakeTech("tech-bronze-working", 10);
+		C7GameData.GameData gameData = MakeGame(philosophy, pottery, bronzeWorking);
+		Player player = MakePlayer(gameData, isHuman: true);
+		MakeCity(gameData, player, commerce: 8);
+		EngineStorage.InitializeGameDataForTests(gameData);
+
+		int fullCost = gameData.TechCostFor(philosophy, player);
+		player.SetCurrentlyResearchedTech(philosophy.id);
+		player.beakers = fullCost + 7;
+		player.turnsResearched = gameData.rules.MinimumResearchTime;
+
+		player.DoPerTurnScienceUpdates(gameData);
+
+		// The free advance is awarded but not spent, and the research slot is
+		// left open so the ScienceSelection prompt can fire.
+		Assert.Contains(philosophy.id, player.knownTechs);
+		Assert.Equal(1, player.freeTechsRemaining);
+		Assert.Null(player.currentlyResearchedTech);
+		// The overflow from the completed tech waits with the free advance.
+		Assert.Equal(7, player.beakers);
+
+		// An explicit choice spends it, and grants the chosen tech for free.
+		player.SetCurrentlyResearchedTech(pottery.id);
+		Assert.Contains(pottery.id, player.knownTechs);
+		Assert.Equal(0, player.freeTechsRemaining);
+		// A free tech costs nothing, so the overflow survives it.
+		Assert.Equal(7, player.beakers);
+
+		// A later choice is ordinary research and does not spend anything.
+		player.SetCurrentlyResearchedTech(bronzeWorking.id);
+		Assert.Equal(0, player.freeTechsRemaining);
+	}
+
+	[Fact]
+	public void AnAIFreeTechIsStillAutoSpent() {
+		Tech philosophy = MakeTech("tech-philosophy", 40);
+		philosophy.BonusTechToFirstCivThatResearches = true;
+		Tech pottery = MakeTech("tech-pottery", 10);
+		pottery.RequiredForEraAdvancement = true;
+		Tech bronzeWorking = MakeTech("tech-bronze-working", 10);
+		Tech ironWorking = MakeTech("tech-iron-working", 12);
+		C7GameData.GameData gameData = MakeGame(philosophy, pottery, bronzeWorking, ironWorking);
+		Player player = MakePlayer(gameData, isHuman: false);
+		MakeCity(gameData, player, commerce: 8);
+		EngineStorage.InitializeGameDataForTests(gameData);
+
+		int fullCost = gameData.TechCostFor(philosophy, player);
+		player.SetCurrentlyResearchedTech(philosophy.id);
+		player.beakers = fullCost + 7;
+		player.turnsResearched = gameData.rules.MinimumResearchTime;
+
+		player.DoPerTurnScienceUpdates(gameData);
+
+		Assert.Contains(philosophy.id, player.knownTechs);
+		Assert.Equal(0, player.freeTechsRemaining);
+		Assert.NotNull(player.currentlyResearchedTech);
+	}
+
+	[Fact]
 	public void LibraryGivesOneAndAHalfTimesTheBeakers() {
 		Building library = FindShippedBuilding("Library");
 
