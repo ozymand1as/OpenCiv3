@@ -75,6 +75,8 @@ namespace C7GameData.Save {
 				CitizenTypes = data.citizenTypes,
 				TerraForms = data.Terraforms.ConvertAll(t => t.ToSaveTerraform()),
 				Governments = data.governments,
+				EspionageMissions = data.espionageMissions,
+				CultureLevels = data.cultureLevels,
 				WorldSizes = data.worldSizes,
 				Difficulties = data.difficulties,
 				GameDifficulty = data.gameDifficulty,
@@ -222,6 +224,8 @@ namespace C7GameData.Save {
 				alliances = Alliances,
 				citizenTypes = CitizenTypes,
 				governments = Governments,
+				espionageMissions = EspionageMissions,
+				cultureLevels = CultureLevels,
 				worldSizes = WorldSizes,
 				difficulties = Difficulties,
 				gameDifficulty = GameDifficulty,
@@ -489,6 +493,8 @@ namespace C7GameData.Save {
 		public List<CitizenType> CitizenTypes = new();
 		public List<SaveTerraform> TerraForms = new();
 		public List<Government> Governments = new();
+		public List<EspionageMission> EspionageMissions = new();
+		public List<CultureLevel> CultureLevels = new();
 		public List<WorldSize> WorldSizes = new();
 		public Dictionary<string, List<HistTurnRecord>> History = new();
 

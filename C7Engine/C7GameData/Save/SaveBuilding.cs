@@ -21,6 +21,8 @@ namespace C7GameData.Save {
 			ProvidesWalls,
 			CanOnlyBeBuiltInTowns,
 			TreasuryEarnsInterest,
+			AllowsSpyMissions,
+			ResistantToBribery,
 		}
 
 		public class GreatWonderProperties {

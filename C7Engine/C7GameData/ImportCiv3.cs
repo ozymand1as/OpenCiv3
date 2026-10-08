@@ -83,6 +83,8 @@ namespace C7GameData {
 			ImportBarbarianInfo();
 			ImportCitizenTypes();
 			ImportGovernments();
+			ImportEspionageMissions();
+			ImportCultureLevels();
 			ImportDifficulties();
 			ImportRules();
 		}
@@ -1673,6 +1675,8 @@ namespace C7GameData {
 				(bldg.AllowsCitySize3, SaveBuilding.Flag.AllowsCitySize3),
 				(bldg.DoublesCityGrowthRate, SaveBuilding.Flag.DoublesCityGrowthRate),
 				(bldg.TreasuryEarnsInterest, SaveBuilding.Flag.TreasuryEarnsInterest),
+				(bldg.AllowsSpyMissions, SaveBuilding.Flag.AllowsSpyMissions),
+				(bldg.ResistantToBribery, SaveBuilding.Flag.ResistantToBribery),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
@@ -1898,6 +1902,7 @@ namespace C7GameData {
 				(t.BonusTechToFirstCivThatResearches, SaveTech.Flag.BonusTechToFirstCivThatResearches),
 				(t.EnablesBridges, SaveTech.Flag.EnablesBridges),
 				(t.DoublesWealthProduction, SaveTech.Flag.DoublesWealthProduction),
+				(t.EnablesDiplomats, SaveTech.Flag.EnablesDiplomats),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
@@ -2020,6 +2025,9 @@ namespace C7GameData {
 				}
 				g.defaultType = govt.DefaultType == 1;
 				g.transitionType = govt.TransitionType == 1;
+				g.immuneTo = govt.ImmuneTo;
+				g.diplomatsAre = govt.DiplomatsAre;
+				g.spiesAre = govt.SpiesAre;
 				g.hasTilePenalty = govt.TilePenalty == 1;
 				g.hasTradeBonus = govt.TradeBonus == 1;
 				g.corruptionType = (Government.CorruptionType)govt.Corruption;
@@ -2035,6 +2043,48 @@ namespace C7GameData {
 
 				save.Governments.Add(g);
 			}
+		}
+
+		// Imports the BIQ ESPN section, the mission rule table. The shipped
+		// Conquests rules carry nine missions, and the original engine
+		// dispatches on the mission's position in this table, so the order is
+		// part of the contract.
+		private void ImportEspionageMissions() {
+			BiqData theBiq = biq.Espn is null ? defaultBiq : biq;
+			save.EspionageMissions.AddRange(BuildEspionageMissions(theBiq));
+		}
+
+		internal static List<EspionageMission> BuildEspionageMissions(BiqData theBiq) {
+			List<EspionageMission> missions = new();
+			foreach (QueryCiv3.Biq.ESPN espn in theBiq.Espn) {
+				missions.Add(new EspionageMission {
+					name = espn.Name,
+					civilopediaEntry = espn.CivilopediaEntry,
+					diplomatAllowed = espn.Diplomat,
+					spyAllowed = espn.Spy,
+					baseCost = espn.BaseCost,
+				});
+			}
+			return missions;
+		}
+
+		// Imports the BIQ CULT section, the cultural levels used to pick the
+		// per-citizen chance of an Initiate Propaganda mission.
+		private void ImportCultureLevels() {
+			BiqData theBiq = biq.Cult is null ? defaultBiq : biq;
+			save.CultureLevels.AddRange(BuildCultureLevels(theBiq));
+		}
+
+		internal static List<CultureLevel> BuildCultureLevels(BiqData theBiq) {
+			List<CultureLevel> levels = new();
+			foreach (QueryCiv3.Biq.CULT cult in theBiq.Cult) {
+				levels.Add(new CultureLevel {
+					name = cult.Name,
+					chanceOfSuccessfulPropaganda = cult.ChanceOfSuccessfulPropaganda,
+					cultureRatioPercentage = cult.CultureRatioPercentage,
+				});
+			}
+			return levels;
 		}
 
 		private void ImportDifficulties() {

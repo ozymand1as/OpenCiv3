@@ -45,6 +45,13 @@ namespace C7GameData {
 		public bool providesVeteranGroundUnits;
 		public bool treasuryEarnsInterest;
 
+		// A civ that owns a wonder with this flag may use spies.
+		public bool allowsSpyMissions;
+
+		// A city with this improvement resists propaganda (the Initiate
+		// Propaganda mission's penalty term).
+		public bool resistantToBribery;
+
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
 
@@ -96,6 +103,8 @@ namespace C7GameData {
 			onlyUsefulInTowns = building.flags.Contains(SaveBuilding.Flag.CanOnlyBeBuiltInTowns);
 			providesVeteranGroundUnits = building.flags.Contains(SaveBuilding.Flag.VeteranGroundUnits);
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
+			allowsSpyMissions = building.flags.Contains(SaveBuilding.Flag.AllowsSpyMissions);
+			resistantToBribery = building.flags.Contains(SaveBuilding.Flag.ResistantToBribery);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();

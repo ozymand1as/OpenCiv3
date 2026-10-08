@@ -34,6 +34,27 @@ public class PlayerRelationship {
 	// borders.
 	public bool wasSneakAttacked = false;
 
+	// The number of times the other civ has caught one of this civ's spies.
+	// The original engine keeps this in the per-civ-pair reputation block.
+	public int caughtSpyCount = 0;
+
+	// True once this civ has an embassy with the other civ (the other civ's
+	// relationship records the matching flag). Set by a successful Build an
+	// Embassy mission.
+	public bool embassyEstablished = false;
+
+	// True when this civ has an agent planted in the other civ. Spy missions
+	// require it, and catching a spy clears it.
+	public bool agentPlanted = false;
+
+	// True when a Plant Spy attempt against the other civ was caught. The
+	// original engine refuses to roll another plant attempt while it is set.
+	public bool plantSpyAttemptWasCaught = false;
+
+	// The turn after which a successful Steal Plans mission stops revealing
+	// the other civ's units, or -1 when no plans are stolen.
+	public int stolenPlansUntilTurn = -1;
+
 	// If at war, refuse contact with the relevant player until this turn
 	// has been reached.
 	public int refuseContactUntilTurn = -1;
