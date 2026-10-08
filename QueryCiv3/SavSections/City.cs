@@ -136,5 +136,15 @@ namespace QueryCiv3.Sav {
 
 		// if version >= ptw:
 		public DATE Date;
+
+		// The 4-byte field save format 20 added, stored in its own chunk right after the
+		// date sub-record. The loader zeroes it instead of reading it for older formats,
+		// so it is 0 there.
+		public int Format20Value;
+
+		// The city record's own revision, the second dword of the same chunk that carries
+		// Format20Value. It gates whether the arrays and objects after it are present. The
+		// loader behaves as revision 0 for formats older than 20, so it is 0 there too.
+		public int Revision;
 	}
 }

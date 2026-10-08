@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using C7GameData;
+using EngineTests.Utils;
 using QueryCiv3;
+using QueryCiv3.Sav;
 using Xunit;
 
 namespace EngineTests;
@@ -11,9 +15,23 @@ namespace EngineTests;
 // then behaves by. The rules are the original save reader's: the file must begin with
 // the save prologue, the major version must be at least 14, and a major version of 17
 // or more stores a minor version whose value 1 is never valid. Below 17 no minor
-// version is stored at all and the loader forces it to 0.
+// version is stored at all and the loader forces it to 0. On top of the acceptance
+// test sit the per-field rules of section 2.3: the version decides whether a city
+// stores its date sub-record and its format-20 field, and how long the block before
+// the per-player array is, so it decides how many bytes a record consumes.
 public class SaveFormatGateTests {
 	private static readonly byte[] SavePrologue = { (byte)'C', (byte)'I', (byte)'V', (byte)'3', 0x00, 0x1A };
+
+	// The header layout, measured from every cached save under data/saves: the
+	// prologue's NUL is byte 4, the marker byte the writer puts after it (0x1A) is
+	// byte 5, the major version is the four bytes at 6 and the minor version the four
+	// at 10. These are literals on purpose. Building the synthetic headers from
+	// SaveFormatGate's own offset constants would make a transcription error there
+	// self-consistent and invisible to every test; the cached saves pin them instead.
+	private const int PrologueNulOffset = 4;
+	private const int PrologueMarkerOffset = 5;
+	private const int LiteralMajorVersionOffset = 6;
+	private const int LiteralMinorVersionOffset = 10;
 
 	// prologue + major version + minor version + the 16-byte GUID a modern save stores
 	private const int SaveHeaderLength = 30;
@@ -26,8 +44,8 @@ public class SaveFormatGateTests {
 			bytes[i] = 0xAB;
 		}
 		Array.Copy(prologue, bytes, prologue.Length);
-		BitConverter.GetBytes(major).CopyTo(bytes, SaveFormatGate.MajorVersionOffset);
-		BitConverter.GetBytes(storedMinor).CopyTo(bytes, SaveFormatGate.MinorVersionOffset);
+		BitConverter.GetBytes(major).CopyTo(bytes, LiteralMajorVersionOffset);
+		BitConverter.GetBytes(storedMinor).CopyTo(bytes, LiteralMinorVersionOffset);
 		return bytes;
 	}
 
@@ -225,5 +243,267 @@ public class SaveFormatGateTests {
 		} finally {
 			File.Delete(path);
 		}
+	}
+
+	// ---- the per-field version rules, measured against the cached saves ----
+
+	[Fact]
+	public void EveryCachedSaveCarriesItsVersionAtTheLiteralOffsets() {
+		List<string> paths = Directory.EnumerateFiles(PathUtils.getDataPath("saves"), "*.SAV", SearchOption.AllDirectories).ToList();
+		Assert.NotEmpty(paths);
+
+		foreach (string path in paths) {
+			byte[] bytes = Util.ReadFile(path);
+
+			// The prologue, the NUL and the writer's marker, then the two version dwords.
+			Assert.Equal((byte)'C', bytes[0]);
+			Assert.Equal((byte)'I', bytes[1]);
+			Assert.Equal((byte)'V', bytes[2]);
+			Assert.Equal((byte)'3', bytes[3]);
+			Assert.Equal(0x00, bytes[PrologueNulOffset]);
+			Assert.Equal(0x1A, bytes[PrologueMarkerOffset]);
+			Assert.Equal(24, BitConverter.ToInt32(bytes, LiteralMajorVersionOffset));
+			Assert.Equal(10, BitConverter.ToInt32(bytes, LiteralMinorVersionOffset));
+
+			// And the gate reads the same version out of those same bytes.
+			SaveHeader header = SaveFormatGate.Check(bytes);
+			Assert.True(header.Accepted, header.FailureMessage);
+			Assert.Equal(24, header.MajorVersion);
+			Assert.Equal(10, header.MinorVersion);
+		}
+	}
+
+	[Fact]
+	public void TheShippedBuildsVersionPairSelectsTheModernFieldLayout() {
+		SaveFieldLayout layout = SaveFormatGate.FieldLayout(SaveFormatGate.Check(SaveHeader(24, 10)));
+
+		Assert.True(layout.CityStoresDateSubRecord);
+		Assert.True(layout.CityStoresFormat20Field);
+		Assert.False(layout.CityDerivesDateSubRecord);
+		Assert.Equal(0x100, layout.WorldTileBlockLength);
+	}
+
+	[Fact]
+	public void MinorVersionBeforeFourRemovesTheDateSubRecordAndLengthensTheBlock() {
+		SaveFieldLayout layout = SaveFormatGate.FieldLayout(SaveFormatGate.Check(SaveHeader(17, 3)));
+
+		Assert.False(layout.CityStoresDateSubRecord);
+		Assert.True(layout.CityDerivesDateSubRecord);
+		Assert.Equal(0x108, layout.WorldTileBlockLength);
+		// The format-20 rule is a major-version rule: a format 17.03 save is below it.
+		Assert.False(layout.CityStoresFormat20Field);
+
+		// A major version below 17 does not store a minor version at all, so the loader
+		// behaves as minor 0 and takes the same older layout.
+		SaveFieldLayout old = SaveFormatGate.FieldLayout(SaveFormatGate.Check(SaveHeader(16, 10)));
+		Assert.False(old.CityStoresDateSubRecord);
+		Assert.Equal(0x108, old.WorldTileBlockLength);
+	}
+
+	[Fact]
+	public void MajorVersionBeforeTwentyRemovesTheFormat20Field() {
+		SaveFieldLayout nineteen = SaveFormatGate.FieldLayout(SaveFormatGate.Check(SaveHeader(19, 10)));
+
+		Assert.True(nineteen.CityStoresDateSubRecord);
+		Assert.False(nineteen.CityStoresFormat20Field);
+		Assert.Equal(0x100, nineteen.WorldTileBlockLength);
+	}
+
+	[Fact]
+	public void MinorVersionBeforeFourReadsTheEightByteLongerBlockBeforeThePerPlayerArray() {
+		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/12345.SAV"));
+		List<string> expected = Snapshot(ParseSave(modern));
+
+		// The same save as a format 24.3 file: the version pair, and the eight extra
+		// bytes a format that old carries at the end of the block before the
+		// per-player array. Nothing else about the file changes, so only the block rule
+		// can explain the parse still landing on every later section.
+		byte[] older = SetVersion(modern, 24, 3);
+		older = InsertBytes(older, PerPlayerBlockStart(older) + SaveFormatGate.WorldTileBlockLength, 8);
+		Assert.Equal(3, SaveFormatGate.Check(older).MinorVersion);
+
+		Assert.Equal(expected, Snapshot(ParseSave(older)));
+	}
+
+	[Fact]
+	public void MinorVersionBeforeFourCityRecordStoresNoDateSubRecord() {
+		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/multi-turn-deals/MultiTurnDeal_Save_A.SAV"));
+		List<string> expected = Snapshot(ParseSave(modern));
+
+		byte[] older = SetVersion(modern, 24, 3);
+		older = InsertBytes(older, PerPlayerBlockStart(older) + SaveFormatGate.WorldTileBlockLength, 8);
+		List<int> dates = CityDateSubRecordOffsets(older);
+		Assert.NotEmpty(dates);
+		older = RemoveRanges(older, dates.Select(offset => (offset, DateSubRecordLength)).ToList());
+		Assert.Equal(3, SaveFormatGate.Check(older).MinorVersion);
+
+		// Every city still reads the same; the load only survives because the 92 bytes
+		// of each date sub-record are no longer taken from the file.
+		Assert.Equal(expected, Snapshot(ParseSave(older)));
+	}
+
+	[Fact]
+	public void MajorVersionBeforeTwentyCityRecordHasNoFormat20FieldOrTail() {
+		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/unit-availability/Middle Ages Scenario Abbasids, 843 AD.SAV"));
+		List<string> expected = Snapshot(ParseSave(modern));
+
+		// This save's format-20 field really is non-zero for some cities, so the rule is
+		// observable in the values and not only in the byte count.
+		Assert.Contains(expected, line => !line.EndsWith("format20=0 rev=0"));
+
+		// The same save as a format 19.10 file: the version pair, and each city's
+		// version-gated tail removed. Below save format 20 the loader zeroes the field
+		// and behaves as revision 0, so that tail is not in the file at all.
+		byte[] older = SetVersion(modern, 19, 10);
+		older = RemoveRanges(older, CityTailRanges(older));
+		Assert.Equal(19, SaveFormatGate.Check(older).MajorVersion);
+
+		List<string> actual = Snapshot(ParseSave(older));
+		Assert.Equal(expected.Count, actual.Count);
+		for (int i = 0; i < actual.Count; i++) {
+			if (actual[i].StartsWith("city ")) {
+				// The version pair is the only difference: the field is zeroed, the
+				// revision that gates the tail is 0, and everything else is identical.
+				Assert.Equal(StripVersionFields(expected[i]), StripVersionFields(actual[i]));
+				Assert.EndsWith("format20=0 rev=0", actual[i]);
+			} else {
+				Assert.Equal(expected[i], actual[i]);
+			}
+		}
+	}
+
+	// ---- helpers for the fixture surgery ----
+
+	private const int DateSubRecordLength = 92; // a DATE chunk: 8-byte header plus 84 payload bytes
+
+	/// <summary>
+	/// Parses a save the way the engine does. The rules file is the one every other
+	/// save test in this suite uses; the save then loads its own embedded rule
+	/// sections over it, so the values below do not depend on which rules file it is.
+	/// </summary>
+	private static SavData ParseSave(byte[] savBytes) {
+		return new SavData(savBytes, Util.ReadFile(PathUtils.defaultBicPath));
+	}
+
+	private static byte[] SetVersion(byte[] bytes, int major, int minor) {
+		byte[] copy = (byte[])bytes.Clone();
+		BitConverter.GetBytes(major).CopyTo(copy, LiteralMajorVersionOffset);
+		BitConverter.GetBytes(minor).CopyTo(copy, LiteralMinorVersionOffset);
+		return copy;
+	}
+
+	/// <summary>
+	/// The offset of the per-player `PALV` array, found by its signature: the four
+	/// ASCII characters followed by the length of one record (148). The block the
+	/// loader advances over sits immediately before it.
+	/// </summary>
+	private static int PerPlayerArrayOffset(byte[] bytes) {
+		for (int i = 0; i + 8 <= bytes.Length; i++) {
+			if (IsTag(bytes, i, "PALV") && BitConverter.ToInt32(bytes, i + 4) == 148) {
+				return i;
+			}
+		}
+		throw new InvalidOperationException("the save has no per-player array to find");
+	}
+
+	private static int PerPlayerBlockStart(byte[] bytes) => PerPlayerArrayOffset(bytes) - SaveFormatGate.WorldTileBlockLength;
+
+	private static bool IsTag(byte[] bytes, int offset, string tag) {
+		if (offset < 0 || offset + 4 > bytes.Length) {
+			return false;
+		}
+		for (int i = 0; i < 4; i++) {
+			if (bytes[offset + i] != (byte)tag[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/// <summary>
+	/// The offsets of the city date sub-records in a save: a `DATE` chunk of 84
+	/// payload bytes directly after the 48-byte `BITM` chunk that ends the fixed part
+	/// of a city record.
+	/// </summary>
+	private static List<int> CityDateSubRecordOffsets(byte[] bytes) {
+		List<int> offsets = new();
+		for (int i = 0; i + 48 + 8 <= bytes.Length; i++) {
+			if (IsTag(bytes, i, "BITM") && BitConverter.ToInt32(bytes, i + 4) == 40
+				&& IsTag(bytes, i + 48, "DATE") && BitConverter.ToInt32(bytes, i + 52) == 84) {
+				offsets.Add(i + 48);
+			}
+		}
+		return offsets;
+	}
+
+	/// <summary>
+	/// The byte ranges a save older than format 20 does not have: for every city, the
+	/// version-gated tail that starts after its date sub-record. The tail ends where
+	/// the next city record starts, or where the block before the per-player array
+	/// starts for the last one.
+	/// </summary>
+	private static List<(int Start, int Length)> CityTailRanges(byte[] bytes) {
+		int blockStart = PerPlayerBlockStart(bytes);
+		List<(int Start, int Length)> ranges = new();
+		foreach (int date in CityDateSubRecordOffsets(bytes)) {
+			int start = date + DateSubRecordLength;
+			int end = NextCityRecord(bytes, start, blockStart);
+			ranges.Add((start, end - start));
+		}
+		return ranges;
+	}
+
+	private static int NextCityRecord(byte[] bytes, int from, int limit) {
+		for (int i = from; i + 8 <= limit; i++) {
+			if (IsTag(bytes, i, "CITY") && BitConverter.ToInt32(bytes, i + 4) == 136) {
+				return i;
+			}
+		}
+		return limit;
+	}
+
+	private static byte[] InsertBytes(byte[] bytes, int offset, int count) {
+		byte[] result = new byte[bytes.Length + count];
+		Array.Copy(bytes, 0, result, 0, offset);
+		Array.Copy(bytes, offset, result, offset + count, bytes.Length - offset);
+		return result;
+	}
+
+	private static byte[] RemoveRanges(byte[] bytes, List<(int Start, int Length)> ranges) {
+		int removed = ranges.Sum(range => range.Length);
+		byte[] result = new byte[bytes.Length - removed];
+		int read = 0;
+		int write = 0;
+		foreach ((int start, int length) in ranges.OrderBy(range => range.Start)) {
+			Array.Copy(bytes, read, result, write, start - read);
+			write += start - read;
+			read = start + length;
+		}
+		Array.Copy(bytes, read, result, write, bytes.Length - read);
+		return result;
+	}
+
+	/// <summary>
+	/// Every value the parse produces that a version rule can change, so a doctored
+	/// file has to agree with the untouched one field by field.
+	/// </summary>
+	private static List<string> Snapshot(SavData sav) {
+		List<string> lines = new() {
+			$"world {sav.Wrld.Width}x{sav.Wrld.Height} seed={sav.Wrld.WorldSeed} continents={sav.Wrld.ContinentCount}",
+			$"tiles={sav.Tile.Length} units={sav.Unit.Length} cities={sav.City.Length} colonies={sav.Clny?.Length ?? 0}",
+			$"players={sav.Palv.Length} history={sav.Hist.TurnCount} turn={sav.Game.TurnNumber}",
+		};
+		for (int i = 0; i < sav.City.Length; i++) {
+			ref CITY city = ref sav.City[i];
+			lines.Add($"city {city.ID} '{city.Name}' owner={city.Owner} at={city.X},{city.Y} pop={city.Popd.CitizenCount} "
+				+ $"bldg={city.Binf.BuildingCount} culture={city.CulturePerTurn} food={city.TotalFood} shields={city.ShieldsCollected} "
+				+ $"maintenance={city.MaintenanceGPT} format20={city.Format20Value} rev={city.Revision}");
+		}
+		return lines;
+	}
+
+	private static string StripVersionFields(string cityLine) {
+		int index = cityLine.IndexOf(" format20=", StringComparison.Ordinal);
+		return index < 0 ? cityLine : cityLine.Substring(0, index);
 	}
 }

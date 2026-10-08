@@ -57,6 +57,58 @@ namespace QueryCiv3 {
 	}
 
 	/// <summary>
+	/// The per-field layout a save's version selects. The save container expresses its
+	/// version differences per field, inside the object readers, against the major and
+	/// minor version of <see cref="SaveHeader"/> - not per section the way the
+	/// scenario container does. Each difference therefore decides whether a field is in
+	/// the file at all, and so how many bytes a record consumes; a reader that ignores
+	/// one loses its place in the file rather than merely reading a wrong value.
+	/// </summary>
+	public readonly struct SaveFieldLayout {
+		/// <summary>
+		/// True when a city record stores its date sub-record. That sub-record (a tagged
+		/// `DATE` chunk of 84 payload bytes) only exists from save format 17.04 on: the
+		/// city reader tests the minor version and, below 4, computes the value instead of
+		/// reading it, so no bytes for it are present in the file (city reader
+		/// `FUN_004bbed0`, the `minor &lt; 4` test at 0x4bc34c in the shipped build).
+		/// </summary>
+		public bool CityStoresDateSubRecord { get; }
+
+		/// <summary>
+		/// True when a city record stores the 4-byte field added in save format 20. The
+		/// city reader tests the major version and, below 20, zeroes the field and reads
+		/// nothing: the field's chunk - which also carries the city record's own revision,
+		/// `FUN_004bbed0` at 0x4bc39b - is not in the file, and neither are the arrays and
+		/// objects that revision gates.
+		/// </summary>
+		public bool CityStoresFormat20Field { get; }
+
+		/// <summary>
+		/// The number of bytes occupied by the block that sits between the city data and
+		/// the per-player (`PALV`) array. From save format 17.04 on it is
+		/// <see cref="SaveFormatGate.WorldTileBlockLength"/> bytes; older saves carry 8
+		/// more, so the reader advances 0x108 instead (`move_game_data` at 0x590030, the
+		/// `minor &lt; 4` test that overrides the 0x100 advance).
+		/// </summary>
+		public int WorldTileBlockLength { get; }
+
+		/// <summary>
+		/// True when the city record's date is computed rather than stored, i.e. for
+		/// formats older than save format 17.04. The derivation itself reads city state
+		/// (`+0x54` through the helpers at 0x5df710/0x5df100) that this model does not
+		/// carry, so the parser only honours the size half of the rule: the sub-record is
+		/// not consumed and the date fields keep their defaults.
+		/// </summary>
+		public bool CityDerivesDateSubRecord => !CityStoresDateSubRecord;
+
+		internal SaveFieldLayout(bool cityStoresDateSubRecord, bool cityStoresFormat20Field, int worldTileBlockLength) {
+			CityStoresDateSubRecord = cityStoresDateSubRecord;
+			CityStoresFormat20Field = cityStoresFormat20Field;
+			WorldTileBlockLength = worldTileBlockLength;
+		}
+	}
+
+	/// <summary>
 	/// The version gate of the save container (`.sav`): a file is accepted only if it
 	/// starts with the save prologue and declares a version the engine knows, and the
 	/// minor version is not read at all for formats that predate the field. Every other
@@ -87,6 +139,55 @@ namespace QueryCiv3 {
 
 		/// <summary>The minor version from which a save stores the 16-byte GUID.</summary>
 		public const int GuidFirstStoredMinor = 7;
+
+		// BLOCKER: the GUID rule of spec 28 section 2.1 (rule 5, "the GUID is replaced,
+		// not validated" below minor 7) is not implemented, and cannot be here without
+		// inventing state: OpenCiv3 has no save GUID. Neither the engine's game data nor
+		// its save model carries such a field, and no code reads or writes one, so there
+		// is no value for the rule to act on. A GUID field added only so that the loader
+		// could replace it would be invented behaviour rather than a ported rule; the
+		// loader therefore records whether the file stores one
+		// (<see cref="SaveHeader.HasStoredGuid"/>) and leaves the replacement undone.
+
+		/// <summary>The minor version from which a city record stores its date sub-record.</summary>
+		public const int CityDateSubRecordFirstMinor = 4;
+
+		/// <summary>The major version from which a city record stores the format-20 field.</summary>
+		public const int CityFormat20FieldFirstMajor = 20;
+
+		/// <summary>
+		/// The first minor version from which the block before the per-player array is the
+		/// short one. Older formats carry 8 more bytes (see
+		/// <see cref="WorldTileBlockLengthBeforeMinor4"/>).
+		/// </summary>
+		public const int WorldTileBlockFirstMinor = 4;
+
+		/// <summary>
+		/// The length of the block between the city data and the per-player array from
+		/// save format 17.04 on, and the length older formats give it (8 bytes more).
+		/// </summary>
+		public const int WorldTileBlockLength = 0x100;
+		public const int WorldTileBlockLengthBeforeMinor4 = 0x108;
+
+		/// <summary>
+		/// The per-field layout of a save with this header: which city fields are present,
+		/// and how long the block before the per-player array is.
+		/// </summary>
+		public static SaveFieldLayout FieldLayout(SaveHeader header) => FieldLayout(header.MajorVersion, header.MinorVersion);
+
+		/// <summary>
+		/// The per-field layout of a save with this version pair, using the loader's own
+		/// version values: a minor version is only meaningful from major 17 on, and callers
+		/// pass the minor the gate reports for the file.
+		/// </summary>
+		public static SaveFieldLayout FieldLayout(int majorVersion, int minorVersion) {
+			return new SaveFieldLayout(
+				cityStoresDateSubRecord: minorVersion >= CityDateSubRecordFirstMinor,
+				cityStoresFormat20Field: majorVersion >= CityFormat20FieldFirstMajor,
+				worldTileBlockLength: minorVersion < WorldTileBlockFirstMinor
+					? WorldTileBlockLengthBeforeMinor4
+					: WorldTileBlockLength);
+		}
 
 		/// <summary>
 		/// Applies the version gate to a save file's header.
