@@ -990,6 +990,13 @@ namespace C7GameData {
 			}
 		}
 
+		// The city that acts as this civ's capital. Civ3 uses the leader's
+		// capital city, and falls back to the first city in scenarios that
+		// have no palace.
+		public City GetCapitalCity() {
+			return cities.Find(x => x.IsCapital()) ?? cities[0];
+		}
+
 		public void DoCorruptionCalculations(GameData gameData) {
 			if (cities.Count == 0) {
 				return;
@@ -1023,10 +1030,7 @@ namespace C7GameData {
 			// then order in the database, which a stable sort gives us.
 			//
 			// TODO: track city age.
-			City capital = cities.Find(x => x.IsCapital());
-			if (capital == null) {
-				capital = cities[0];
-			}
+			City capital = GetCapitalCity();
 			List<City> citiesInRankOrdering = cities.OrderBy(x => x.location.RankDistanceTo(capital.location)).ToList();
 			for (int i = 0; i < citiesInRankOrdering.Count; ++i) {
 				citiesInRankOrdering[i].rankIndex = i;
