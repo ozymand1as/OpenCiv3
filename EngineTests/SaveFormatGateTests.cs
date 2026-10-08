@@ -18,7 +18,10 @@ namespace EngineTests;
 // version is stored at all and the loader forces it to 0. On top of the acceptance
 // test sit the per-field rules of section 2.3: the version decides whether a city
 // stores its date sub-record and its format-20 field, and how long the block before
-// the per-player array is, so it decides how many bytes a record consumes.
+// the per-player array is, so it decides how many bytes a record consumes. The same
+// version decides where the body starts (section 2.1's header table): the minor
+// version dword exists only from major 17 on and the 16-byte GUID only from minor 7
+// on, so neither the body's start nor the embedded BIQ's offsets are constant.
 public class SaveFormatGateTests {
 	private static readonly byte[] SavePrologue = { (byte)'C', (byte)'I', (byte)'V', (byte)'3', 0x00, 0x1A };
 
@@ -35,6 +38,13 @@ public class SaveFormatGateTests {
 
 	// prologue + major version + minor version + the 16-byte GUID a modern save stores
 	private const int SaveHeaderLength = 30;
+
+	// Section 2.1's header table as literal thresholds, so the fixtures below are built
+	// to the table rather than to the production constants and a transcription error in
+	// either cannot hide behind the other.
+	private const int LiteralMinorFirstStoredMajor = 17;
+	private const int LiteralGuidFirstStoredMinor = 7;
+	private const int LiteralGuidLength = 16;
 
 	private static byte[] Header(byte[] prologue, int major, int storedMinor) {
 		// Fill with a value that is neither a plausible version nor a plausible GUID
@@ -249,10 +259,7 @@ public class SaveFormatGateTests {
 
 	[Fact]
 	public void EveryCachedSaveCarriesItsVersionAtTheLiteralOffsets() {
-		List<string> paths = Directory.EnumerateFiles(PathUtils.getDataPath("saves"), "*.SAV", SearchOption.AllDirectories).ToList();
-		Assert.NotEmpty(paths);
-
-		foreach (string path in paths) {
+		foreach (string path in CachedSavePaths()) {
 			byte[] bytes = Util.ReadFile(path);
 
 			// The prologue, the NUL and the writer's marker, then the two version dwords.
@@ -270,6 +277,55 @@ public class SaveFormatGateTests {
 			Assert.True(header.Accepted, header.FailureMessage);
 			Assert.Equal(24, header.MajorVersion);
 			Assert.Equal(10, header.MinorVersion);
+		}
+	}
+
+	[Theory]
+	// Section 2.1's header table as arithmetic: prologue 6, major version 4 always,
+	// minor version 4 only from major 17 on, GUID 16 only from minor 7 on. The shipped
+	// build writes 24.10, so its body starts at 30; an older spec-shaped save's is 14
+	// or 10, and a constant calibrated for 30 reads it from the wrong position.
+	[InlineData(24, 10, 30)]
+	[InlineData(24, 7, 30)]
+	[InlineData(24, 6, 14)]
+	[InlineData(19, 5, 14)]
+	[InlineData(17, 0, 14)]
+	[InlineData(16, 12345, 10)]
+	[InlineData(14, -1, 10)]
+	public void TheBodyAndEmbeddedBicOffsetsFollowTheHeaderTable(int major, int storedMinor, int expectedBodyOffset) {
+		SaveHeader header = SaveFormatGate.Check(SaveHeader(major, storedMinor));
+
+		Assert.Equal(expectedBodyOffset, SaveFormatGate.BodyOffset(header));
+		// The embedded BIQ's length dword and first byte sit inside the body, so both move
+		// with it: the dword after the 'BIC ' wrapper's own 8-byte header, the BIQ past the
+		// wrapper's 524-byte payload.
+		Assert.Equal(expectedBodyOffset + 8, SaveFormatGate.EmbeddedBicLengthOffset(header));
+		Assert.Equal(expectedBodyOffset + 532, SaveFormatGate.EmbeddedBicStartOffset(header));
+	}
+
+	[Fact]
+	public void EveryCachedSavesDerivedBodyOffsetPointsAtItsEmbeddedBic() {
+		foreach (string path in CachedSavePaths()) {
+			byte[] bytes = Util.ReadFile(path);
+			SaveHeader header = SaveFormatGate.Check(bytes);
+			Assert.Equal(24, header.MajorVersion);
+			Assert.Equal(10, header.MinorVersion);
+
+			// The derived body offset is where the body really starts: the first chunk is the
+			// 'BIC ' wrapper, whose own length field says 524.
+			int body = SaveFormatGate.BodyOffset(header);
+			Assert.Equal(30, body);
+			Assert.Equal("BIC ", Encoding.ASCII.GetString(bytes, body, 4));
+			Assert.Equal(524, BitConverter.ToInt32(bytes, body + 4));
+
+			// The derived embedded-BIQ offsets locate the embedded BIQ: it begins with the
+			// scenario magic BICQ and is exactly as long as the dword states, so the next
+			// save chunk - the GAME section - starts where it ends.
+			int biqStart = SaveFormatGate.EmbeddedBicStartOffset(header);
+			int biqLength = BitConverter.ToInt32(bytes, SaveFormatGate.EmbeddedBicLengthOffset(header));
+			Assert.True(biqLength > 0);
+			Assert.Equal("BICQ", Encoding.ASCII.GetString(bytes, biqStart, 4));
+			Assert.Equal("GAME", Encoding.ASCII.GetString(bytes, biqStart + biqLength, 4));
 		}
 	}
 
@@ -314,11 +370,13 @@ public class SaveFormatGateTests {
 		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/12345.SAV"));
 		List<string> expected = Snapshot(ParseSave(modern));
 
-		// The same save as a format 24.3 file: the version pair, and the eight extra
-		// bytes a format that old carries at the end of the block before the
-		// per-player array. Nothing else about the file changes, so only the block rule
-		// can explain the parse still landing on every later section.
-		byte[] older = SetVersion(modern, 24, 3);
+		// The same save as a format 24.3 file: the version pair in a header that is
+		// spec-shaped for it (no GUID below minor 7), and the eight extra bytes a format
+		// that old carries at the end of the block before the per-player array. Nothing
+		// else about the file changes, so only the block rule and the version's body
+		// offset can explain the parse still landing on every later section.
+		byte[] older = RestateHeader(modern, 24, 3);
+		AssertSpecShapedForVersion(older, 24, 3);
 		older = InsertBytes(older, PerPlayerBlockStart(older) + SaveFormatGate.WorldTileBlockLength, 8);
 		Assert.Equal(3, SaveFormatGate.Check(older).MinorVersion);
 
@@ -330,7 +388,8 @@ public class SaveFormatGateTests {
 		byte[] modern = Util.ReadFile(PathUtils.getDataPath("saves/multi-turn-deals/MultiTurnDeal_Save_A.SAV"));
 		List<string> expected = Snapshot(ParseSave(modern));
 
-		byte[] older = SetVersion(modern, 24, 3);
+		byte[] older = RestateHeader(modern, 24, 3);
+		AssertSpecShapedForVersion(older, 24, 3);
 		older = InsertBytes(older, PerPlayerBlockStart(older) + SaveFormatGate.WorldTileBlockLength, 8);
 		List<int> dates = CityDateSubRecordOffsets(older);
 		Assert.NotEmpty(dates);
@@ -351,12 +410,18 @@ public class SaveFormatGateTests {
 		// observable in the values and not only in the byte count.
 		Assert.Contains(expected, line => !line.EndsWith("format20=0 rev=0"));
 
-		// The same save as a format 19.10 file: the version pair, and each city's
-		// version-gated tail removed. Below save format 20 the loader zeroes the field
-		// and behaves as revision 0, so that tail is not in the file at all.
-		byte[] older = SetVersion(modern, 19, 10);
+		// The same save as a format 19.5 file: the version pair in a header that is
+		// spec-shaped for it (major 17+ does store a minor version, but minor 5 stores no
+		// GUID, so the header is 14 bytes and the body starts there rather than at 30),
+		// and each city's version-gated tail removed. Below save format 20 the loader
+		// zeroes the field and behaves as revision 0, so that tail is not in the file at
+		// all. Minor 5 is at or above every other threshold, so the format-20 rule is the
+		// only one this fixture exercises.
+		byte[] older = RestateHeader(modern, 19, 5);
+		AssertSpecShapedForVersion(older, 19, 5);
 		older = RemoveRanges(older, CityTailRanges(older));
 		Assert.Equal(19, SaveFormatGate.Check(older).MajorVersion);
+		Assert.Equal(5, SaveFormatGate.Check(older).MinorVersion);
 
 		List<string> actual = Snapshot(ParseSave(older));
 		Assert.Equal(expected.Count, actual.Count);
@@ -385,11 +450,70 @@ public class SaveFormatGateTests {
 		return new SavData(savBytes, Util.ReadFile(PathUtils.defaultBicPath));
 	}
 
-	private static byte[] SetVersion(byte[] bytes, int major, int minor) {
-		byte[] copy = (byte[])bytes.Clone();
-		BitConverter.GetBytes(major).CopyTo(copy, LiteralMajorVersionOffset);
-		BitConverter.GetBytes(minor).CopyTo(copy, LiteralMinorVersionOffset);
-		return copy;
+	private static List<string> CachedSavePaths() {
+		List<string> paths = Directory.EnumerateFiles(PathUtils.getDataPath("saves"), "*.SAV", SearchOption.AllDirectories).ToList();
+		Assert.NotEmpty(paths);
+		return paths;
+	}
+
+	/// <summary>
+	/// How many bytes a spec-shaped header occupies for this version, from section
+	/// 2.1's table: the six prologue bytes, the four-byte major version, the four-byte
+	/// minor version only from major 17 on (below that the loader behaves as 0, so no
+	/// minor is stored), and the sixteen-byte GUID only from minor 7 on.
+	/// </summary>
+	private static int HeaderLength(int major, int minor) {
+		int length = LiteralMajorVersionOffset + sizeof(int); // the prologue and the major version
+		if (major < LiteralMinorFirstStoredMajor) {
+			return length;
+		}
+		length += sizeof(int); // the minor version dword
+		if (minor >= LiteralGuidFirstStoredMinor) {
+			length += LiteralGuidLength; // the GUID
+		}
+		return length;
+	}
+
+	/// <summary>
+	/// Restates a modern save's version as this pair, keeping only the header bytes that
+	/// version stores: it drops the minor version dword below major 17 and the GUID below
+	/// minor 7 instead of leaving them in place. The rest of the file is the modern body,
+	/// shifted to follow the shorter (or equal) header. Declaring an older version on a
+	/// file that still carries the modern header would not be spec-shaped, and would let
+	/// a hardcoded body offset pass unnoticed.
+	/// </summary>
+	private static byte[] RestateHeader(byte[] bytes, int major, int minor) {
+		int length = HeaderLength(major, minor);
+		byte[] result = new byte[bytes.Length - SaveHeaderLength + length];
+		Array.Copy(bytes, 0, result, 0, LiteralMajorVersionOffset); // the prologue, incl. its marker byte
+		BitConverter.GetBytes(major).CopyTo(result, LiteralMajorVersionOffset);
+		int cursor = LiteralMajorVersionOffset + sizeof(int);
+		if (major >= LiteralMinorFirstStoredMajor) {
+			BitConverter.GetBytes(minor).CopyTo(result, cursor);
+			cursor += sizeof(int);
+			if (minor >= LiteralGuidFirstStoredMinor) {
+				// The GUID is at 14 and is the only part of the modern header an older
+				// version may still store, so it is copied rather than generated.
+				Array.Copy(bytes, LiteralMinorVersionOffset + sizeof(int), result, cursor, LiteralGuidLength);
+			}
+		}
+		Array.Copy(bytes, SaveHeaderLength, result, length, bytes.Length - SaveHeaderLength);
+		return result;
+	}
+
+	/// <summary>
+	/// Asserts the fixture is spec-shaped for the version it declares: it stores that
+	/// version pair at the literal offsets, and its first body chunk - the 'BIC ' wrapper
+	/// that carries the embedded BIQ - starts exactly where the header table says the body
+	/// does. A file that declares an older version but still carries the modern header, or
+	/// a body at the modern offset, fails here.
+	/// </summary>
+	private static void AssertSpecShapedForVersion(byte[] bytes, int major, int minor) {
+		Assert.Equal(major, BitConverter.ToInt32(bytes, LiteralMajorVersionOffset));
+		if (major >= LiteralMinorFirstStoredMajor) {
+			Assert.Equal(minor, BitConverter.ToInt32(bytes, LiteralMinorVersionOffset));
+		}
+		Assert.Equal("BIC ", Encoding.ASCII.GetString(bytes, HeaderLength(major, minor), 4));
 	}
 
 	/// <summary>
@@ -485,13 +609,16 @@ public class SaveFormatGateTests {
 
 	/// <summary>
 	/// Every value the parse produces that a version rule can change, so a doctored
-	/// file has to agree with the untouched one field by field.
+	/// file has to agree with the untouched one field by field. The rules line comes
+	/// from the embedded BIQ, so it also pins where the body - and with it the BIQ -
+	/// was read from.
 	/// </summary>
 	private static List<string> Snapshot(SavData sav) {
 		List<string> lines = new() {
 			$"world {sav.Wrld.Width}x{sav.Wrld.Height} seed={sav.Wrld.WorldSeed} continents={sav.Wrld.ContinentCount}",
 			$"tiles={sav.Tile.Length} units={sav.Unit.Length} cities={sav.City.Length} colonies={sav.Clny?.Length ?? 0}",
 			$"players={sav.Palv.Length} history={sav.Hist.TurnCount} turn={sav.Game.TurnNumber}",
+			$"rules tech={sav.Bic.Tech.Length} bldg={sav.Bic.Bldg.Length} good={sav.Bic.Good.Length}",
 		};
 		for (int i = 0; i < sav.City.Length; i++) {
 			ref CITY city = ref sav.City[i];

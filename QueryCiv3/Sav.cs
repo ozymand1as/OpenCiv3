@@ -93,8 +93,6 @@ namespace QueryCiv3 {
 		public int[][] TurnCulture;
 		public int[][] TurnVP;
 
-		private const int BIQ_SECTION_START = 562;
-
 		public SavData(byte[] savBytes, byte[] biqBytes) {
 			Bic = new BiqData(biqBytes);
 			Load(savBytes);
@@ -127,14 +125,21 @@ namespace QueryCiv3 {
 			// body is read. Civ3File reports the values the loader behaves by, so a file
 			// whose major version predates the stored minor version reads as minor 0, the
 			// same value the original save reader forces.
-			layout = SaveFormatGate.FieldLayout(Sav.Civ3Version.MajorVersion, Sav.Civ3Version.MinorVersion);
+			int majorVersion = Sav.Civ3Version.MajorVersion;
+			int minorVersion = Sav.Civ3Version.MinorVersion;
+			layout = SaveFormatGate.FieldLayout(majorVersion, minorVersion);
 			// Load in any biq sections contained in Sav file, overwriting existing biq sections:
-			int BiqSectionLength = Sav.ReadInt32(38);
-			Bic.Load(Sav.GetBytes(BIQ_SECTION_START, BiqSectionLength));
+			// The body does not start at a fixed offset: section 2.1's header table gives the
+			// minor version only from major 17 on and the GUID only from minor 7 on, so the
+			// body's start follows the version too. The embedded BIQ's length dword and its
+			// first byte sit at fixed distances inside that body, so both move with it.
+			int biqSectionLength = Sav.ReadInt32(SaveFormatGate.EmbeddedBicLengthOffset(majorVersion, minorVersion));
+			int biqSectionStart = SaveFormatGate.EmbeddedBicStartOffset(majorVersion, minorVersion);
+			Bic.Load(Sav.GetBytes(biqSectionStart, biqSectionLength));
 
 			fixed (byte* bytePtr = savBytes) {
 				int* header;
-				scan = bytePtr + BIQ_SECTION_START + BiqSectionLength;
+				scan = bytePtr + biqSectionStart + biqSectionLength;
 				byte* end = bytePtr + savBytes.Length;
 
 				while (scan < end) {
