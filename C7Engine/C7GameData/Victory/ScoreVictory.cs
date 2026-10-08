@@ -72,7 +72,10 @@ public class ScoreVictory : IVictory {
 		int contentCitizens = citizens.Count(c => c.mood == CityResident.Mood.Content);
 		int specialists = player.cities.Sum(c => c.residents.Count(r => !r.citizenType.IsDefaultCitizen));
 
-		int futureTechs = 0; // TODO: future techs
+		// 1 point per future technology, per the score spec's technology term
+		// (25_victory_score.md §3.1). Ordinary technologies and wonders
+		// contribute nothing.
+		int futureTechs = player.futureTechs;
 
 		// TODO: gameData.gameDifficulty.ScoreMultiplier
 		float difficultyFactor = GetDifficultyScoreFactor(gameData);

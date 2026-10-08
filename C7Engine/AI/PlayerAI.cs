@@ -23,7 +23,6 @@ namespace C7Engine {
 			if (player.isHuman || player.isBarbarians || !player.isIncludedInGame) {
 				return;
 			}
-			List<Tech> techs = gameData.techs;
 
 			Stopwatch stopwatch = new Stopwatch();
 			stopwatch.Start();
@@ -35,7 +34,7 @@ namespace C7Engine {
 			PlayerRelationship.CheckForObsoleteDeals(player, EngineStorage.gameData.players, EngineStorage.gameData.turn);
 
 			MaybeDoPriorityReevaluation(player);
-			MaybePickTechToResearch(player, techs);
+			MaybePickTechToResearch(player, gameData);
 
 			// Roughly every 4 turns, see if there are trades to be made.
 			if (GameData.rng.Next(100) < 25) {
@@ -75,12 +74,19 @@ namespace C7Engine {
 			}
 		}
 
-		public static void MaybePickTechToResearch(Player player, List<Tech> techs) {
+		public static void MaybePickTechToResearch(Player player, GameData gameData) {
+			List<Tech> techs = gameData.techs;
 			while (player.currentlyResearchedTech == null || player.knownTechs.Contains(player.currentlyResearchedTech)) {
 				Tech toResearch = player.GetAvailableTechsToResearch(techs).FirstOrDefault();
 				if (toResearch == null) {
-					log.Information($"Player {player.civilization.name} has no techs available to research.");
-					player.SetCurrentlyResearchedTech(null);
+					// Every technology in the tree is known. Civ3 keeps research
+					// going with the repeatable future technology instead of
+					// stopping, and each completion increments the player's
+					// future-tech counter (16_science.md §3.1). It is never put
+					// on the research queue, because it is not a tech the player
+					// can ever "know".
+					player.SetCurrentlyResearchedTech(GameData.FutureTechId);
+					log.Information($"{player.civilization.name} is researching {gameData.FutureTech.Name}.");
 					break;
 				}
 
