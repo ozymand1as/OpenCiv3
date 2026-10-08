@@ -50,6 +50,25 @@ public class ScoreVictoryTest {
 	}
 
 	[Fact]
+	public void ComputeTurnScore_CountsFutureTechnologiesOnceEachWithTheDifficultyFactor() {
+		// Two players that are identical apart from their future-tech count.
+		Player noFutureTechs = new() { civilization = new Civilization("Rome") };
+		Player threeFutureTechs = new() { civilization = new Civilization("Greece"), futureTechs = 3 };
+
+		var difficulty = new Difficulty();
+		C7GameData.GameData gameData = new() {
+			difficulties = new List<Difficulty> { new Difficulty(), difficulty },
+			gameDifficulty = difficulty // index 1 -> factor of 2
+		};
+
+		float baseScore = ScoreVictory.ComputeTurnScore(noFutureTechs, gameData);
+		float futureScore = ScoreVictory.ComputeTurnScore(threeFutureTechs, gameData);
+
+		// 3 future techs * the difficulty factor of 2 (25_victory_score.md §3.1).
+		Assert.Equal(6f, futureScore - baseScore);
+	}
+
+	[Fact]
 	public void ComputeTurnScore_UnrecognizedDifficulty_FallsBackToFactorOfOne() {
 		Player player = new() { civilization = new Civilization("Rome") };
 		player.cities.Add(new City(Tile.NONE, player, "Roma", ID.None("city")));

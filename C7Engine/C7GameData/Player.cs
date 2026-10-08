@@ -200,6 +200,12 @@ namespace C7GameData {
 		// completing a wonder (like Theory of Evolution).
 		public int freeTechsRemaining = 0;
 
+		// The number of future technologies this player has completed. Once
+		// every technology in the tree is known, research continues with the
+		// repeatable future technology and each completion increments this
+		// (16_science.md §3.1). The score's technology term reads it.
+		public int futureTechs = 0;
+
 		public Alliance alliance;
 
 		// How many of each spaceship part this player has built, indexed by the
@@ -359,8 +365,10 @@ namespace C7GameData {
 		}
 
 		public void SetCurrentlyResearchedTech(ID id) {
-			// Award a free tech if the player has one.
-			if (id != null && freeTechsRemaining > 0) {
+			// Award a free tech if the player has one. A future technology is
+			// not a tech in the tree, so it never consumes a free tech - there
+			// is nothing left to spend it on once the tree is exhausted.
+			if (id != null && freeTechsRemaining > 0 && id != GameData.FutureTechId) {
 				--freeTechsRemaining;
 
 				Tech tech = EngineStorage.gameData.techs.Find(x => x.id == id);
@@ -672,7 +680,7 @@ namespace C7GameData {
 		}
 
 		public string SummarizeScience(GameData gD) {
-			Tech tech = gD.techs.Find(x => x.id == currentlyResearchedTech);
+			Tech tech = gD.GetTech(currentlyResearchedTech);
 			if (tech == null) {
 				return "Not selected (-- turns)";
 			}
@@ -974,7 +982,7 @@ namespace C7GameData {
 
 			// Check to see if the player has finished researching their
 			// tech, and if they have, add it to the list of known techs
-			Tech tech = gameData.techs.Find(x => x.id == currentlyResearchedTech);
+			Tech tech = gameData.GetTech(currentlyResearchedTech);
 			if (EstimateTurnsToResearch(gameData, tech) > 0) {
 				return;
 			}
@@ -994,12 +1002,12 @@ namespace C7GameData {
 			foreach (Tech tech in techs) {
 				overflow = CompleteResearchingTech(gameData, tech);
 			}
-			PlayerAI.MaybePickTechToResearch(this, gameData.techs);
+			PlayerAI.MaybePickTechToResearch(this, gameData);
 			CarryOverflowIntoNextTech(overflow);
 		}
 		private void CompleteResearchAndBeginNew(GameData gameData, Tech tech, bool free = false) {
 			int? overflow = CompleteResearchingTech(gameData, tech, free);
-			PlayerAI.MaybePickTechToResearch(this, gameData.techs);
+			PlayerAI.MaybePickTechToResearch(this, gameData);
 			CarryOverflowIntoNextTech(overflow);
 		}
 
@@ -1020,6 +1028,23 @@ namespace C7GameData {
 		}
 
 		private int CompleteResearchingTech(GameData gameData, Tech tech, bool free = false) {
+			// Civ3's future technology is repeatable: no tech is recorded, the
+			// era is not advanced, and completing one simply increments the
+			// player's future-tech counter (16_science.md §3.1). The progress
+			// and turn counters are zeroed by SetCurrentlyResearchedTech, as on
+			// every other completion.
+			if (gameData.IsFutureTech(tech)) {
+				++futureTechs;
+				SetCurrentlyResearchedTech(null);
+				// No surplus: a future-tech completion zeroes the research counter
+				// (16_science.md §2.7), so there is no overflow to carry. Returning
+				// zero rather than null keeps CarryOverflowIntoNextTech's contract
+				// honest - null means "no tech was completed, leave progress alone",
+				// and here a tech *was* completed and the progress is deliberately
+				// discarded.
+				return 0;
+			}
+
 			// If this tech awards the first civ to research it a free tech and
 			// no other civs know about the tech, this player gets the bonus.
 			if (tech.BonusTechToFirstCivThatResearches) {

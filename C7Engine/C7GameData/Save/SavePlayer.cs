@@ -75,6 +75,11 @@ namespace C7GameData.Save {
 		// saves that predate the field loadable.
 		public int? freeTechsRemaining;
 
+		// The number of future technologies this player has completed. Null
+		// when zero, so that saves without any future techs do not carry the
+		// field (16_science.md §3.1).
+		public int? futureTechs;
+
 		// If the government is anarchy (or a govt with the transition bool set
 		// to true), the turn number at which switching governments is allowed.
 		public int inAnarchyUntilTurn = 0;
@@ -148,6 +153,7 @@ namespace C7GameData.Save {
 			// Set after the researched tech, because the setter spends a free
 			// tech when one is available.
 			player.freeTechsRemaining = freeTechsRemaining ?? 0;
+			player.futureTechs = futureTechs ?? 0;
 
 			foreach (ID techId in researchQueue) {
 				Tech tech = techs.Find(x => x.id == techId);
@@ -193,6 +199,7 @@ namespace C7GameData.Save {
 			beakers = player.beakers;
 			turnsResearched = player.turnsResearched;
 			freeTechsRemaining = player.freeTechsRemaining == 0 ? null : player.freeTechsRemaining;
+			futureTechs = player.futureTechs == 0 ? null : player.futureTechs;
 			inAnarchyUntilTurn = player.inAnarchyUntilTurn;
 			governmentId = player.government.id;
 			spaceshipPartsBuilt = new List<int>(player.spaceshipPartsBuilt);

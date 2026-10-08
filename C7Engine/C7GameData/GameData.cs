@@ -161,7 +161,30 @@ namespace C7GameData {
 			return players.Find(p => p.id == id);
 		}
 
+		// Civ3's repeatable future technology (16_science.md §3.1). It is not
+		// part of the tech tree and is never recorded in a player's known
+		// techs: once every real technology is known a player researches this
+		// instead, and each completion increments the player's future-tech
+		// counter, which the score's technology term reads. The id is stable so
+		// that a save made mid-research reloads with the same target.
+		public static readonly ID FutureTechId = ID.FromString("future-technology-0");
+
+		// A fresh instance each time, so a rules change (or a rules load that
+		// happens after the first read) is always reflected in the cost.
+		public Tech FutureTech => new() {
+			id = FutureTechId,
+			Name = "Future Technology",
+			Cost = rules?.FutureTechCost ?? 0,
+		};
+
+		public bool IsFutureTech(Tech tech) {
+			return tech != null && tech.id == FutureTechId;
+		}
+
 		public Tech GetTech(ID id) {
+			if (id == FutureTechId) {
+				return FutureTech;
+			}
 			return techs.Find(p => p.id == id);
 		}
 

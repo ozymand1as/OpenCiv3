@@ -11741,6 +11741,7 @@
   "rules": {
     "maximumResearchTime": 50,
     "minimumResearchTime": 4,
+    "futureTechCost": 400,
     "shieldValueInGold": 4,
     "forestValueInShields": 10,
     "citizenValueInShields": 20,

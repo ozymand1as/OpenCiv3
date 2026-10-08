@@ -817,6 +817,9 @@ namespace C7GameData {
 				player.gold = leader.Gold;
 				player.beakers = leader.Beakers;
 				player.turnsResearched = leader.TurnsResearched;
+				// Keep the saved json free of the field when it is zero, matching
+				// every other player-save null-when-default field.
+				player.futureTechs = leader.FutureTechsKnown == 0 ? null : leader.FutureTechsKnown;
 				player.scienceRate = leader.ScienceRate;
 				player.luxuryRate = leader.LuxuryRate;
 				player.taxRate = leader.TaxRate;
@@ -2304,6 +2307,7 @@ namespace C7GameData {
 
 			save.Rules.MaximumResearchTime = rule.MaximumResearchTime;
 			save.Rules.MinimumResearchTime = rule.MinimumResearchTime;
+			save.Rules.FutureTechCost = rule.FutureTechCost;
 			save.Rules.MaximumLevel1CitySize = rule.MaximumLevel1CitySize;
 			save.Rules.MaximumLevel2CitySize = rule.MaximumLevel2CitySize;
 			save.Rules.ShieldValueInGold = rule.ShieldValueInGold;

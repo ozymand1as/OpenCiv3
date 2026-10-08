@@ -490,7 +490,7 @@ public partial class Game : Node {
 						PopupOverlay.PopupCategory.Info);
 
 				if (controller.currentlyResearchedTech == null && controller.GetAvailableTechsToResearch(gameData.techs).Count > 0) {
-					PlayerAI.MaybePickTechToResearch(controller, gameData.techs);
+					PlayerAI.MaybePickTechToResearch(controller, gameData);
 				}
 			}
 
