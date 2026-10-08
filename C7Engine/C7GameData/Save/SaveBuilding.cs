@@ -27,6 +27,9 @@ namespace C7GameData.Save {
 			DoublesResearchOutput,
 			AllowsSpyMissions,
 			ResistantToBribery,
+			IncreasesLeaderChance,
+			AllowsBuildArmy,
+			AllowsLargerArmies,
 		}
 
 		public class GreatWonderProperties {

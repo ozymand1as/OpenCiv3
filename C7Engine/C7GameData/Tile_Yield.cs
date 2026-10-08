@@ -130,6 +130,12 @@ public partial class Tile {
 
 		yield += this.overlays.GetBaseYieldBonus(YieldType.Production);
 
+		// A Golden Age adds one shield to every tile that already produces at
+		// least one.
+		if (player.GoldenAgeActive && yield >= 1) {
+			yield++;
+		}
+
 		return yield;
 	}
 	public Yield ProductionYield(Player player) {
@@ -181,6 +187,12 @@ public partial class Tile {
 		}
 
 		yield += this.overlays.GetBaseYieldBonus(YieldType.Commerce);
+
+		// A Golden Age adds one commerce to every tile that already produces at
+		// least one.
+		if (player.GoldenAgeActive && yield >= 1) {
+			yield++;
+		}
 
 		return yield;
 	}

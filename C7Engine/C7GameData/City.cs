@@ -596,6 +596,11 @@ namespace C7GameData {
 		public CommerceBreakdown CurrentCommerceYield(bool respectCivilDisorder = true) {
 			CommerceBreakdown result = CurrentCommerceYieldRaw(respectCivilDisorder);
 
+			// The Age of Science makes the city's research 25% more productive.
+			if (owner.AgeOfScienceActive) {
+				result.beakers = (int)(result.beakers * Player.AgeOfScienceResearchMultiplier);
+			}
+
 			// commerce lua infow
 			if (this.itemBeingProduced is Inflow inflowCommerce && inflowCommerce.TryGetInflowYieldFunc(InflowYield.commerce, out var commerceYieldFunc)) {
 				int extraCommerce = commerceYieldFunc.Invoke(new ScriptContext(this.owner, this));
@@ -753,6 +758,10 @@ namespace C7GameData {
 				year = 1, // TODO: Implement in-game year tracking
 				totalCulture = 0
 			});
+
+			// A Great Wonder carrying all of the owner's traits opens their Golden
+			// Age.
+			owner.CheckGoldenAgeFromWonders();
 		}
 		public void RemoveBuilding(CityBuilding building) {
 			constructed_buildings.Remove(building);

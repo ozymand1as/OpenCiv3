@@ -38,6 +38,15 @@ namespace C7GameData {
 		public int hitPointsRemaining { get; set; }
 		public int maxHitPoints {
 			get {
+				// An army pools the hit points of the units it carries: its maximum
+				// is the sum of their maxima plus its own bonus, floored at one.
+				if (IsArmy) {
+					int total = unitType.hpBonus;
+					foreach (MapUnit member in Members()) {
+						total += member.maxHitPoints;
+					}
+					return Math.Max(1, total);
+				}
 				return this.experienceLevel.baseHitPoints + this.unitType.hpBonus;
 			}
 		}
@@ -100,6 +109,11 @@ namespace C7GameData {
 		}
 
 		public bool CanTransport() {
+			// An army is a container even though it has no Unload action: its
+			// members are never disembarked.
+			if (IsArmy) {
+				return this.unitType.capacity > 0;
+			}
 			return this.unitType.capacity > 0 && this.unitType.actions.Contains(UnitAction.Unload);
 		}
 
@@ -282,7 +296,43 @@ namespace C7GameData {
 		}
 
 		public double StrengthVersus(MapUnit opponent, CombatRole role, TileDirection? attackDirection) {
-			return unitType.BaseStrength(role) * StrengthBonus.ListToMultiplier(ListStrengthBonusesVersus(opponent, role, attackDirection));
+			return BaseStrength(role) * StrengthBonus.ListToMultiplier(ListStrengthBonusesVersus(opponent, role, attackDirection));
+		}
+
+		// The strength a unit brings to a fight, before bonuses. For a normal
+		// unit this is its type's field; for an army it is the Civ3 aggregation
+		// (count/2 + sum of the members) / count, computed in integer arithmetic.
+		public double BaseStrength(CombatRole role) {
+			switch (role) {
+				case CombatRole.Attack:
+					return IsArmy ? ArmyMemberStrength(u => u.AttackStrength()) : unitType.attack;
+				case CombatRole.Defense:
+				case CombatRole.BombardDefense:
+				case CombatRole.DefensiveBombardDefense:
+					return IsArmy ? ArmyMemberStrength(u => u.DefenseStrength()) : unitType.defense;
+				case CombatRole.Bombard:
+				case CombatRole.DefensiveBombard:
+					return unitType.bombard;
+				default:
+					throw new ArgumentOutOfRangeException("Invalid CombatRole");
+			}
+		}
+
+		public int AttackStrength() {
+			return IsArmy ? ArmyMemberStrength(u => u.AttackStrength()) : unitType.attack;
+		}
+
+		public int DefenseStrength() {
+			return IsArmy ? ArmyMemberStrength(u => u.DefenseStrength()) : unitType.defense;
+		}
+
+		private int ArmyMemberStrength(Func<MapUnit, int> memberStrength) {
+			List<MapUnit> members = Members();
+			if (members.Count == 0) {
+				return 0;
+			}
+			int sum = members.Sum(memberStrength);
+			return (members.Count / 2 + sum) / members.Count;
 		}
 
 		public bool CanDefendAgainst(MapUnit attacker) {
@@ -523,7 +573,8 @@ namespace C7GameData {
 			if (!IsLoadable())
 				return false;
 
-			var availableTransports = tile.unitsOnTile.Where(u => u.CanTransport());
+			// Armies are loaded by an explicit action, never automatically.
+			var availableTransports = tile.unitsOnTile.Where(u => u.CanTransport() && !u.IsArmy);
 			foreach (var transport in availableTransports) {
 				if (transport.CanLoad(this))
 					return true;
@@ -539,8 +590,9 @@ namespace C7GameData {
 		private MapUnit SelectTransportToBoard(Tile tile) {
 			// TODO: Let human player choose via UI which transport to load unit in
 
+			// Armies are loaded by an explicit action, never automatically.
 			var availableTransports = tile.unitsOnTile
-				.Where(u => u.CanTransport())
+				.Where(u => u.CanTransport() && !u.IsArmy)
 				.Where(u => !u.IsFull());
 
 			// Sort candidates by free capacity, but prefer transports that already have units
@@ -578,7 +630,8 @@ namespace C7GameData {
 		// TODO: Amphibious assault
 
 		private bool CanUnloadToTile(Tile tile) {
-			if (!CanTransport())
+			// An army's members are never disembarked; they are lost with it.
+			if (IsArmy || !CanTransport())
 				return false;
 
 			var isValidLanding = tile.IsLand();
@@ -587,11 +640,11 @@ namespace C7GameData {
 
 		public int FreeCapacity() {
 			var loaded = this.location.unitsOnTile.Where(u => u.IsLoadedIn(this)).ToList();
-			return this.unitType.capacity - loaded.Count;
+			return this.GetTransportCapacity() - loaded.Count;
 		}
 
-		private bool IsEmpty() => unitType.capacity > 0 && FreeCapacity() == unitType.capacity;
-		private bool IsFull() => unitType.capacity > 0 && FreeCapacity() == 0;
+		private bool IsEmpty() => GetTransportCapacity() > 0 && FreeCapacity() == GetTransportCapacity();
+		private bool IsFull() => GetTransportCapacity() > 0 && FreeCapacity() == 0;
 
 		private static bool HasHostileUnits(Tile tile, Player player) {
 			foreach (MapUnit other in tile.unitsOnTile) {

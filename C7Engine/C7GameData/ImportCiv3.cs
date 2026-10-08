@@ -1430,8 +1430,11 @@ namespace C7GameData {
 		private static bool IsUnproducible(PRTO prto) {
 			int[] availableTo = prto.AvailableTo.GetAvailableCivIndexes().ToArray();
 
-			// TODO: Implement proper logic for Army production
-			return availableTo.Length == 0 || prto.ShieldCost < 1 || prto.Army;
+			// A great leader is never produced by a city; it is created by the
+			// military or scientific leader roll. The Army, on the other hand, can
+			// be built - its gate is the CitiesNeededToSupportAnArmy rule, applied
+			// when a city's production options are evaluated.
+			return availableTo.Length == 0 || prto.ShieldCost < 1 || prto.Leader;
 		}
 
 		private HashSet<string> ImportUnitAvailability(PRTO prto) {
@@ -1484,6 +1487,9 @@ namespace C7GameData {
 				if (prto.LethalLandBombardment) prototype.flags.Add(SaveUnitPrototype.Flag.LethalLandBombardment);
 				if (prto.LethalSeaBombardment) prototype.flags.Add(SaveUnitPrototype.Flag.LethalSeaBombardment);
 				if (prto.Radar) prototype.flags.Add(SaveUnitPrototype.Flag.Radar);
+				if (prto.Army) prototype.flags.Add(SaveUnitPrototype.Flag.Army);
+				if (prto.Leader) prototype.flags.Add(SaveUnitPrototype.Flag.Leader);
+				if (prto.StartsGoldenAge) prototype.flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
@@ -1727,6 +1733,9 @@ namespace C7GameData {
 				(bldg.DoublesResearchOutput, SaveBuilding.Flag.DoublesResearchOutput),
 				(bldg.AllowsSpyMissions, SaveBuilding.Flag.AllowsSpyMissions),
 				(bldg.ResistantToBribery, SaveBuilding.Flag.ResistantToBribery),
+				(bldg.IncreasesLeaderChance, SaveBuilding.Flag.IncreasesLeaderChance),
+				(bldg.AllowsBuildArmy, SaveBuilding.Flag.AllowsBuildArmy),
+				(bldg.AllowsLargerArmies, SaveBuilding.Flag.AllowsLargerArmies),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
@@ -2192,6 +2201,18 @@ namespace C7GameData {
 			save.Rules.ShieldRateForDisbanding = 0.25f;
 			save.Rules.AllowLesserUnitProduction = false;
 			save.Rules.RadarTileVisibility = 2;
+
+			// RULE.GoldenAgeDuration (20) and RULE.CitiesNeededToSupportAnArmy (4)
+			// are the two rules the leader/army/golden-age subsystem reads.
+			save.Rules.GoldenAgeDuration = rule.GoldenAgeDuration;
+			save.Rules.CitiesNeededToSupportAnArmy = rule.CitiesNeededToSupportAnArmy;
+
+			// The "Allow Scientific Leaders" game toggle (bit 0x40000) gates the
+			// scientific leader roll.
+			QueryCiv3.Biq.GAME[] game = biq.Game ?? defaultBiq.Game;
+			if (game is { Length: > 0 }) {
+				save.Rules.AllowScientificLeaders = game[0].AllowScientificLeaders;
+			}
 		}
 
 		private static void SetWorldWrap(SavData civ3Save, SaveGame save) {

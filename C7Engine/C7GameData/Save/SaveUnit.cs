@@ -21,6 +21,11 @@ namespace C7GameData.Save {
 		public ID WorkerJob;
 		public ID loadedOnUnitId;
 
+		// Great-leader state: which kind of leader this unit is (none for every
+		// other unit) and whether it has already produced a leader.
+		public MapUnit.LeaderKind leaderKind = MapUnit.LeaderKind.None;
+		public bool hasProducedLeader;
+
 		// True for multiple types of automation, including worker automation
 		// and automated exploring.
 		public bool isAutomated;
@@ -38,6 +43,8 @@ namespace C7GameData.Save {
 			}
 			currentLocation = new TileLocation(unit.location);
 			loadedOnUnitId = unit.loadedOnUnitId;
+			leaderKind = unit.leaderKind;
+			hasProducedLeader = unit.hasProducedLeader;
 			if (unit.path?.PathLength() > 0) {
 				path = unit.path.path.ToList().ConvertAll(tile => new TileLocation(tile));
 			}
@@ -61,6 +68,8 @@ namespace C7GameData.Save {
 				owner = players.Find(player => player.id == owner),
 				location = map.tileAt(currentLocation.X, currentLocation.Y),
 				loadedOnUnitId = loadedOnUnitId,
+				leaderKind = leaderKind,
+				hasProducedLeader = hasProducedLeader,
 				previousLocation = currentLocation.X == - 1 ? Tile.NONE : map.tileAt(previousLocation.X, previousLocation.Y),
 				hitPointsRemaining = hitPointsRemaining,
 				movementPoints = new MovementPoints(),

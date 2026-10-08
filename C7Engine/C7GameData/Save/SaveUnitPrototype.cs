@@ -11,6 +11,9 @@ namespace C7GameData.Save {
 			LethalLandBombardment,
 			LethalSeaBombardment,
 			Radar,
+			Army,
+			Leader,
+			StartsGoldenAge,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The
