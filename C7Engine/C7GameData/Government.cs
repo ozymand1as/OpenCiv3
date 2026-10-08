@@ -16,6 +16,19 @@ namespace C7GameData {
 		// If true, this is the government used while switching governments.
 		public bool transitionType;
 
+		// The mission id this government's cities are immune to, or -1 for
+		// none (BIQ GOVT.ImmuneTo). The original engine only consults this for
+		// missions 0 through 6.
+		public int immuneTo = -1;
+
+		// The index (0..3) into the espionage experience-bonus table that
+		// applies when a diplomat runs a mission against this government
+		// (BIQ GOVT.DiplomatsAre).
+		public int diplomatsAre = 1;
+
+		// Ditto for a spy (BIQ GOVT.SpiesAre).
+		public int spiesAre = 1;
+
 		// The "despotism penalty" applies for this goverment; reduces all 
 		// commerce, production and food output done by citizen laborers by -1 
 		// when they produce more than 2.

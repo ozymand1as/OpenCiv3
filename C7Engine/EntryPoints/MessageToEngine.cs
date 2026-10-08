@@ -414,6 +414,31 @@ namespace C7Engine {
 		}
 	}
 
+	// Runs one espionage mission. The engine entry point is
+	// Espionage.RunMission; this message is how the UI (or a scripted action)
+	// reaches it.
+	public class MsgRunEspionageMission : MessageToEngine {
+		private readonly Player actor;
+		private readonly Player target;
+		private readonly City targetCity;
+		private readonly int missionId;
+		private readonly EspionageAgent agent;
+		private readonly EspionageSafetyLevel safety;
+
+		public MsgRunEspionageMission(Player actor, Player target, City targetCity, int missionId, EspionageAgent agent, EspionageSafetyLevel safety = EspionageSafetyLevel.Carefully) {
+			this.actor = actor;
+			this.target = target;
+			this.targetCity = targetCity;
+			this.missionId = missionId;
+			this.agent = agent;
+			this.safety = safety;
+		}
+
+		public override void process() {
+			Espionage.RunMission(EngineStorage.gameData, actor, target, targetCity, missionId, agent, safety);
+		}
+	}
+
 	public class MsgDoStopWorkerAction : MessageToEngine {
 		private MapUnit worker;
 		public MsgDoStopWorkerAction(MapUnit worker) {

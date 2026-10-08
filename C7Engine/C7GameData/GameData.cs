@@ -48,6 +48,8 @@ namespace C7GameData {
 		public List<CitizenType> citizenTypes = new();
 		public List<Terraform> Terraforms = new();
 		public List<Government> governments = new();
+		public List<EspionageMission> espionageMissions = new();
+		public List<CultureLevel> cultureLevels = new();
 		public List<WorldSize> worldSizes = new();
 		public List<Difficulty> difficulties = new();
 		public Difficulty gameDifficulty = new();
@@ -144,6 +146,15 @@ namespace C7GameData {
 
 		public Tech GetTech(ID id) {
 			return techs.Find(p => p.id == id);
+		}
+
+		// Returns the espionage mission with the given id (its position in the
+		// BIQ ESPN table), or null when the id is out of range.
+		public EspionageMission GetEspionageMission(int id) {
+			if (espionageMissions == null || id < 0 || id >= espionageMissions.Count) {
+				return null;
+			}
+			return espionageMissions[id];
 		}
 
 		public ExperienceLevel GetExperienceLevelAfter(ExperienceLevel experienceLevel) {

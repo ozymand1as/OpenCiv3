@@ -13,6 +13,9 @@ namespace C7GameData {
 		public bool EnablesBridges;
 		public bool DoublesWealthProduction;
 
+		// Knowing a technology with this flag lets a civ use diplomats.
+		public bool EnablesDiplomats;
+
 		// The civilopedia name of the era this tech is part of
 		// (like ERA_Ancient_Times). This is what art lookups are based on.
 		public string EraCivilopediaName { get; set; }

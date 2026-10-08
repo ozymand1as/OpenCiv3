@@ -50,6 +50,12 @@ namespace C7GameData {
 		// Copernicus' Observatory gives 2.5x, not 3x.
 		public bool plus50PercentResearch;
 		public bool doublesResearchOutput;
+		// A civ that owns a wonder with this flag may use spies.
+		public bool allowsSpyMissions;
+
+		// A city with this improvement resists propaganda (the Initiate
+		// Propaganda mission's penalty term).
+		public bool resistantToBribery;
 
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
@@ -114,6 +120,8 @@ namespace C7GameData {
 			reducesBuildingPollution = building.flags.Contains(SaveBuilding.Flag.ReducesBuildingPollution);
 			plus50PercentResearch = building.flags.Contains(SaveBuilding.Flag.Plus50PercentResearch);
 			doublesResearchOutput = building.flags.Contains(SaveBuilding.Flag.DoublesResearchOutput);
+			allowsSpyMissions = building.flags.Contains(SaveBuilding.Flag.AllowsSpyMissions);
+			resistantToBribery = building.flags.Contains(SaveBuilding.Flag.ResistantToBribery);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();

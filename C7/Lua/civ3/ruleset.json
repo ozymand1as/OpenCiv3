@@ -8536,7 +8536,8 @@
       "maintenanceCost": 1,
       "iconRowIndex": 6,
       "flags": [
-        "reducesCorruption"
+        "reducesCorruption",
+        "resistantToBribery"
       ]
     },
     {
@@ -9534,6 +9535,9 @@
       "traits": [
         "militaristic",
         "scientific"
+      ],
+      "flags": [
+        "allowsSpyMissions"
       ]
     },
     {
@@ -11787,6 +11791,9 @@
       "y": 332,
       "prerequisites": [
         "tech-3"
+      ],
+      "flags": [
+        "enablesDiplomats"
       ]
     },
     {
@@ -13084,6 +13091,9 @@
       "civilopediaEntry": "GOVT_Anarchy",
       "defaultType": false,
       "transitionType": true,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "catastrophic",
       "hurryingType": "cannotHurry",
       "draftLimit": 0,
@@ -13103,6 +13113,9 @@
       "civilopediaEntry": "GOVT_Despotism",
       "defaultType": true,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "rampant",
       "hurryingType": "forcedLabor",
       "draftLimit": 2,
@@ -13123,6 +13136,9 @@
       "prerequisiteTech": "tech-20",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "problematic",
       "hurryingType": "paidLabor",
       "draftLimit": 2,
@@ -13143,6 +13159,9 @@
       "prerequisiteTech": "tech-47",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 2,
       "corruptionType": "communal",
       "hurryingType": "forcedLabor",
       "draftLimit": 2,
@@ -13163,6 +13182,9 @@
       "prerequisiteTech": "tech-19",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "nuisance",
       "hurryingType": "paidLabor",
       "draftLimit": 1,
@@ -13183,6 +13205,9 @@
       "prerequisiteTech": "tech-35",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": 6,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "minimal",
       "hurryingType": "paidLabor",
       "draftLimit": 1,
@@ -13203,6 +13228,9 @@
       "prerequisiteTech": "tech-83",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 2,
       "corruptionType": "nuisance",
       "hurryingType": "forcedLabor",
       "draftLimit": 2,
@@ -13223,6 +13251,9 @@
       "prerequisiteTech": "tech-23",
       "defaultType": false,
       "transitionType": false,
+      "immuneTo": -1,
+      "diplomatsAre": 1,
+      "spiesAre": 1,
       "corruptionType": "problematic",
       "hurryingType": "forcedLabor",
       "draftLimit": 2,
@@ -13455,5 +13486,95 @@
     "victoryLocations": false,
     "captureTheFlag": false,
     "reverseCaptureTheFlag": false
-  }
+  },
+  "espionageMissions": [
+    {
+      "name": "Build an Embassy",
+      "civilopediaEntry": "ESPN_Build_an_Embassy",
+      "diplomatAllowed": true,
+      "baseCost": 20
+    },
+    {
+      "name": "Investigate City",
+      "civilopediaEntry": "ESPN_Investigate_City",
+      "diplomatAllowed": true,
+      "spyAllowed": true,
+      "baseCost": 10
+    },
+    {
+      "name": "Steal Technology",
+      "civilopediaEntry": "ESPN_Steal_Technology",
+      "diplomatAllowed": true,
+      "spyAllowed": true,
+      "baseCost": 10
+    },
+    {
+      "name": "Steal World Map",
+      "civilopediaEntry": "ESPN_Steal_World_Map",
+      "spyAllowed": true,
+      "baseCost": 1
+    },
+    {
+      "name": "Plant Spy",
+      "civilopediaEntry": "ESPN_Plant_Spy",
+      "spyAllowed": true,
+      "baseCost": 60
+    },
+    {
+      "name": "Steal Plans",
+      "civilopediaEntry": "ESPN_Steal_Plans",
+      "spyAllowed": true,
+      "baseCost": 10
+    },
+    {
+      "name": "Initiate Propaganda",
+      "civilopediaEntry": "ESPN_Initiate_Propaganda",
+      "spyAllowed": true,
+      "baseCost": 100
+    },
+    {
+      "name": "Sabotage Production",
+      "civilopediaEntry": "ESPN_Sabotage_Production",
+      "spyAllowed": true,
+      "baseCost": 10
+    },
+    {
+      "name": "Expose Enemy Spy",
+      "civilopediaEntry": "ESPN_Expose_Enemy_Mole",
+      "spyAllowed": true,
+      "baseCost": 80
+    }
+  ],
+  "cultureLevels": [
+    {
+      "name": "in awe of",
+      "chanceOfSuccessfulPropaganda": 30,
+      "cultureRatioPercentage": 300
+    },
+    {
+      "name": "admirers of",
+      "chanceOfSuccessfulPropaganda": 25,
+      "cultureRatioPercentage": 200
+    },
+    {
+      "name": "impressed with",
+      "chanceOfSuccessfulPropaganda": 20,
+      "cultureRatioPercentage": 100
+    },
+    {
+      "name": "unimpressed by",
+      "chanceOfSuccessfulPropaganda": 10,
+      "cultureRatioPercentage": 75
+    },
+    {
+      "name": "dismissive of",
+      "chanceOfSuccessfulPropaganda": 5,
+      "cultureRatioPercentage": 50
+    },
+    {
+      "name": "disdainful of",
+      "chanceOfSuccessfulPropaganda": 3,
+      "cultureRatioPercentage": 33
+    }
+  ]
 }

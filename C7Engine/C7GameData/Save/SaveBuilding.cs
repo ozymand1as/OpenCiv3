@@ -25,6 +25,8 @@ namespace C7GameData.Save {
 			ReducesBuildingPollution,
 			Plus50PercentResearch,
 			DoublesResearchOutput,
+			AllowsSpyMissions,
+			ResistantToBribery,
 		}
 
 		public class GreatWonderProperties {
