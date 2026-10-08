@@ -154,6 +154,36 @@ public class PollutionTest {
 		};
 	}
 
+	/// <summary>
+	/// Builds a game whose accumulated pollution is exactly
+	/// <paramref name="accumulatedPollution"/> (via one city with a building of
+	/// that pollution value) and whose map has exactly
+	/// <paramref name="tileCount"/> tiles, so the global-warming severity bands
+	/// can be exercised at their boundaries.
+	/// </summary>
+	private static C7GameData.GameData MakeSeverityGame(int accumulatedPollution, int tileCount) {
+		C7GameData.GameData gameData = MakeGameData();
+		Player player = MakePlayer(gameData);
+
+		List<Tile> tiles = new();
+		for (int i = 0; i < tileCount; ++i) {
+			Tile tile = MakeLandTile(gameData);
+			tile.XCoordinate = i;
+			tile.YCoordinate = 0;
+			tiles.Add(tile);
+		}
+		gameData.map = new GameMap { numTilesWide = tileCount, numTilesTall = 1, tiles = tiles };
+
+		if (accumulatedPollution > 0) {
+			City city = MakeCity(gameData, player, 1,
+				MakeBuilding(gameData, "Polluter", pollution: accumulatedPollution));
+			city.location = tiles[0];
+			tiles[0].cityAtTile = city;
+		}
+
+		return gameData;
+	}
+
 	// ---- Population pollution (section 6.1) ----
 
 	[Fact]
@@ -380,7 +410,24 @@ public class PollutionTest {
 		Pollution.DoPerTurnGlobalWarming(gameData);
 
 		Assert.Equal(PlainsId, TerrainType.Civ3TerrainIdForKey(tile.overlayTerrainType.Key));
-		Assert.Equal(PlainsId, TerrainType.Civ3TerrainIdForKey(tile.baseTerrainType.Key));
+		// Civ3's Map_change_tile_terrain changes only the rule terrain (+0xC8),
+		// so the underlying terrain is still grassland.
+		Assert.Equal(GrasslandId, TerrainType.Civ3TerrainIdForKey(tile.baseTerrainType.Key));
+	}
+
+	[Fact]
+	public void GlobalWarming_PreservesTheTilesUnderlyingTerrain() {
+		// A grassland tile that is warmed to plains keeps grassland underneath,
+		// exactly as Map_change_tile_terrain leaves Tile + 0xC4 alone. The
+		// underlying terrain is what the 0xE PollutionEffect sentinel reads, so
+		// overwriting it would also corrupt the forest/jungle fallback.
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("grassland");
+		MakeCity(gameData, MakePlayer(gameData), 1, MakeBuilding(gameData, "Factory", pollution: 1));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal("plains", tile.overlayTerrainType.Key);
+		Assert.Equal("grassland", tile.baseTerrainType.Key);
 	}
 
 	[Fact]
@@ -391,6 +438,7 @@ public class PollutionTest {
 		Pollution.DoPerTurnGlobalWarming(gameData);
 
 		Assert.Equal(DesertId, TerrainType.Civ3TerrainIdForKey(tile.overlayTerrainType.Key));
+		Assert.Equal(PlainsId, TerrainType.Civ3TerrainIdForKey(tile.baseTerrainType.Key));
 	}
 
 	[Fact]
@@ -434,6 +482,60 @@ public class PollutionTest {
 		Pollution.DoPerTurnGlobalWarming(gameData);
 
 		Assert.Equal(GrasslandId, TerrainType.Civ3TerrainIdForKey(tile.overlayTerrainType.Key));
+	}
+
+	// ---- Severity indicator (section 7 step 2) ----
+
+	[Theory]
+	// A clean world is 0; any pollution at all is 1; past a quarter of the map
+	// is 2; past half is 3. The boundaries are strict, so exactly a quarter or
+	// exactly half does not reach the next band.
+	[InlineData(0, 100, 0)]
+	[InlineData(1, 100, 1)]
+	[InlineData(25, 100, 1)]
+	[InlineData(26, 100, 2)]
+	[InlineData(50, 100, 2)]
+	[InlineData(51, 100, 3)]
+	[InlineData(100, 100, 3)]
+	// An odd tile count pins the integer halves: 5/2 = 2 and 5/4 = 1.
+	[InlineData(1, 5, 1)]
+	[InlineData(2, 5, 2)]
+	[InlineData(3, 5, 3)]
+	public void GlobalWarmingSeverity_ReportsTheBandOfTheAccumulatedPollution(int accumulatedPollution, int tileCount, int expected) {
+		C7GameData.GameData gameData = MakeSeverityGame(accumulatedPollution, tileCount);
+
+		Assert.Equal(accumulatedPollution, Pollution.AccumulatedPollution(gameData));
+		Assert.Equal(expected, Pollution.GlobalWarmingSeverity(gameData));
+	}
+
+	[Fact]
+	public void AccumulatedPollution_AddsTheSquareOfTheNukesUsed() {
+		// Civ3 adds nukes^2 to the sum (section 7 step 1). Nothing in OpenCiv3
+		// increments nukesUsed yet, so this term is always zero in a real game,
+		// but the rule itself is implemented and pinned here.
+		C7GameData.GameData gameData = MakeSeverityGame(5, 100);
+		gameData.nukesUsed = 3;
+
+		Assert.Equal(14, Pollution.AccumulatedPollution(gameData));
+	}
+
+	[Fact]
+	public void GlobalWarmingPass_RecordsTheSeverityIndicator() {
+		C7GameData.GameData gameData = MakeSeverityGame(3, 4);
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal(3, gameData.globalWarmingSeverity);
+		Assert.Equal(3, Pollution.GlobalWarmingSeverity(gameData));
+	}
+
+	[Fact]
+	public void GlobalWarmingPass_RecordsAZeroSeverityForACleanWorld() {
+		C7GameData.GameData gameData = MakeSeverityGame(0, 100);
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal(0, gameData.globalWarmingSeverity);
 	}
 
 	// ---- Persistence ----

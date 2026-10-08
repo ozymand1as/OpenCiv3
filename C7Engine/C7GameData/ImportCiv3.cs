@@ -1416,6 +1416,10 @@ namespace C7GameData {
 		}
 
 		private static IEnumerable<TerraformKey> GetUnitTerraforms(PRTO prto) {
+		// internal rather than private so EngineTests can pin the BIQ-to-terraform
+		// mapping against the shipped conquests.biq (see
+		// PollutionBiqImportTest).
+		internal static IEnumerable<TerraformKey> GetUnitTerraforms(PRTO prto) {
 			if (prto.BuildRoad) yield return TerraformKey.BuildRoad;
 			if (prto.BuildRailroad) yield return TerraformKey.BuildRailroad;
 			if (prto.BuildMine) yield return TerraformKey.BuildMine;
@@ -1710,7 +1714,10 @@ namespace C7GameData {
 			}
 		}
 
-		private static IEnumerable<SaveBuilding.Flag> LoadBuildingFlags(BLDG bldg) {
+		// internal rather than private so EngineTests can pin the BIQ-to-flag
+		// mapping against the shipped conquests.biq (see
+		// PollutionBiqImportTest).
+		internal static IEnumerable<SaveBuilding.Flag> LoadBuildingFlags(BLDG bldg) {
 			return new[] {
 				(bldg.CenterOfEmpire, SaveBuilding.Flag.IsCenterOfEmpire),
 				(bldg.CoastalInstallation, SaveBuilding.Flag.MustBeCoastal),
