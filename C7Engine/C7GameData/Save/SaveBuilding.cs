@@ -21,6 +21,9 @@ namespace C7GameData.Save {
 			ProvidesWalls,
 			CanOnlyBeBuiltInTowns,
 			TreasuryEarnsInterest,
+			IncreasesLeaderChance,
+			AllowsBuildArmy,
+			AllowsLargerArmies,
 		}
 
 		public class GreatWonderProperties {

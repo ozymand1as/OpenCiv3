@@ -24,5 +24,18 @@ namespace C7GameData {
 		public float ShieldRateForDisbanding; // per cent
 		public bool AllowLesserUnitProduction; // for example, allow building a Spearman/Pikeman when we can build a Musketman (simultaneously)
 		public int RadarTileVisibility; // how many tiles, a unit with the Radar ability, can see ahead
+
+		// How many turns a Golden Age lasts (RULE.GoldenAgeDuration, measured as 20
+		// in the shipped conquests.biq).
+		public int GoldenAgeDuration = 20;
+
+		// How many cities a civ must own per army it already has before it may
+		// create another one (RULE.CitiesNeededToSupportAnArmy, measured as 4 in
+		// the shipped conquests.biq).
+		public int CitiesNeededToSupportAnArmy = 4;
+
+		// Whether great scientific leaders can be created at all (GAME's "Allow
+		// Scientific Leaders" toggle, bit 0x40000).
+		public bool AllowScientificLeaders = true;
 	}
 }

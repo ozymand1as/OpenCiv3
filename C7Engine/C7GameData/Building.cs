@@ -45,6 +45,19 @@ namespace C7GameData {
 		public bool providesVeteranGroundUnits;
 		public bool treasuryEarnsInterest;
 
+		// The small-wonder abilities that feed the leader/army subsystem. The
+		// Heroic Epic raises the military leader chance, the Military Academy is
+		// the (open item) gate on building armies, and the Pentagon raises an
+		// army's capacity by one.
+		public bool increasesLeaderChance;
+		public bool allowsBuildArmy;
+		public bool allowsLargerArmies;
+
+		// The traits this building has. For a Great Wonder this is the set of
+		// civ traits the wonder is associated with, which is what the Golden Age
+		// wonder trigger checks.
+		public HashSet<Civilization.Trait> traits = [];
+
 		public int culturePerTurn = 0;
 		public int maintenanceCost = 0;
 
@@ -96,6 +109,10 @@ namespace C7GameData {
 			onlyUsefulInTowns = building.flags.Contains(SaveBuilding.Flag.CanOnlyBeBuiltInTowns);
 			providesVeteranGroundUnits = building.flags.Contains(SaveBuilding.Flag.VeteranGroundUnits);
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
+			increasesLeaderChance = building.flags.Contains(SaveBuilding.Flag.IncreasesLeaderChance);
+			allowsBuildArmy = building.flags.Contains(SaveBuilding.Flag.AllowsBuildArmy);
+			allowsLargerArmies = building.flags.Contains(SaveBuilding.Flag.AllowsLargerArmies);
+			traits = new HashSet<Civilization.Trait>(building.traits);
 
 			if (building.greatWonderProperties != null) {
 				greatWonderProperties = new();

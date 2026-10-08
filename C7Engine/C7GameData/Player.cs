@@ -68,6 +68,19 @@ namespace C7GameData {
 		// Has this player been defeated?
 		public bool defeated = false;
 
+		// The turn on which this player's Golden Age ends. -1 means the player
+		// has never had one; Civ3 never writes -1 back, so a civ has at most one
+		// Golden Age per game.
+		public int goldenAgeEndTurn = -1;
+
+		// The Age of Science is a separate, repeatable 20-turn window during
+		// which the civ's research is 25% more productive. Its duration is a
+		// literal in Civ3, not RULE.GoldenAgeDuration.
+		public bool ageOfScienceActive = false;
+		public int ageOfScienceEndTurn = 0;
+		public const int AgeOfScienceDuration = 20;
+		public const float AgeOfScienceResearchMultiplier = 1.25f;
+
 		public Civilization civilization;
 
 		// Answers if this player-civ is simply included in the game.
@@ -213,6 +226,119 @@ namespace C7GameData {
 
 		public void AddUnit(MapUnit unit) {
 			this.units.Add(unit);
+		}
+
+		/// How many armies this player currently owns.
+		public int ArmyCount() {
+			return units.Count(u => u.IsArmy);
+		}
+
+		/// Whether this player currently has an unspent great leader. Civ3 allows
+		/// at most one leader unit per civilisation at a time, of either kind.
+		public bool HasGreatLeader() {
+			return units.Any(u => u.IsGreatLeader);
+		}
+
+		/// Whether this player owns any building matching the predicate. Great
+		/// Wonders count even when they were built by another civ, as long as we
+		/// control them.
+		public bool OwnsBuildingWhere(Func<Building, bool> predicate) {
+			return cities.Any(c => c.GetBuildings().Any(cb => predicate(cb.building)));
+		}
+
+		/// Spawn a great leader of the given kind on the given tile.
+		public MapUnit CreateGreatLeader(MapUnit.LeaderKind kind, Tile tile) {
+			GameData gameData = EngineStorage.gameData;
+			UnitPrototype leaderType = gameData.unitPrototypes.FirstOrDefault(p => p.isLeader);
+			if (leaderType == null || tile == null) {
+				return null;
+			}
+
+			MapUnit leader = leaderType.GetInstance(gameData.GenerateID(leaderType.name), leaderType, this, location: tile);
+			leader.leaderKind = kind;
+			leader.experienceLevelKey = gameData.defaultExperienceLevelKey;
+			leader.experienceLevel = gameData.defaultExperienceLevel;
+			leader.hitPointsRemaining = leader.maxHitPoints;
+
+			tile.unitsOnTile.Add(leader);
+			gameData.mapUnits.Add(leader);
+			AddUnit(leader);
+
+			return leader;
+		}
+
+		/// The scientific great leader roll's thresholds, in percent.
+		private const int SCIENCE_LEADER_ROLL_BASE = 3;
+		private const int SCIENCE_LEADER_ROLL_SCIENTIFIC = 5;
+
+		/// The post-discovery scientific great leader roll. It runs only when a
+		/// technology is genuinely researched (never when one is granted silently
+		/// by a trade), after the first turn, and only when the rules allow
+		/// scientific leaders at all. The one-leader-per-civ cap applies here too.
+		public void RollForScientificLeader() {
+			if (!rules.AllowScientificLeaders) return;
+			if (EngineStorage.gameData.turn <= 0) return;
+			if (HasGreatLeader()) return;
+
+			int threshold = civilization.traits.Contains(Civilization.Trait.Scientific)
+				? SCIENCE_LEADER_ROLL_SCIENTIFIC
+				: SCIENCE_LEADER_ROLL_BASE;
+			if (GameData.rng.Next(100) >= threshold) return;
+
+			// Scientific leaders appear at the capital; a civ without one gets
+			// nothing.
+			City capital = cities.FirstOrDefault(c => c.IsCapital());
+			if (capital == null) return;
+
+			CreateGreatLeader(MapUnit.LeaderKind.Scientific, capital.location);
+		}
+
+		/// Whether the Age of Science window is currently open. Civ3's test is the
+		/// flag plus "current turn <= end turn".
+		public bool AgeOfScienceActive => ageOfScienceActive && EngineStorage.gameData.turn <= ageOfScienceEndTurn;
+
+		/// Start the Age of Science. Unlike the Golden Age this can happen more
+		/// than once per game, but never while a window is already open.
+		public void StartAgeOfScience() {
+			if (AgeOfScienceActive) return;
+			ageOfScienceActive = true;
+			ageOfScienceEndTurn = EngineStorage.gameData.turn + AgeOfScienceDuration;
+		}
+
+		/// Whether this player has ever had a Golden Age.
+		public bool HasHadGoldenAge => goldenAgeEndTurn != -1;
+
+		/// Whether the Golden Age window is currently open. The window covers
+		/// turns [start, goldenAgeEndTurn).
+		public bool GoldenAgeActive => goldenAgeEndTurn != -1 && EngineStorage.gameData.turn < goldenAgeEndTurn;
+
+		/// Open this player's Golden Age. The duration comes from
+		/// RULE.GoldenAgeDuration, and a Golden Age can never be restarted.
+		public void StartGoldenAge() {
+			if (goldenAgeEndTurn != -1) return;
+			goldenAgeEndTurn = EngineStorage.gameData.turn + rules.GoldenAgeDuration;
+		}
+
+		/// The second Golden Age trigger: a civ whose traits are all represented
+		/// by Great Wonders it owns opens one. Small wonders do not count, and a
+		/// single wonder carrying several of the civ's traits satisfies all of
+		/// them. Called whenever a building is added to one of our cities.
+		public void CheckGoldenAgeFromWonders() {
+			if (goldenAgeEndTurn != -1) return;
+			if (civilization == null || civilization.traits.Count == 0) return;
+
+			HashSet<Civilization.Trait> wonderTraits = [];
+			foreach (City city in cities) {
+				foreach (CityBuilding cb in city.constructed_buildings) {
+					if (cb.building.IsGreatWonder()) {
+						wonderTraits.UnionWith(cb.building.traits);
+					}
+				}
+			}
+
+			if (civilization.traits.All(wonderTraits.Contains)) {
+				StartGoldenAge();
+			}
 		}
 
 		public void SetCurrentlyResearchedTech(ID id) {
@@ -833,6 +959,11 @@ namespace C7GameData {
 			}
 
 			CompleteResearchAndBeginNew(gameData, tech);
+
+			// A researched technology can produce a great scientific leader. A
+			// technology granted by a trade does not, so this is deliberately not
+			// inside CompleteResearchingTech.
+			RollForScientificLeader();
 		}
 
 		private void CompleteResearchAndBeginNew(GameData gameData, IEnumerable<Tech> techs) {

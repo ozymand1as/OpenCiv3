@@ -114,6 +114,18 @@ namespace C7GameData {
 			}
 		}
 
+		// The unit type is an army: a container whose combat strength, hit points
+		// and movement come from the units loaded into it.
+		public bool isArmy => flags.Contains(SaveUnitPrototype.Flag.Army);
+
+		// The unit type is a great leader. Leaders are never produced by a city;
+		// they are created by the military and scientific leader rolls.
+		public bool isLeader => flags.Contains(SaveUnitPrototype.Flag.Leader);
+
+		// A victory by a unit of this type (or by an army carrying one) starts the
+		// owner's Golden Age.
+		public bool startsGoldenAge => flags.Contains(SaveUnitPrototype.Flag.StartsGoldenAge);
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];
@@ -240,6 +252,17 @@ namespace C7GameData {
 
 			if (!this.requiredResources.All(accessibleResources.Contains)) {
 				return false;
+			}
+
+			// An army may only be created while the civ has enough cities to
+			// support it: (cities owned) >= CitiesNeededToSupportAnArmy *
+			// (armies owned + 1). This is the same test Civ3 applies to the army
+			// build order, to a leader forming an army, and to the AI.
+			if (this.isArmy) {
+				int citiesNeeded = EngineStorage.gameData.rules.CitiesNeededToSupportAnArmy * (city.owner.ArmyCount() + 1);
+				if (city.owner.RemainingCities() < citiesNeeded) {
+					return false;
+				}
 			}
 
 			return true;

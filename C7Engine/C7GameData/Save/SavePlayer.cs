@@ -15,6 +15,15 @@ namespace C7GameData.Save {
 		public bool canBePicked = true;
 		public bool skipFirstTurn = false;
 
+		// The turn on which this player's Golden Age ends; -1 means it has never
+		// had one.
+		public int goldenAgeEndTurn = -1;
+
+		// The Age of Science window: whether it has ever been started and the
+		// turn it ends on.
+		public bool ageOfScienceActive = false;
+		public int ageOfScienceEndTurn = 0;
+
 		public string civilization;
 
 		public List<TileLocation> tileKnowledge = new List<TileLocation>();
@@ -81,6 +90,9 @@ namespace C7GameData.Save {
 				hasPlayedThisTurn = hasPlayedCurrentTurn,
 				skipFirstTurn = skipFirstTurn,
 				defeated = defeated,
+				goldenAgeEndTurn = goldenAgeEndTurn,
+				ageOfScienceActive = ageOfScienceActive,
+				ageOfScienceEndTurn = ageOfScienceEndTurn,
 				primaryColorIndex = primaryColorIndex,
 				secondaryColorIndex = secondaryColorIndex,
 				civilization = civilization is not null ? civilizations.Find(civ => civ.name == civilization) : null,
@@ -138,6 +150,9 @@ namespace C7GameData.Save {
 			human = player.isHuman;
 			hasPlayedCurrentTurn = player.hasPlayedThisTurn;
 			defeated = player.defeated;
+			goldenAgeEndTurn = player.goldenAgeEndTurn;
+			ageOfScienceActive = player.ageOfScienceActive;
+			ageOfScienceEndTurn = player.ageOfScienceEndTurn;
 			civilization = player.civilization?.name;
 			// TODO: this should be computed by looking at cities defined in the save
 			// so that adding cities in the save structure doesn't require updating this value

@@ -295,14 +295,14 @@ public partial class MapUnit {
 		IEnumerable<StrengthBonus> attackBonuses  = attacker.ListStrengthBonusesVersus(defender, CombatRole.Attack , attackerAttackDirection),
 								   defenseBonuses = defender.ListStrengthBonusesVersus(attacker, CombatRole.Defense, attackerAttackDirection);
 
-		double attackerStrength = attacker.unitType.attack  * StrengthBonus.ListToMultiplier(attackBonuses),
-			   defenderStrength = defender.unitType.defense * StrengthBonus.ListToMultiplier(defenseBonuses);
+		double attackerStrength = attacker.BaseStrength(CombatRole.Attack) * StrengthBonus.ListToMultiplier(attackBonuses),
+			   defenderStrength = defender.BaseStrength(CombatRole.Defense) * StrengthBonus.ListToMultiplier(defenseBonuses);
 
 		log.Information($"Combat log: {attacker} ({attackerStrength}) attacking {defender} ({defenderStrength})");
-		log.Information($"\tAttacker: {attacker.unitType.name}, base strength {attacker.unitType.BaseStrength(CombatRole.Attack)}");
+		log.Information($"\tAttacker: {attacker.unitType.name}, base strength {attacker.BaseStrength(CombatRole.Attack)}");
 		foreach (StrengthBonus bonus in attackBonuses)
 			log.Information($"\t\t+{100.0 * bonus.amount}%\t{bonus.description}");
-		log.Information($"\tDefender: {defender.unitType.name}, base strength {defender.unitType.BaseStrength(CombatRole.Defense)}");
+		log.Information($"\tDefender: {defender.unitType.name}, base strength {defender.BaseStrength(CombatRole.Defense)}");
 		foreach (StrengthBonus bonus in defenseBonuses)
 			log.Information($"\t\t+{100.0 * bonus.amount}%\t{bonus.description}");
 
@@ -380,7 +380,7 @@ public partial class MapUnit {
 
 		if ((result == CombatResult.AttackerKilled) || (result == CombatResult.DefenderKilled)) {
 			var (dead, alive) = (result == CombatResult.AttackerKilled) ? (attacker, defender) : (defender, attacker);
-			alive.RollToPromote(dead);
+			alive.RollForCombatOutcome(dead, defeatedWasTheDefender: result == CombatResult.DefenderKilled);
 			await dead.animateAsync(MapUnit.AnimatedAction.DEATH);
 			dead.RemoveFromPlay();
 		}
