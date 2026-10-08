@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using C7Engine;
 using C7GameData;
@@ -35,16 +34,6 @@ public class SaveTests : IClassFixture<SaveGameFixture> {
 			SaveType.standalone => fixture.standaloneSaveGame,
 			_ => throw new ArgumentOutOfRangeException()
 		};
-	}
-
-	private static string GetMd5FileHash(string path) {
-		if (!File.Exists(path)) {
-			return "";
-		}
-		using MD5 md5 = MD5.Create();
-		using FileStream fileStream = File.OpenRead(path);
-		byte[] hashBytes = md5.ComputeHash(fileStream);
-		return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
 	}
 
 	[Theory]
@@ -386,12 +375,9 @@ public class SaveTests : IClassFixture<SaveGameFixture> {
 		string savesPath = PathUtils.getDataPath("saves");
 		Directory.CreateDirectory(savesPath);
 
-		string sampleSavPath = Path.Combine(savesPath, "12345.SAV");
-		if (GetMd5FileHash(sampleSavPath) != "d34dd19a76eaebe26d29d73132c2fa60") {
-			using HttpClient client = new();
-			byte[] fileData = await client.GetByteArrayAsync("https://drive.usercontent.google.com/download?id=1QlIavkLtPZEIv1kHK9sO0fY2yp3o2si7&confirm=y");
-			File.WriteAllBytes(sampleSavPath, fileData);
-		}
+		// Shared with the other tests that read this save; see SampleSaves for why
+		// the download belongs in one place rather than in whichever test runs first.
+		await SampleSaves.TryEnsureSampleSave();
 
 		IEnumerable<FileInfo> saveFiles = new DirectoryInfo(savesPath).EnumerateFiles("*.SAV");
 		int i = 0;

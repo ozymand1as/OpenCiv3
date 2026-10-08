@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using C7Engine;
 using C7GameData;
 using C7GameData.Save;
@@ -73,10 +74,13 @@ public class ImportVictoryConditionsTest {
 	}
 
 	[SkippableFact]
-	public void ImportSav_ReadsTheSpaceshipPartsEachLeaderHasBuilt() {
+	public async Task ImportSav_ReadsTheSpaceshipPartsEachLeaderHasBuilt() {
 		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
-		string savePath = PathUtils.getDataPath("saves/12345.SAV");
-		Skip.If(!File.Exists(savePath), "Sample save not present.");
+
+		// Fetch the shared save rather than assuming another test already did, so a
+		// cold checkout exercises this instead of silently skipping it.
+		string savePath = await SampleSaves.TryEnsureSampleSave();
+		Skip.If(savePath == null, "Sample save could not be downloaded.");
 
 		SaveGame save = ImportCiv3.ImportSav(savePath, PathUtils.defaultBicPath, _ => PathUtils.defaultPediaIconsPath);
 
