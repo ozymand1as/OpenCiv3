@@ -1381,6 +1381,32 @@ namespace C7GameData {
 			if (prto.Unload) yield return UnitAction.Unload;
 		}
 
+		// The Civ3 AI-strategy bits (BIQ PRTO Flags1[4..6]). The original engine
+		// dispatches on these to pick a unit's movement routine; exactly one is
+		// set on every shipped unit type.
+		internal static IEnumerable<SaveUnitPrototype.AIStrategy> GetUnitAIStrategies(PRTO prto) {
+			if (prto.AIOffense) yield return SaveUnitPrototype.AIStrategy.Offense;
+			if (prto.AIDefense) yield return SaveUnitPrototype.AIStrategy.Defense;
+			if (prto.AIArtillery) yield return SaveUnitPrototype.AIStrategy.Artillery;
+			if (prto.AIExplore) yield return SaveUnitPrototype.AIStrategy.Explore;
+			if (prto.AIArmy) yield return SaveUnitPrototype.AIStrategy.Army;
+			if (prto.AICruiseMissile) yield return SaveUnitPrototype.AIStrategy.CruiseMissile;
+			if (prto.AIAirBombard) yield return SaveUnitPrototype.AIStrategy.AirBombard;
+			if (prto.AIAirDefense) yield return SaveUnitPrototype.AIStrategy.AirDefense;
+			if (prto.AINavalPower) yield return SaveUnitPrototype.AIStrategy.NavalPower;
+			if (prto.AIAirTransport) yield return SaveUnitPrototype.AIStrategy.AirTransport;
+			if (prto.AINavalTransport) yield return SaveUnitPrototype.AIStrategy.NavalTransport;
+			if (prto.AINavalCarrier) yield return SaveUnitPrototype.AIStrategy.NavalCarrier;
+			if (prto.AITerraform) yield return SaveUnitPrototype.AIStrategy.Terraform;
+			if (prto.AISettle) yield return SaveUnitPrototype.AIStrategy.Settle;
+			if (prto.AILeader) yield return SaveUnitPrototype.AIStrategy.Leader;
+			if (prto.AITacticalNuke) yield return SaveUnitPrototype.AIStrategy.TacticalNuke;
+			if (prto.AIICBM) yield return SaveUnitPrototype.AIStrategy.ICBM;
+			if (prto.AINavalMissileTransport) yield return SaveUnitPrototype.AIStrategy.NavalMissileTransport;
+			if (prto.AIFlag) yield return SaveUnitPrototype.AIStrategy.FlagUnit;
+			if (prto.AIKing) yield return SaveUnitPrototype.AIStrategy.King;
+		}
+
 		private static IEnumerable<TerraformKey> GetUnitTerraforms(PRTO prto) {
 			if (prto.BuildRoad) yield return TerraformKey.BuildRoad;
 			if (prto.BuildRailroad) yield return TerraformKey.BuildRailroad;
@@ -1452,6 +1478,7 @@ namespace C7GameData {
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
+				prototype.aiStrategies.UnionWith(GetUnitAIStrategies(prto));
 
 				prototype.unproducible = IsUnproducible(prto);
 

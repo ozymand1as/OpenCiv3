@@ -72,6 +72,16 @@ namespace C7GameData {
 		public List<UnitPrototype> upgradesTo = [];
 		public bool unproducible;
 		public HashSet<SaveUnitPrototype.Flag> flags = [];
+		// The AI-strategy bits this unit type carries (Civ3's PRTO AI-strategy
+		// bitmask). The AI must key its role decisions off these, not off names.
+		public HashSet<SaveUnitPrototype.AIStrategy> aiStrategies = [];
+
+		public bool HasAIStrategy(SaveUnitPrototype.AIStrategy strategy) => aiStrategies.Contains(strategy);
+
+		// The roles the AI used to infer from a unit's name.
+		public bool isAISettler => HasAIStrategy(SaveUnitPrototype.AIStrategy.Settle);
+		public bool isAIWorker => HasAIStrategy(SaveUnitPrototype.AIStrategy.Terraform);
+		public bool isAIArtillery => HasAIStrategy(SaveUnitPrototype.AIStrategy.Artillery);
 		public bool rotateBeforeAttack {
 			get => flags.Contains(SaveUnitPrototype.Flag.RotateBeforeAttack);
 			set {
@@ -145,6 +155,7 @@ namespace C7GameData {
 			actions = proto.actions;
 			attributes = new HashSet<string>(proto.attributes);
 			flags = new HashSet<SaveUnitPrototype.Flag>(proto.flags);
+			aiStrategies = new HashSet<SaveUnitPrototype.AIStrategy>(proto.aiStrategies);
 
 			terraformActions = proto.terraformActions.Select(id => terraforms.First(t => t.Id == id)).ToHashSet();
 		}

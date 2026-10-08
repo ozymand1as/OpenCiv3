@@ -160,18 +160,17 @@ namespace C7Engine {
 		}
 
 		public static UnitAI GetAIForUnit(MapUnit unit, Player player) {
-			//figure out an AI behavior
-			//TODO: Use strategies, not names
-			if (unit.unitType.name == "Settler") {
+			//figure out an AI behavior, from the unit type's AI-strategy bits
+			if (unit.unitType.isAISettler) {
 				return new SettlerAI(SettlerAI.MakeAiData(unit, player));
-			} else if (unit.unitType.name == "Worker") {
+			} else if (unit.unitType.isAIWorker) {
 				return new WorkerAI(WorkerAI.MakeAiData(unit, player));
 			} else if (unit.location.cityAtTile != null && unit.CanDefendOnLand() && unit.location.unitsOnTile.Count(u => u.CanDefendOnLand() && u != unit) == 0) {
 				return new DefenderAI(DefenderAI.MakeAiDataForDefendInPlace(unit, player));
 			} else if (GetCombatAIIfUnitCanAttackNearbyBarbCamp(unit, player) is UnitAI unitAI && unitAI != null) {
 				return unitAI;
-			} else if (unit.unitType.name == "Catapult") {
-				//For now tell catapults to sit tight.  It's getting really annoying watching them pointlessly bombard barb camps forever
+			} else if (unit.unitType.isAIArtillery) {
+				//For now tell artillery to sit tight. It's getting really annoying watching them pointlessly bombard barb camps forever
 				return new DefenderAI(DefenderAI.MakeAiDataForDefendInPlace(unit, player));
 			}
 

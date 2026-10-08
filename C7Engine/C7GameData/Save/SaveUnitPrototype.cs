@@ -13,6 +13,33 @@ namespace C7GameData.Save {
 			Radar,
 		}
 
+		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The
+		// original engine stores it as one scalar per unit type and dispatches on
+		// it: it is the key the AI uses to decide what a unit is for. Every shipped
+		// unit type has exactly one of these set; the storage permits overlaps.
+		public enum AIStrategy {
+			Offense,
+			Defense,
+			Artillery,
+			Explore,
+			Army,
+			CruiseMissile,
+			AirBombard,
+			AirDefense,
+			NavalPower,
+			AirTransport,
+			NavalTransport,
+			NavalCarrier,
+			Terraform,
+			Settle,
+			Leader,
+			TacticalNuke,
+			ICBM,
+			NavalMissileTransport,
+			FlagUnit,
+			King,
+		}
+
 		public string name { get; set; }
 		public Art art { get; set; }
 		public int shieldCost { get; set; }
@@ -35,6 +62,10 @@ namespace C7GameData.Save {
 		// Assorted boolean flags for the unit prototype. They're stored in
 		// this set rather than as booleans to avoid bloating the json file.
 		public HashSet<Flag> flags = [];
+
+		// The AI-strategy bits of this unit type. Stored as a set for the same
+		// reason as the flags above; the shipped rules put exactly one bit here.
+		public HashSet<AIStrategy> aiStrategies = [];
 
 		public HashSet<string> categories = new HashSet<string>();
 
@@ -65,6 +96,7 @@ namespace C7GameData.Save {
 			actions = proto.actions;
 			attributes = new HashSet<string>(proto.attributes);
 			flags = new HashSet<Flag>(proto.flags);
+			aiStrategies = new HashSet<AIStrategy>(proto.aiStrategies);
 
 			requiredResources = proto.requiredResources.Select(r => r.Key).ToHashSet();
 			terraformActions = proto.terraformActions.Select(r => r.Id).ToHashSet();
