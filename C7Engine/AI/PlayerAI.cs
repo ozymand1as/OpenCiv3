@@ -76,6 +76,14 @@ namespace C7Engine {
 		}
 
 		public static void MaybePickTechToResearch(Player player, List<Tech> techs) {
+			// A human player holding a free advance picks it themselves. Leave
+			// the research slot empty so the ScienceSelection prompt fires, and
+			// only spend the advance when the player makes an explicit choice.
+			if (player.isHuman && player.freeTechsRemaining > 0) {
+				log.Information($"Player {player.civilization.name} has a free tech to choose.");
+				return;
+			}
+
 			while (player.currentlyResearchedTech == null || player.knownTechs.Contains(player.currentlyResearchedTech)) {
 				Tech toResearch = player.GetAvailableTechsToResearch(techs).FirstOrDefault();
 				if (toResearch == null) {

@@ -219,12 +219,12 @@ namespace C7GameData {
 			// Award a free tech if the player has one.
 			if (id != null && freeTechsRemaining > 0) {
 				--freeTechsRemaining;
-				beakers = 0;
-				turnsResearched = 0;
 
 				Tech tech = EngineStorage.gameData.techs.Find(x => x.id == id);
 				log.Information($"Awarding {tech.Name} to player {this}");
-				CompleteResearchAndBeginNew(EngineStorage.gameData, tech);
+				// A free tech costs nothing, so any beakers carried over from the
+				// previously completed tech stay available for the next one.
+				CompleteResearchAndBeginNew(EngineStorage.gameData, tech, free: true);
 				return;
 			}
 
@@ -840,17 +840,38 @@ namespace C7GameData {
 		}
 
 		private void CompleteResearchAndBeginNew(GameData gameData, IEnumerable<Tech> techs) {
+			// Null means no tech was completed, in which case the player's current
+			// research progress must be left alone.
+			int? overflow = null;
 			foreach (Tech tech in techs) {
-				CompleteResearchingTech(gameData, tech);
+				overflow = CompleteResearchingTech(gameData, tech);
 			}
 			PlayerAI.MaybePickTechToResearch(this, gameData.techs);
+			CarryOverflowIntoNextTech(overflow);
 		}
-		private void CompleteResearchAndBeginNew(GameData gameData, Tech tech) {
-			CompleteResearchingTech(gameData, tech);
+		private void CompleteResearchAndBeginNew(GameData gameData, Tech tech, bool free = false) {
+			int? overflow = CompleteResearchingTech(gameData, tech, free);
 			PlayerAI.MaybePickTechToResearch(this, gameData.techs);
+			CarryOverflowIntoNextTech(overflow);
 		}
 
-		private void CompleteResearchingTech(GameData gameData, Tech tech) {
+		// Beakers left over after a tech is completed are carried into the next
+		// technology instead of being discarded. Unlike Civ3, which zeroes the
+		// research counter on completion, this is a deliberate improvement, so
+		// an overshooting turn is not wasted.
+		private void CarryOverflowIntoNextTech(int? overflow) {
+			if (overflow == null) {
+				return;
+			}
+			// With no next tech (an exhausted tech tree) and no pending free tech
+			// to spend, there is nowhere for the surplus to go.
+			if (currentlyResearchedTech == null && freeTechsRemaining == 0) {
+				return;
+			}
+			beakers = overflow.Value;
+		}
+
+		private int CompleteResearchingTech(GameData gameData, Tech tech, bool free = false) {
 			// If this tech awards the first civ to research it a free tech and
 			// no other civs know about the tech, this player gets the bonus.
 			if (tech.BonusTechToFirstCivThatResearches) {
@@ -865,11 +886,19 @@ namespace C7GameData {
 				}
 			}
 
+			// Keep the accumulated progress before the setter below clears it.
+			int progress = beakers;
+
 			knownTechs.Add(tech.id);
 			// trigger callback for techs that enable improvements to redraw map
 			TechImprovementCallback(this, tech);
 
 			SetCurrentlyResearchedTech(null);
+
+			// The tech's full cost, ignoring progress. Progress is only subtracted
+			// while the tech is the current target, and it is no longer the
+			// target, so this is the tech's real cost.
+			int overflow = free ? progress : Math.Max(0, progress - gameData.TechCostFor(tech, this));
 
 			// remove completed tech from the current research queue
 			if (ResearchQueue.Count > 0) {
@@ -879,6 +908,8 @@ namespace C7GameData {
 			if (CanAdvanceToNextEra(gameData)) {
 				eraCivilopediaName = GetNextEraNameByIndex(EraIndex());
 			}
+
+			return overflow;
 		}
 
 		private static void TechImprovementCallback(Player player, Tech tech) {

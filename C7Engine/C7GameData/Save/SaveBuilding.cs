@@ -23,6 +23,8 @@ namespace C7GameData.Save {
 			TreasuryEarnsInterest,
 			RemovesPopulationPollution,
 			ReducesBuildingPollution,
+			Plus50PercentResearch,
+			DoublesResearchOutput,
 		}
 
 		public class GreatWonderProperties {

@@ -1715,6 +1715,8 @@ namespace C7GameData {
 				(bldg.TreasuryEarnsInterest, SaveBuilding.Flag.TreasuryEarnsInterest),
 				(bldg.RemovesPopulationPollution, SaveBuilding.Flag.RemovesPopulationPollution),
 				(bldg.ReducesBuildingPollution, SaveBuilding.Flag.ReducesBuildingPollution),
+				(bldg.Plus50PercentResearch, SaveBuilding.Flag.Plus50PercentResearch),
+				(bldg.DoublesResearchOutput, SaveBuilding.Flag.DoublesResearchOutput),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
