@@ -13022,17 +13022,40 @@
     }
   ],
   "victoryConditions": {
-    "allowDominationVictory": false,
-    "allowSpaceRaceVictory": false,
-    "allowDiplomaticVictory": false,
-    "allowConquestVictory": false,
-    "allowCulturalVictory": false,
+    "allowDominationVictory": true,
+    "allowSpaceRaceVictory": true,
+    "allowDiplomaticVictory": true,
+    "allowConquestVictory": true,
+    "allowCulturalVictory": true,
     "allowWonderVictory": false,
     "cityElimination": false,
     "regicide": false,
     "massRegicide": false,
     "victoryLocations": false,
     "captureTheFlag": false,
-    "reverseCaptureTheFlag": false
+    "reverseCaptureTheFlag": false,
+    "dominationTerrain": 66,
+    "dominationPopulation": 66,
+    "oneCityCultureWin": 20000,
+    "allCitiesCultureWin": 100000,
+    "victoryPointLimit": 50000,
+    "wonderCost": 10,
+    "defeatingOpposingUnitCost": 5,
+    "advancementCost": 5,
+    "cityConquestPopulation": 100,
+    "victoryPointScoring": 25,
+    "capturingSpecialUnit": 1000,
+    "spaceshipPartsNeeded": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
   }
 }

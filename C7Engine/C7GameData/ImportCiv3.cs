@@ -49,6 +49,15 @@ namespace C7GameData {
 
 		private static ILogger log = Log.ForContext<ImportCiv3>();
 
+		// Civ3 substitutes these values when a BIQ stores 0 for a victory
+		// parameter, so an imported game behaves the same as one created from
+		// the shipped rules.
+		private const int DefaultVictoryPointLimit = 50000;
+		private const int DefaultDominationTerrain = 66;
+		private const int DefaultDominationPopulation = 66;
+		private const int DefaultOneCityCultureWin = 20000;
+		private const int DefaultAllCitiesCultureWin = 100000;
+
 		private ImportCiv3() {
 			save = new SaveGame();
 			ids = new ID.Factory();
@@ -85,6 +94,7 @@ namespace C7GameData {
 			ImportGovernments();
 			ImportDifficulties();
 			ImportRules();
+			ImportBiqVictory();
 		}
 
 		public static SaveGame ImportSav(string savePath, string defaultBicPath, Func<string, string> getPediaIconsPath) {
@@ -460,6 +470,19 @@ namespace C7GameData {
 				VictoryLocations = game.VictoryLocations,
 				CaptureTheFlag = game.CaptureTheFlag, // 'Capture the Unit', 'Capture the Princess'
 				ReverseCaptureTheFlag = game.ReverseCaptureTheFlag,
+
+				// The SAV GAME section does not store the victory point limit.
+				VictoryPointLimit = DefaultVictoryPointLimit,
+				DominationTerrain = OrDefault(game.DominationTerrain, DefaultDominationTerrain),
+				DominationPopulation = OrDefault(game.DominationPopulation, DefaultDominationPopulation),
+				OneCityCultureWin = OrDefault(game.OneCityCultureWin, DefaultOneCityCultureWin),
+				AllCitiesCultureWin = OrDefault(game.AllCitiesCultureWin, DefaultAllCitiesCultureWin),
+				WonderCost = game.WonderCost,
+				DefeatingOpposingUnitCost = game.DefeatingOpposingUnitCost,
+				AdvancementCost = game.AdvancementCost,
+				CityConquestPopulation = game.CityConquestPopulation,
+				VictoryPointScoring = game.VictoryPointScoring,
+				CapturingSpecialUnit = game.CapturingSpecialUnit,
 			};
 
 			if (game.Winner > -1) {
@@ -470,6 +493,45 @@ namespace C7GameData {
 				save.GameOver = true;
 			}
 
+		}
+
+		// The victory flags and parameters the BIQ GAME section stores, with the
+		// same zero-substitution Civ3 applies when it installs the rules.
+		private void ImportBiqVictory() {
+			var game = biq.Game[0];
+
+			save.VictoryConditions = new VictoryConditions {
+				AllowDominationVictory = game.DominationVictory,
+				AllowSpaceRaceVictory = game.SpaceRaceVictory,
+				AllowDiplomaticVictory = game.DiplomaticVictory,
+				AllowConquestVictory = game.ConquestVictory,
+				AllowCulturalVictory = game.CulturalVictory,
+
+				AllowWonderVictory = game.WonderVictory,
+
+				CityElimination = game.CityElimination,
+				Regicide = game.Regicide,
+				MassRegicide = game.MassRegicide,
+				VictoryLocations = game.VictoryLocations,
+				CaptureTheFlag = game.CaptureTheFlag,
+				ReverseCaptureTheFlag = game.ReverseCaptureTheFlag,
+
+				VictoryPointLimit = OrDefault(game.VictoryPointLimit, DefaultVictoryPointLimit),
+				DominationTerrain = OrDefault(game.DominationTerrain, DefaultDominationTerrain),
+				DominationPopulation = OrDefault(game.DominationPopulation, DefaultDominationPopulation),
+				OneCityCultureWin = OrDefault(game.OneCityCultureWin, DefaultOneCityCultureWin),
+				AllCitiesCultureWin = OrDefault(game.AllCitiesCultureWin, DefaultAllCitiesCultureWin),
+				WonderCost = game.WonderCost,
+				DefeatingOpposingUnitCost = game.DefeatingOpposingUnitCost,
+				AdvancementCost = game.AdvancementCost,
+				CityConquestPopulation = game.CityConquestPopulation,
+				VictoryPointScoring = game.VictoryPointScoring,
+				CapturingSpecialUnit = game.CapturingSpecialUnit,
+			};
+		}
+
+		private static int OrDefault(int value, int defaultValue) {
+			return value != 0 ? value : defaultValue;
 		}
 
 		private void ImportCiv3Resources() {

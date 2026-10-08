@@ -182,6 +182,10 @@ namespace C7GameData {
 
 		public Alliance alliance;
 
+		// How many of each spaceship part this player has built, indexed by the
+		// part's slot in VictoryConditions.SpaceshipPartsNeeded.
+		public List<int> spaceshipPartsBuilt = new();
+
 		public int EraIndex() {
 			return GetEraIndex(eraCivilopediaName);
 		}

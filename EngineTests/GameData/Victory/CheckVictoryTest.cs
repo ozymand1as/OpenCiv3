@@ -187,4 +187,103 @@ public class CheckVictoryTest : IClassFixture<SaveGameFixture> {
 		var status = gd.victories.OfType<TimeLimitVictory>().First().Evaluate(gd.players.First(), gd);
 		Assert.False(gd.victories.OfType<TimeLimitVictory>().First().HasVictory(status));
 	}
+
+	// ---------------------------------------------------------------- condition ordering and gating
+
+	private static C7GameData.GameData MakeRegisteredGame(int turn, VictoryConditions conditions) {
+		var difficulty = new Difficulty();
+		return new C7GameData.GameData {
+			turn = turn,
+			difficulties = new List<Difficulty> { difficulty },
+			gameDifficulty = difficulty,
+			history = new Dictionary<string, List<HistTurnRecord>>(),
+			victoryConditions = conditions,
+			timeOptions = new TimeOptions { turnLimit = TurnLimit },
+		};
+	}
+
+	/// Gives Rome a 20k-culture city and, when `domination` is set, control of
+	/// 67 of the world's 100 counted tiles and 67 of its 101 citizens.
+	private static void GiveRomeACulturalAndDominatingEmpire(C7GameData.GameData game, Player rome, Player greece, Player egypt, bool domination) {
+		City romeCity = VictoryTestHelpers.AddCity(game, rome, domination ? 67 : 1, 20000);
+		City greeceCity = VictoryTestHelpers.AddCity(game, greece, domination ? 33 : 1);
+		VictoryTestHelpers.AddCity(game, egypt, 1);
+
+		if (!domination) {
+			return;
+		}
+
+		for (int i = 0; i < 67; ++i) {
+			VictoryTestHelpers.AddOwnedTile(game, VictoryTestHelpers.Land(), romeCity);
+		}
+		for (int i = 0; i < 33; ++i) {
+			VictoryTestHelpers.AddOwnedTile(game, VictoryTestHelpers.Land(), greeceCity);
+		}
+	}
+
+	private static (C7GameData.GameData game, Player rome, Player greece, Player egypt) MakeContestedGame(
+		VictoryConditions conditions, bool domination = true) {
+		var game = MakeRegisteredGame(1, conditions);
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		Player egypt = MakePlayer("player-4", "Egypt");
+		game.players.AddRange([rome, greece, egypt]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, greece, 20);
+		VictoryTestHelpers.AddHistory(game, egypt, 30);
+		GiveRomeACulturalAndDominatingEmpire(game, rome, greece, egypt, domination);
+		SaveGame.ConvertVictoryConditions(game);
+		return (game, rome, greece, egypt);
+	}
+
+	[Fact]
+	public void CheckVictory_WhenDominationAndCulturalBothHold_AwardsDomination() {
+		var (game, rome, _, _) = MakeContestedGame(new VictoryConditions {
+			AllowDominationVictory = true,
+			AllowCulturalVictory = true,
+		});
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<DominationVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_WhenConquestAndDominationBothHold_AwardsConquest() {
+		var (game, rome, greece, egypt) = MakeContestedGame(new VictoryConditions {
+			AllowConquestVictory = true,
+			AllowDominationVictory = true,
+		});
+		greece.defeated = true;
+		egypt.defeated = true;
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<ConquestVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_DominationDisabled_CulturalIsAwardedInstead() {
+		var (game, rome, _, _) = MakeContestedGame(new VictoryConditions { AllowCulturalVictory = true });
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<CulturalVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_EveryConditionDisabled_DoesNotEndTheGame() {
+		// Rome holds both a 20k city and a dominating empire, but the rules turn
+		// every condition off.
+		var (game, _, _, _) = MakeContestedGame(new VictoryConditions());
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Null(game.winner);
+		Assert.False(game.gameOver);
+		Assert.Empty(VictoryMessages());
+	}
 }
