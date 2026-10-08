@@ -286,4 +286,67 @@ public class CheckVictoryTest : IClassFixture<SaveGameFixture> {
 		Assert.False(game.gameOver);
 		Assert.Empty(VictoryMessages());
 	}
+
+	// ---------------------------------------------------------------- condition-major awarding and ties
+
+	[Fact]
+	public void CheckVictory_DifferentConditionsSatisfiedByDifferentPlayers_AwardsTheHigherPriorityCondition() {
+		// Greece is one city away from a cultural win; Rome and Egypt share an
+		// alliance, so both satisfy the diplomatic condition. Rome has the
+		// highest score, which is what the old player-major selection looked at,
+		// but cultural comes before diplomatic and only the first satisfied
+		// condition is awarded (spec section 2.0).
+		var game = MakeRegisteredGame(1, new VictoryConditions {
+			AllowCulturalVictory = true,
+			AllowDiplomaticVictory = true,
+		});
+		Player rome = MakePlayer("player-2", "Rome");
+		Player greece = MakePlayer("player-3", "Greece");
+		Player egypt = MakePlayer("player-4", "Egypt");
+		game.players.AddRange([rome, greece, egypt]);
+		VictoryTestHelpers.AddHistory(game, rome, 90);
+		VictoryTestHelpers.AddHistory(game, greece, 10);
+		VictoryTestHelpers.AddHistory(game, egypt, 50);
+
+		Alliance alliance = new Alliance(1, "Team");
+		rome.alliance = alliance;
+		egypt.alliance = alliance;
+
+		VictoryTestHelpers.AddCity(game, rome, 1);
+		VictoryTestHelpers.AddCity(game, egypt, 1);
+		VictoryTestHelpers.AddCity(game, greece, 1, 20000);
+
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(greece, game.winner);
+		Assert.IsType<CulturalVictory>(VictoryMessages().Single().victory);
+	}
+
+	[Fact]
+	public void CheckVictory_WhenAnAllianceWinsByConquest_TheHumanMemberWinsRegardlessOfScore() {
+		// Rome and Egypt are allied and Greece has been eliminated, so every
+		// survivor satisfies conquest. Section 5.4 awards it to the human member
+		// of the surviving alliance, not to the highest score.
+		var game = MakeRegisteredGame(1, new VictoryConditions { AllowConquestVictory = true });
+		Player rome = MakePlayer("player-2", "Rome");
+		rome.isHuman = true;
+		Player egypt = MakePlayer("player-4", "Egypt");
+		Player greece = MakePlayer("player-3", "Greece", defeated: true);
+		game.players.AddRange([rome, egypt, greece]);
+		VictoryTestHelpers.AddHistory(game, rome, 10);
+		VictoryTestHelpers.AddHistory(game, egypt, 90);
+
+		Alliance alliance = new Alliance(1, "Team");
+		rome.alliance = alliance;
+		egypt.alliance = alliance;
+
+		SaveGame.ConvertVictoryConditions(game);
+
+		TurnHandling.CheckVictory(game);
+
+		Assert.Same(rome, game.winner);
+		Assert.IsType<ConquestVictory>(VictoryMessages().Single().victory);
+	}
 }

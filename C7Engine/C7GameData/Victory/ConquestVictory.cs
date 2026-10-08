@@ -29,6 +29,13 @@ public class ConquestVictory : IVictory {
 			&& (status.SurvivingCivs == 1 || status.AllianceSize == status.SurvivingCivs);
 	}
 
+	public Player ChooseWinner(List<Player> candidates, GameData gameData) {
+		// Section 5.4: with one civilization left it wins outright; when one
+		// alliance contains every survivor, the human member if the human is in
+		// it, otherwise the last scanned member.
+		return candidates.FirstOrDefault(p => p.isHuman) ?? candidates[^1];
+	}
+
 	public IEnumerable<string[]> GenerateStatusRows(VictoryStatus status, List<VictoryStatus> rivalStatuses) {
 		yield return [
 			"",

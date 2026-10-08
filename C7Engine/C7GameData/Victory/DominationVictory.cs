@@ -62,6 +62,12 @@ public class DominationVictory : IVictory {
 			r => Percent(r.OwnedTiles, r.TotalTiles));
 	}
 
+	public Player ChooseWinner(List<Player> candidates, GameData gameData) {
+		// Section 5.4: the human member of the qualifying alliance if there is
+		// one, otherwise the lowest-index member.
+		return candidates.FirstOrDefault(p => p.isHuman) ?? candidates[0];
+	}
+
 	private static string[] RequirementPrint(string label, string value) {
 		return ["", "", label, value, "", ""];
 	}
