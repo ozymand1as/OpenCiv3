@@ -179,8 +179,12 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 		player.DoPerTurnScienceUpdates(gameData);
 
 		Assert.Contains(philosophy.id, player.knownTechs);
-		Assert.Null(player.currentlyResearchedTech);
-		Assert.Equal(0, player.beakers);
+		// An exhausted tech tree no longer leaves the research slot empty:
+		// research continues with the repeatable future technology
+		// (16_science.md §3.1), so the surplus has somewhere to go after all
+		// and is carried into it.
+		Assert.Equal(C7GameData.GameData.FutureTechId, player.currentlyResearchedTech);
+		Assert.Equal(7, player.beakers);
 	}
 
 	[Fact]

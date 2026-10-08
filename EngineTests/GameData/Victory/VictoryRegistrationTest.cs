@@ -61,6 +61,9 @@ public class VictoryRegistrationTest {
 		SaveGame.ConvertVictoryConditions(game);
 
 		Assert.DoesNotContain(game.victories, v => v is WonderVictory);
+	}
+
+	[Fact]
 	public void ConvertVictoryConditions_RegistersTheVictoryPointConditionBeforeConquest() {
 		// Type 8 is the first condition Civ3 evaluates, so it must be the first
 		// condition in the list that can actually end the game.
