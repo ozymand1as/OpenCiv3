@@ -31,6 +31,7 @@ namespace C7GameData.Save {
 			AllowsBuildArmy,
 			AllowsLargerArmies,
 			RequiresVictoriousArmy,
+			BuildSpaceshipParts,
 		}
 
 		public class GreatWonderProperties {

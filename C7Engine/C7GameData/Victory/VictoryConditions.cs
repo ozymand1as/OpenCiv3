@@ -37,4 +37,19 @@ public class VictoryConditions {
 	// How many of each spaceship part a player must build to launch. Civ3's
 	// shipped rules require one of each of the ten parts.
 	public List<int> SpaceshipPartsNeeded { get; set; } = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+
+	// How many copies of one part the rules require. Civ3 reads
+	// General.SpaceshipPartsNeeded[part] directly (spec 25 section 2.6); a
+	// ruleset that lists fewer requirements than the parts it defines keeps
+	// the shipped one-of-each default rather than making the extra part
+	// impossible to build.
+	public int SpaceshipPartsNeededFor(int partIndex) {
+		if (partIndex < 0) {
+			return 0;
+		}
+		if (partIndex < SpaceshipPartsNeeded.Count) {
+			return SpaceshipPartsNeeded[partIndex];
+		}
+		return 1;
+	}
 }

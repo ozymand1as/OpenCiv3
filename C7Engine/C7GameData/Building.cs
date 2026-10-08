@@ -37,6 +37,12 @@ namespace C7GameData {
 		// building is not a spaceship part. Completing it adds to the owner's
 		// Player.spaceshipPartsBuilt, which the space-race victory reads.
 		public int spaceshipPart { get; set; } = -1;
+
+		// Whether this building opens spaceship-part production for its owner.
+		// Civ3 gates the parts on the civ owning the improvement that carries
+		// BLDG.BuildSpaceshipParts (the Apollo Program in the shipped rules),
+		// so the rule follows the flag rather than the building's name.
+		public bool buildsSpaceshipParts { get; set; }
 		public bool isCenterOfEmpire;
 		public bool increasesLuxuryTrade;
 		public bool reducesCorruption;
@@ -115,6 +121,7 @@ namespace C7GameData {
 			populationCost = building.populationCost;
 			isSmallWonder = building.isSmallWonder;
 			spaceshipPart = building.spaceshipPart;
+			buildsSpaceshipParts = building.flags.Contains(SaveBuilding.Flag.BuildSpaceshipParts);
 			culturePerTurn = building.culturePerTurn;
 			maintenanceCost = building.maintenanceCost;
 			iconRowIndex = building.iconRowIndex;
@@ -174,7 +181,15 @@ namespace C7GameData {
 				return false;
 			}
 
-			if (city.GetBuildings().Exists(cityBuilding => cityBuilding.building == this)) {
+			// A city may hold only one copy of an ordinary building, but Civ3
+			// allows a second copy of a spaceship part - a scenario can require
+			// more than one of a part, and the original caps the parts per civ
+			// rather than per city. See CanProduceSpaceshipPart.
+			if (spaceshipPart < 0 && city.GetBuildings().Exists(cityBuilding => cityBuilding.building == this)) {
+				return false;
+			}
+
+			if (spaceshipPart >= 0 && !CanProduceSpaceshipPart(city)) {
 				return false;
 			}
 
@@ -212,6 +227,37 @@ namespace C7GameData {
 			}
 
 			return true;
+		}
+
+		// Civ3 decides whether a city may build a spaceship part in
+		// Leader_can_build_city_improvement (0x56a2a0). Two rules apply, both
+		// read off the rules data:
+		//
+		//  * The civ must own the improvement carrying BLDG.BuildSpaceshipParts
+		//    (the Apollo Program in the shipped rules). The original counts the
+		//    flag-bearing small wonders the leader owns, so the gate is per civ,
+		//    not per city.
+		//  * The part is capped per civ at General.SpaceshipPartsNeeded[part],
+		//    counting the copies already built and the copies the civ's cities
+		//    are currently producing. The original compares built + in
+		//    production against the requirement; a part in production elsewhere
+		//    therefore also counts. It uses == rather than >=, which would let a
+		//    part become available again after over-building; the spec's victory
+		//    test is built[i] >= required[i] (spec 25 section 2.6), so >= is the
+		//    rule that is modelled here.
+		private bool CanProduceSpaceshipPart(City city) {
+			if (!city.owner.OwnsBuildingWhere(building => building.buildsSpaceshipParts)) {
+				return false;
+			}
+
+			int built = spaceshipPart < city.owner.spaceshipPartsBuilt.Count
+				? city.owner.spaceshipPartsBuilt[spaceshipPart]
+				: 0;
+			int inProduction = city.owner.cities.Count(
+				c => c.itemBeingProduced != null && c.itemBeingProduced.name == name);
+			int needed = EngineStorage.gameData.victoryConditions.SpaceshipPartsNeededFor(spaceshipPart);
+
+			return built + inProduction < needed;
 		}
 
 		public int ShieldCost(HashSet<Civilization.Trait> civTraits, float costFactor) {
