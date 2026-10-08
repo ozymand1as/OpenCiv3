@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using Serilog;
 using QueryCiv3;
@@ -93,9 +94,19 @@ namespace C7GameData {
 		}
 
 		private SaveGame importSav(string savePath, string defaultBicPath, Func<string, string> getPediaIconsPath) {
+			// Apply the save version gate before anything is read from the file or from the
+			// ruleset: a save the engine will not read must fail with the rule that refused
+			// it, not with a parse error from the middle of its body. Util.ReadFile is what
+			// decompresses an exploded save, so the gate sees the header the game wrote.
+			byte[] savBytes = Util.ReadFile(savePath);
+			SaveHeader header = SaveFormatGate.Check(savBytes);
+			if (!header.Accepted) {
+				throw new InvalidDataException($"Cannot load {savePath}: {header.FailureMessage}.");
+			}
+
 			// Get save data reader
 			byte[] defaultBicBytes = Util.ReadFile(defaultBicPath);
-			savData = new SavData(Util.ReadFile(savePath), defaultBicBytes);
+			savData = new SavData(savBytes, defaultBicBytes);
 			biq = savData.Bic;
 			pediaIcons = new(getPediaIconsPath(biq.Game[0].ScenarioSearchFolders));
 			save.TurnNumber = savData.Game.TurnNumber;

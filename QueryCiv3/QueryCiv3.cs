@@ -55,8 +55,13 @@ namespace QueryCiv3 {
 			if (IsGameFile) {
 				header = GetString(0, 4);
 				mag = ReadInt16(4);
-				maj = ReadInt32(6);
-				min = ReadInt32(10);
+				// The version the loader behaves by. Below save format 17 there is no stored
+				// minor version, and the engine forces it to 0 rather than reading whatever
+				// the bytes there happen to hold (see SaveFormatGate), so the parser must not
+				// report those bytes as a version either.
+				SaveHeader version = SaveFormatGate.Check(FileData);
+				maj = version.MajorVersion;
+				min = version.MinorVersion;
 			} else if (IsBicFile) {
 				header = GetString(0, 4);
 				mag = -1;
