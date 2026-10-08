@@ -31,4 +31,9 @@ public class VictoryStatus {
 	// how many the rules require.
 	public int SpaceshipPartsBuilt { get; set; }
 	public int SpaceshipPartsRequired { get; set; }
+
+	// Wonder victory: how many Great Wonders the rules define and how many of
+	// them have been built by anyone.
+	public int GreatWondersBuilt { get; set; }
+	public int GreatWondersTotal { get; set; }
 }

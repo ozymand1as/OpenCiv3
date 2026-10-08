@@ -28,25 +28,36 @@ public class VictoryRegistrationTest {
 			AllowDiplomaticVictory = true,
 			AllowConquestVictory = true,
 			AllowCulturalVictory = true,
+			AllowWonderVictory = true,
 		});
 
 		SaveGame.ConvertVictoryConditions(game);
 
 		// Score is registered first so the status screen can render it, but it
 		// is a tie-break rather than a condition. The rest follow the order in
-		// which the original awards them: conquest, space race, domination,
-		// cultural, diplomatic, then the turn limit.
+		// which the original awards them: conquest, space race, wonder,
+		// domination, cultural, diplomatic, then the turn limit.
 		Assert.Equal(
 			[
 				typeof(ScoreVictory),
 				typeof(ConquestVictory),
 				typeof(SpaceRaceVictory),
+				typeof(WonderVictory),
 				typeof(DominationVictory),
 				typeof(CulturalVictory),
 				typeof(DiplomaticVictory),
 				typeof(TimeLimitVictory),
 			],
 			game.victories.Select(v => v.GetType()));
+	}
+
+	[Fact]
+	public void ConvertVictoryConditions_WithTheWonderFlagClear_DoesNotRegisterWonderVictory() {
+		var game = MakeGame(new VictoryConditions { AllowSpaceRaceVictory = true });
+
+		SaveGame.ConvertVictoryConditions(game);
+
+		Assert.DoesNotContain(game.victories, v => v is WonderVictory);
 	}
 
 	[Fact]
