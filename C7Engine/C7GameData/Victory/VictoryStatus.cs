@@ -31,4 +31,9 @@ public class VictoryStatus {
 	// how many the rules require.
 	public int SpaceshipPartsBuilt { get; set; }
 	public int SpaceshipPartsRequired { get; set; }
+
+	// Victory points: the player's (or the player's alliance's) total and the
+	// limit the rules require to win.
+	public int VictoryPoints { get; set; }
+	public int VictoryPointLimit { get; set; }
 }

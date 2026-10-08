@@ -184,6 +184,9 @@ namespace C7GameData {
 				await tile.AnimateAsync(tile.IsWater() ? AnimatedEffect.WaterMiss : AnimatedEffect.Miss);
 
 			if (target.hitPointsRemaining <= 0) {
+				// Destroying a unit awards the bombarding player victory points
+				// (spec 25 section 4).
+				owner.AwardVictoryPointsForUnitKill(EngineStorage.gameData, target);
 				RollToPromote(target);
 				await target.animateAsync(AnimatedAction.DEATH, AnimationEnding.Pause);
 				target.RemoveFromPlay();

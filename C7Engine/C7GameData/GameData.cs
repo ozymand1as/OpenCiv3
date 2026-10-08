@@ -70,6 +70,11 @@ namespace C7GameData {
 		public List<IVictory> victories = new();
 		public bool gameOver;
 		public Player winner;
+
+		/// Whether the rules turn on the victory-point group (spec 25 section 2.8's
+		/// 0x26000 mask). Victory points are accumulated and the type-8 condition is
+		/// evaluated only when this is true.
+		public bool VictoryPointsEnabled => victoryConditions is not null && victoryConditions.VictoryPointsEnabled;
 		// TODO: Victory type serialization
 
 		public BarbarianInfo barbarianInfo = new BarbarianInfo();

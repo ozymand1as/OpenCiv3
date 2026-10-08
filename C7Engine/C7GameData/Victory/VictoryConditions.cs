@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace C7GameData;
 
@@ -33,6 +34,16 @@ public class VictoryConditions {
 	public int CityConquestPopulation { get; set; } = 100;
 	public int VictoryPointScoring { get; set; } = 25;
 	public int CapturingSpecialUnit { get; set; } = 1000;
+
+	// Civ3 gates every victory-point award and the type-8 condition on one
+	// three-bit group rather than on VictoryLocations alone: the test is
+	// `p_toggleable_rules & 0x26000`, i.e. victory-point scoring (0x2000),
+	// capture the princess (0x4000) and reverse capture the flag (0x20000).
+	// Derived rather than stored, so it stays out of the saved rules.
+	[JsonIgnore]
+	public bool VictoryPointsEnabled {
+		get => VictoryLocations || CaptureTheFlag || ReverseCaptureTheFlag;
+	}
 
 	// How many of each spaceship part a player must build to launch. Civ3's
 	// shipped rules require one of each of the ten parts.

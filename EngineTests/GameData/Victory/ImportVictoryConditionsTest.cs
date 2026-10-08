@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using C7Engine;
+using C7Engine.Lua;
 using C7GameData;
 using C7GameData.Save;
 using EngineTests.Utils;
@@ -71,6 +72,62 @@ public class ImportVictoryConditionsTest {
 		Assert.False(conditions.AllowSpaceRaceVictory);
 		Assert.False(conditions.AllowDiplomaticVictory);
 		Assert.False(conditions.AllowCulturalVictory);
+	}
+
+	[SkippableFact]
+	public void ShippedRules_CarryTheWholeVictoryPointParameterSet() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		// Measured from the shipped conquests.biq: every numeric parameter the
+		// victory-point system reads, and all three flags of the 0x26000 group
+		// (the shipped rules leave the group off).
+		BiqData biq = BiqData.LoadFile(PathUtils.defaultBicPath);
+		QueryCiv3.Biq.GAME game = biq.Game[0];
+
+		Assert.Equal(50000, game.VictoryPointLimit);
+		Assert.Equal(25, game.VictoryPointScoring);
+		Assert.Equal(1000, game.CapturingSpecialUnit);
+		Assert.Equal(10, game.WonderCost);
+		Assert.Equal(5, game.DefeatingOpposingUnitCost);
+		Assert.Equal(5, game.AdvancementCost);
+		Assert.Equal(100, game.CityConquestPopulation);
+
+		Assert.False(game.VictoryLocations);
+		Assert.False(game.CaptureTheFlag);
+		Assert.False(game.ReverseCaptureTheFlag);
+
+		VictoryConditions conditions = ImportCiv3.VictoryConditionsFromBiqGame(
+			game, ImportCiv3.SpaceshipPartsNeededFrom(biq.RuleSpaceship));
+		Assert.Equal(50000, conditions.VictoryPointLimit);
+		Assert.Equal(25, conditions.VictoryPointScoring);
+		Assert.Equal(1000, conditions.CapturingSpecialUnit);
+		Assert.Equal(10, conditions.WonderCost);
+		Assert.Equal(5, conditions.DefeatingOpposingUnitCost);
+		Assert.Equal(5, conditions.AdvancementCost);
+		Assert.Equal(100, conditions.CityConquestPopulation);
+		Assert.False(conditions.VictoryPointsEnabled);
+	}
+
+	[SkippableFact]
+	public void ShippedRuleset_CarriesTheSameVictoryPointParametersAsTheBiq() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		// A freshly generated (non-BIQ) game takes its victory parameters from
+		// ruleset.json, so the ruleset must not drift from the shipped BIQ.
+		BiqData biq = BiqData.LoadFile(PathUtils.defaultBicPath);
+		VictoryConditions fromBiq = ImportCiv3.VictoryConditionsFromBiqGame(
+			biq.Game[0], ImportCiv3.SpaceshipPartsNeededFrom(biq.RuleSpaceship));
+		SaveGame ruleset = GameMode.Load(PathUtils.GameModesDir, new GameMode.Config("civ3")).GetSave();
+		VictoryConditions fromRuleset = ruleset.VictoryConditions;
+
+		Assert.Equal(fromBiq.VictoryPointLimit, fromRuleset.VictoryPointLimit);
+		Assert.Equal(fromBiq.VictoryPointScoring, fromRuleset.VictoryPointScoring);
+		Assert.Equal(fromBiq.CapturingSpecialUnit, fromRuleset.CapturingSpecialUnit);
+		Assert.Equal(fromBiq.WonderCost, fromRuleset.WonderCost);
+		Assert.Equal(fromBiq.DefeatingOpposingUnitCost, fromRuleset.DefeatingOpposingUnitCost);
+		Assert.Equal(fromBiq.AdvancementCost, fromRuleset.AdvancementCost);
+		Assert.Equal(fromBiq.CityConquestPopulation, fromRuleset.CityConquestPopulation);
+		Assert.Equal(fromBiq.VictoryPointsEnabled, fromRuleset.VictoryPointsEnabled);
 	}
 
 	[SkippableFact]

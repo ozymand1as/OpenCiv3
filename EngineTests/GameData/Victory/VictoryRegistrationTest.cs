@@ -23,6 +23,7 @@ public class VictoryRegistrationTest {
 	[Fact]
 	public void ConvertVictoryConditions_RegistersTheEnabledConditionsInTheOriginalsOrder() {
 		var game = MakeGame(new VictoryConditions {
+			VictoryLocations = true,
 			AllowDominationVictory = true,
 			AllowSpaceRaceVictory = true,
 			AllowDiplomaticVictory = true,
@@ -34,11 +35,12 @@ public class VictoryRegistrationTest {
 
 		// Score is registered first so the status screen can render it, but it
 		// is a tie-break rather than a condition. The rest follow the order in
-		// which the original awards them: conquest, space race, domination,
-		// cultural, diplomatic, then the turn limit.
+		// which the original awards them: victory points (type 8), conquest,
+		// space race, domination, cultural, diplomatic, then the turn limit.
 		Assert.Equal(
 			[
 				typeof(ScoreVictory),
+				typeof(VictoryPointVictory),
 				typeof(ConquestVictory),
 				typeof(SpaceRaceVictory),
 				typeof(DominationVictory),
@@ -46,6 +48,22 @@ public class VictoryRegistrationTest {
 				typeof(DiplomaticVictory),
 				typeof(TimeLimitVictory),
 			],
+			game.victories.Select(v => v.GetType()));
+	}
+
+	[Fact]
+	public void ConvertVictoryConditions_RegistersTheVictoryPointConditionBeforeConquest() {
+		// Type 8 is the first condition Civ3 evaluates, so it must be the first
+		// condition in the list that can actually end the game.
+		var game = MakeGame(new VictoryConditions {
+			CaptureTheFlag = true,
+			AllowConquestVictory = true,
+		});
+
+		SaveGame.ConvertVictoryConditions(game);
+
+		Assert.Equal(
+			[typeof(ScoreVictory), typeof(VictoryPointVictory), typeof(ConquestVictory), typeof(TimeLimitVictory)],
 			game.victories.Select(v => v.GetType()));
 	}
 
@@ -95,5 +113,12 @@ public class VictoryRegistrationTest {
 		Assert.Equal(25, conditions.VictoryPointScoring);
 		Assert.Equal(1000, conditions.CapturingSpecialUnit);
 		Assert.Equal(Enumerable.Repeat(1, 10), conditions.SpaceshipPartsNeeded);
+
+		// The victory-point group is off in the shipped rules, which is why a
+		// normal game never accumulates victory points.
+		Assert.False(conditions.VictoryLocations);
+		Assert.False(conditions.CaptureTheFlag);
+		Assert.False(conditions.ReverseCaptureTheFlag);
+		Assert.False(conditions.VictoryPointsEnabled);
 	}
 }

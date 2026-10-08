@@ -87,6 +87,11 @@ namespace C7GameData.Save {
 		// The spaceship parts this player has built, in rules order.
 		public List<int> spaceshipPartsBuilt = new();
 
+		// The player's victory-point total (spec 25 section 4). Nullable so that
+		// the value is omitted from saved games when it is zero, which keeps
+		// saves that predate the field loadable.
+		public int? victoryPoints;
+
 		// Used when importing from .biq, to make it easier to distinguish barbarians from other players.
 		// It's not meant to be saved in the json.
 		[JsonIgnore]
@@ -120,6 +125,7 @@ namespace C7GameData.Save {
 				government = governments.Find(x => x.id == governmentId),
 				rules = rules,
 				spaceshipPartsBuilt = spaceshipPartsBuilt is not null ? new List<int>(spaceshipPartsBuilt) : new(),
+				victoryPoints = victoryPoints ?? 0,
 			};
 			foreach (TileLocation tile in tileKnowledge) {
 				player.tileKnowledge.AddTileToKnown(map.tileAt(tile.X, tile.Y));
@@ -190,6 +196,7 @@ namespace C7GameData.Save {
 			inAnarchyUntilTurn = player.inAnarchyUntilTurn;
 			governmentId = player.government.id;
 			spaceshipPartsBuilt = new List<int>(player.spaceshipPartsBuilt);
+			victoryPoints = player.victoryPoints == 0 ? null : player.victoryPoints;
 
 			foreach (KeyValuePair<ID, PlayerRelationship> keyValuePair in player.playerRelationships) {
 				playerRelationships.Add(keyValuePair.Key.ToString(), keyValuePair.Value);

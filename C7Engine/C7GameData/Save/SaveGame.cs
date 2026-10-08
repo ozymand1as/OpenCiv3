@@ -184,6 +184,11 @@ namespace C7GameData.Save {
 			// we can render the current score alongside the state of other conditions
 			data.victories.Add(new ScoreVictory());
 
+			// Type 8 is the first condition Civ3 evaluates (section 2.0), and it is
+			// gated by the victory-point group rather than by a flag of its own.
+			if (conditions.VictoryPointsEnabled)
+				data.victories.Add(new VictoryPointVictory(conditions.VictoryPointLimit));
+
 			if (conditions.AllowConquestVictory)
 				data.victories.Add(new ConquestVictory());
 			if (conditions.AllowSpaceRaceVictory)
