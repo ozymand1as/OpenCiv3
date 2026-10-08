@@ -184,6 +184,29 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 	}
 
 	[Fact]
+	public void ResearchOverflowIsNotNegativeWhenTheCostWasNotMet() {
+		Tech philosophy = MakeTech("tech-philosophy", 40);
+		Tech pottery = MakeTech("tech-pottery", 10);
+		pottery.RequiredForEraAdvancement = true;
+		C7GameData.GameData gameData = MakeGame(philosophy, pottery);
+		Player player = MakePlayer(gameData);
+		MakeCity(gameData, player, commerce: 8);
+		EngineStorage.InitializeGameDataForTests(gameData);
+
+		// Nothing was accumulated, so the tech only completes because the
+		// maximum research time is up. There is no surplus to carry.
+		player.SetCurrentlyResearchedTech(philosophy.id);
+		player.beakers = 0;
+		player.turnsResearched = gameData.rules.MaximumResearchTime;
+
+		player.DoPerTurnScienceUpdates(gameData);
+
+		Assert.Contains(philosophy.id, player.knownTechs);
+		Assert.Equal(pottery.id, player.currentlyResearchedTech);
+		Assert.Equal(0, player.beakers);
+	}
+
+	[Fact]
 	public void AHumanFreeTechIsNotAutoSpent() {
 		Tech philosophy = MakeTech("tech-philosophy", 40);
 		philosophy.BonusTechToFirstCivThatResearches = true;

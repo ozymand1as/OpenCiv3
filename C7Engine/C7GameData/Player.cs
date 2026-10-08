@@ -836,9 +836,9 @@ namespace C7GameData {
 		}
 
 		private void CompleteResearchAndBeginNew(GameData gameData, IEnumerable<Tech> techs) {
-			// -1 means no tech was completed, in which case the player's current
+			// Null means no tech was completed, in which case the player's current
 			// research progress must be left alone.
-			int overflow = -1;
+			int? overflow = null;
 			foreach (Tech tech in techs) {
 				overflow = CompleteResearchingTech(gameData, tech);
 			}
@@ -846,7 +846,7 @@ namespace C7GameData {
 			CarryOverflowIntoNextTech(overflow);
 		}
 		private void CompleteResearchAndBeginNew(GameData gameData, Tech tech, bool free = false) {
-			int overflow = CompleteResearchingTech(gameData, tech, free);
+			int? overflow = CompleteResearchingTech(gameData, tech, free);
 			PlayerAI.MaybePickTechToResearch(this, gameData.techs);
 			CarryOverflowIntoNextTech(overflow);
 		}
@@ -855,8 +855,8 @@ namespace C7GameData {
 		// technology instead of being discarded. Unlike Civ3, which zeroes the
 		// research counter on completion, this is a deliberate improvement, so
 		// an overshooting turn is not wasted.
-		private void CarryOverflowIntoNextTech(int overflow) {
-			if (overflow < 0) {
+		private void CarryOverflowIntoNextTech(int? overflow) {
+			if (overflow == null) {
 				return;
 			}
 			// With no next tech (an exhausted tech tree) and no pending free tech
@@ -864,7 +864,7 @@ namespace C7GameData {
 			if (currentlyResearchedTech == null && freeTechsRemaining == 0) {
 				return;
 			}
-			beakers = overflow;
+			beakers = overflow.Value;
 		}
 
 		private int CompleteResearchingTech(GameData gameData, Tech tech, bool free = false) {
