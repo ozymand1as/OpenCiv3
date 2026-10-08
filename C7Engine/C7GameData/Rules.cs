@@ -24,5 +24,10 @@ namespace C7GameData {
 		public float ShieldRateForDisbanding; // per cent
 		public bool AllowLesserUnitProduction; // for example, allow building a Spearman/Pikeman when we can build a Musketman (simultaneously)
 		public int RadarTileVisibility; // how many tiles, a unit with the Radar ability, can see ahead
+
+		// When true, a goody hut may hand over a city ("an advanced tribe has
+		// joined us"). This is the Civ3 "no city from a hut" rule toggle: the
+		// shipped rules leave it enabled, and it is not yet imported from a BIQ.
+		public bool AllowCitiesFromGoodyHuts = true;
 	}
 }

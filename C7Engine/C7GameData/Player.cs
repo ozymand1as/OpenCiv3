@@ -912,6 +912,23 @@ namespace C7GameData {
 			return overflow;
 		}
 
+		/// <summary>
+		/// Grants a technology outright, without the research bookkeeping. Used
+		/// by effects that hand a tech over directly, such as a goody hut.
+		/// </summary>
+		public void GrantTech(GameData gameData, Tech tech) {
+			if (tech == null || knownTechs.Contains(tech.id)) {
+				return;
+			}
+
+			knownTechs.Add(tech.id);
+			TechImprovementCallback(this, tech);
+
+			if (CanAdvanceToNextEra(gameData)) {
+				eraCivilopediaName = GetNextEraNameByIndex(EraIndex());
+			}
+		}
+
 		private static void TechImprovementCallback(Player player, Tech tech) {
 			var terraforms = EngineStorage.gameData.Terraforms;
 			if (terraforms.Any(t => t.Improvement is { layer: TerrainImprovement.Layer.Roads } && t.RequiredTech == tech.id)) {

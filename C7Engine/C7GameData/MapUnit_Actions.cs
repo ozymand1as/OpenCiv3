@@ -31,6 +31,13 @@ public partial class MapUnit {
 		//Add to player knowledge of tiles
 		owner.tileKnowledge.AddTilesToKnown(tile);
 
+		// Pop a goody hut. The hut is consumed by the entering unit; the
+		// barbarian player never collects its own huts.
+		if (tile.hasGoodyHut && !owner.isBarbarians) {
+			animate(MapUnit.AnimatedAction.VICTORY);
+			GoodyHutInteractions.Consume(EngineStorage.gameData, owner, tile);
+		}
+
 		// Disperse barb camp
 		if (tile.hasBarbarianCamp && !owner.isBarbarians) {
 			EngineStorage.gameData.map.barbarianCamps.Remove(tile);

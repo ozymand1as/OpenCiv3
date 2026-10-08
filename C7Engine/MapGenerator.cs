@@ -129,7 +129,10 @@ namespace C7Engine {
 			// Previously step 10
 			AddBarbarianCamps(wc, gameMap);
 
-			// TODO: Goody huts, barbarian camps.
+			// Step 12: Add goody huts. This runs after the camps so that the two
+			// features never share a tile, and after the starting locations so
+			// that no hut lands on one.
+			AddGoodyHuts(wc, gameMap);
 
 			// Last step: Assign the terrain file and image ids to each tile so
 			// we know which texture to use when displaying them.
@@ -1393,6 +1396,61 @@ namespace C7Engine {
 
 			// No barbarian camps less than 6 tiles away from a player
 			if (m.startingLocations.Any(x => t.DistanceTo(x) < 6)) return false;
+
+			return true;
+		}
+
+		private static void AddGoodyHuts(WorldCharacteristics wc, GameMap m) {
+			// With "No Barbarians" the generated map has no goody huts at all.
+			if (wc.barbarianActivity == BarbarianActivity.None) {
+				return;
+			}
+
+			// The pass is skipped entirely on degenerate maps.
+			int tileCount = m.tiles.Count;
+			if ((tileCount & 0xfff0) == 0) {
+				return;
+			}
+
+			// One independent draw per attempt, roughly one attempt per 32
+			// tiles. There is no de-duplication and no second-chance pass, so
+			// the realised hut count is well below the attempt count because
+			// the predicate enforces spacing.
+			Random rand = new(wc.mapSeed + 0x900d);
+			int attempts = tileCount >> 5;
+			for (int i = 0; i < attempts; ++i) {
+				Tile t = m.tiles[rand.Next(tileCount)];
+				if (IsValidForGoodyHut(m, t)) {
+					t.hasGoodyHut = true;
+				}
+			}
+		}
+
+		/// <summary>
+		/// A goody hut may only be placed on land that carries no starting
+		/// location, barbarian camp, city, unit or resource, and no other hut
+		/// within the 7x7 Chebyshev block around it - so huts are at least four
+		/// tiles apart.
+		/// </summary>
+		private static bool IsValidForGoodyHut(GameMap m, Tile t) {
+			if (t == Tile.NONE || !t.IsLand()) {
+				return false;
+			}
+			if (m.startingLocations.Contains(t) || t.hasBarbarianCamp || t.hasGoodyHut) {
+				return false;
+			}
+			if (t.HasCity() || t.unitsOnTile.Count > 0) {
+				return false;
+			}
+			if (t.Resource != null && t.Resource != Resource.NONE) {
+				return false;
+			}
+
+			foreach (Tile n in t.GetTilesWithinTileSquare(3)) {
+				if (n != null && n != Tile.NONE && n.hasGoodyHut) {
+					return false;
+				}
+			}
 
 			return true;
 		}
