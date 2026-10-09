@@ -1776,6 +1776,11 @@ namespace C7GameData {
 				if (bldg.Name == "Wealth") {
 					SaveInflow inflow = new () {
 						name = bldg.Name,
+						// The original engine keys the shield-to-gold conversion off the
+						// Wealth improvement's Capitalization flag (spec 14 §4.2 step 6,
+						// City_get_income_from_wealth_build). Wealth is modelled as an
+						// inflow here, so the flag has to ride along with it.
+						capitalization = bldg.Capitalization,
 						iconRowIndex = pediaIcons.buildingToRowNumberMapping[bldg.CivilopediaEntry],
 						localYield = [
 							new SaveLocalYield(InflowYield.commerce, "inflows.result.wealth.commerce"),
@@ -1800,6 +1805,7 @@ namespace C7GameData {
 					combatDefenseBonus=bldg.DefenseBonus / 100.0,
 					maintenanceCost=bldg.MaintenanceCost,
 					pollution=bldg.Pollution,
+					production=bldg.Production,
 				};
 
 				if (bldg.RequiredAdvance != -1) {
@@ -1879,6 +1885,10 @@ namespace C7GameData {
 				(bldg.ReducesBuildingPollution, SaveBuilding.Flag.ReducesBuildingPollution),
 				(bldg.Plus50PercentResearch, SaveBuilding.Flag.Plus50PercentResearch),
 				(bldg.DoublesResearchOutput, SaveBuilding.Flag.DoublesResearchOutput),
+				(bldg.Plus50PercentLuxury, SaveBuilding.Flag.Plus50PercentLuxury),
+				(bldg.Plus50PercentCommerce, SaveBuilding.Flag.Plus50PercentCommerce),
+				(bldg.Capitalization, SaveBuilding.Flag.Capitalization),
+				(bldg.ReplacesOtherBuildings, SaveBuilding.Flag.ReplacesOtherBuildings),
 				(bldg.AllowsSpyMissions, SaveBuilding.Flag.AllowsSpyMissions),
 				(bldg.ResistantToBribery, SaveBuilding.Flag.ResistantToBribery),
 				(bldg.IncreasesLeaderChance, SaveBuilding.Flag.IncreasesLeaderChance),

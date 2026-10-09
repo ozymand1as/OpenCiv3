@@ -552,7 +552,35 @@ namespace C7GameData {
 			// TODO: add specialist shields here. Do specialists still work in
 			// civil disorder?
 
+			// The city's production buildings multiply the net shields, applied
+			// after waste (spec 14 §4.1 step 3). The corrupt value stays the
+			// pre-multiplier waste.
+			result.useful = result.useful * ProductionMultiplierNumerator() / 4;
+
 			return result;
+		}
+
+		// The shield multiplier numerator from the city's own buildings: it
+		// starts at 4 (= 100 %) and each non-obsolete building adds its
+		// Production field in quarters (the shipped Factory is 2, i.e. +50 %).
+		// A building with ReplacesOtherBuildings only counts when the city also
+		// has its required building, and then only the best one of them counts -
+		// the power plants never stack with each other (spec 14 §4.1 step 3).
+		private int ProductionMultiplierNumerator() {
+			int numerator = 4;
+			int maxReplacement = 0;
+			foreach (CityBuilding cb in constructed_buildings) {
+				if (IsObsoleteForOwner(cb.building)) {
+					continue;
+				}
+				if (!cb.building.replacesOtherBuildings) {
+					numerator += cb.building.production;
+				} else if (cb.building.requiredBuilding != null
+						&& constructed_buildings.Exists(x => x.building == cb.building.requiredBuilding)) {
+					maxReplacement = Math.Max(maxReplacement, cb.building.production);
+				}
+			}
+			return numerator + maxReplacement;
 		}
 
 		public CommerceBreakdown CurrentCommerceYieldRaw(bool respectCivilDisorder = true) {
@@ -587,14 +615,19 @@ namespace C7GameData {
 			CommerceBreakdown result = new();
 			result.corrupted = commerce.corrupt;
 
-			// The buildings that boost research multiply the city's slider share
-			// of its own commerce, after corruption. They add extra beakers
-			// rather than taking them from the tax income, so the tax share is
-			// still computed from the unmultiplied science share.
+			// The buildings that boost commerce multiply the city's slider share
+			// of its own commerce, after corruption. They add extra beakers/gold
+			// rather than taking them from the other shares, so each share is
+			// still computed from the unmultiplied split (spec 14 §4.2 steps
+			// 4-5).
 			int sliderBeakers = (int)Math.Floor(commerce.useful * owner.scienceRate / 10.0);
-			result.beakers = sliderBeakers * ResearchMultiplierNumerator() / 2;
-			result.happiness = (int)Math.Floor(commerce.useful * owner.luxuryRate / 10.0);
-			result.taxes = commerce.useful - sliderBeakers - result.happiness;
+			int sliderHappiness = (int)Math.Floor(commerce.useful * owner.luxuryRate / 10.0);
+			int sliderTaxes = commerce.useful - sliderBeakers - sliderHappiness;
+
+			var numerators = CommerceMultiplierNumerators();
+			result.beakers = sliderBeakers * numerators.science / 2;
+			result.happiness = sliderHappiness * numerators.luxury / 2;
+			result.taxes = sliderTaxes * numerators.tax / 2;
 
 			foreach (CityResident cr in residents) {
 				// Resisting citizens contribute no specialist output either
@@ -608,25 +641,77 @@ namespace C7GameData {
 				result.taxes += cr.citizenType.Taxes;
 			}
 
+			result.wealth = WealthBuildGoldIncome();
+
 			return result;
 		}
 
-		// The research multiplier from the city's own buildings, with a
-		// denominator of two: (2 + n_plus50 + 2 * n_doubles) / 2. The bonus is
-		// additive in halves, so Library + University + Research Lab in one city
-		// is 2.5x, not 1.5 * 1.5 * 1.5, and a doubling building adds a flat
-		// +100% to that same sum.
-		private int ResearchMultiplierNumerator() {
-			int numerator = 2;
+		// The three commerce-multiplier counters from the city's own buildings,
+		// each with a denominator of two: the counter starts at 2 (= 100 %) and
+		// every non-obsolete building with the matching flag adds 1 (spec 14
+		// §4.2 step 5). The bonus is additive in halves, so Library + University
+		// is 2x, not 1.5 * 1.5 = 2.25x, and a doubling building adds a flat
+		// +100 % to the science counter. Buildings made obsolete by a technology
+		// the owner knows contribute nothing.
+		private (int luxury, int science, int tax) CommerceMultiplierNumerators() {
+			int luxury = 2;
+			int science = 2;
+			int tax = 2;
 			foreach (CityBuilding cb in constructed_buildings) {
+				if (IsObsoleteForOwner(cb.building)) {
+					continue;
+				}
+				if (cb.building.plus50PercentLuxury) {
+					++luxury;
+				}
 				if (cb.building.plus50PercentResearch) {
-					++numerator;
+					++science;
 				}
 				if (cb.building.doublesResearchOutput) {
-					numerator += 2;
+					science += 2;
+				}
+				if (cb.building.plus50PercentCommerce) {
+					++tax;
 				}
 			}
-			return numerator;
+			return (luxury, science, tax);
+		}
+
+		// Civ3's City_get_income_from_wealth_build (spec 14 §4.2 step 6): a city
+		// producing the Wealth build turns its net shields into gold, at
+		// RULE.ShieldsCostPerGold shields per gold and identically max(1, K/2)
+		// for an owner that knows a technology flagged 0x1000
+		// (ATF_Doubles_Effect_Of_Wealth, Economics in the shipped rules). The
+		// division truncates, and a shortfall below one full gold yields exactly
+		// one gold rather than rounding up.
+		private int WealthBuildGoldIncome() {
+			if (!IsProducingWealthBuild()) {
+				return 0;
+			}
+
+			int netShields = CurrentProductionYield().useful;
+			if (netShields <= 0) {
+				return 0;
+			}
+
+			int shieldsPerGold = owner.rules.ShieldCostPerGold;
+			if (owner.GetKnownTechs().Any(t => t.DoublesWealthProduction)) {
+				shieldsPerGold = Math.Max(1, shieldsPerGold / 2);
+			}
+
+			return Math.Max(1, netShields / shieldsPerGold);
+		}
+
+		// Whether the city's current production order carries the Capitalization
+		// flag: the original engine reads the flag off the produced improvement
+		// (BLDG+0xec bit 19). The shipped Wealth item is modelled as an inflow,
+		// but a mod may still define an ordinary building with the flag.
+		private bool IsProducingWealthBuild() {
+			return itemBeingProduced switch {
+				Building b => b.capitalization,
+				Inflow i => i.capitalization,
+				_ => false,
+			};
 		}
 
 		[MoonSharpHidden]

@@ -61,6 +61,16 @@ namespace C7GameData {
 		// Copernicus' Observatory gives 2.5x, not 3x.
 		public bool plus50PercentResearch;
 		public bool doublesResearchOutput;
+
+		// The luxury and tax halves of the same commerce multiplier (spec 14
+		// §4.2 step 5). They stack additively with the research half inside a
+		// single division, so Marketplace + Bank is 2x tax, not 2.25x.
+		public bool plus50PercentLuxury;
+		public bool plus50PercentCommerce;
+
+		// The Wealth build: a city whose production is this building converts
+		// its net shields into gold (spec 14 §4.2 step 6).
+		public bool capitalization;
 		// A civ that owns a wonder with this flag may use spies.
 		public bool allowsSpyMissions;
 
@@ -108,6 +118,13 @@ namespace C7GameData {
 
 		// The pollution added to the city each turn by this building.
 		public int pollution = 0;
+
+		// The building's shield multiplier, in units of 25 %: the shipped
+		// Factory is 2 (+50 %). The multipliers stack additively in quarters,
+		// and a building with replacesOtherBuildings only counts as the best
+		// one whose required building the city also has (spec 14 §4.1 step 3).
+		public int production = 0;
+		public bool replacesOtherBuildings;
 
 		// Whether this building caps the pollution the city generates, from
 		// the ITF_Removes_Population_Pollution and
@@ -158,6 +175,8 @@ namespace C7GameData {
 			maintenanceCost = building.maintenanceCost;
 			iconRowIndex = building.iconRowIndex;
 			pollution = building.pollution;
+			production = building.production;
+			replacesOtherBuildings = building.flags.Contains(SaveBuilding.Flag.ReplacesOtherBuildings);
 
 			if (building.contentFacesInCity < 0) {
 				unhappyFacesInCity = -building.contentFacesInCity;
@@ -192,6 +211,9 @@ namespace C7GameData {
 			reducesBuildingPollution = building.flags.Contains(SaveBuilding.Flag.ReducesBuildingPollution);
 			plus50PercentResearch = building.flags.Contains(SaveBuilding.Flag.Plus50PercentResearch);
 			doublesResearchOutput = building.flags.Contains(SaveBuilding.Flag.DoublesResearchOutput);
+			plus50PercentLuxury = building.flags.Contains(SaveBuilding.Flag.Plus50PercentLuxury);
+			plus50PercentCommerce = building.flags.Contains(SaveBuilding.Flag.Plus50PercentCommerce);
+			capitalization = building.flags.Contains(SaveBuilding.Flag.Capitalization);
 			allowsSpyMissions = building.flags.Contains(SaveBuilding.Flag.AllowsSpyMissions);
 			resistantToBribery = building.flags.Contains(SaveBuilding.Flag.ResistantToBribery);
 			increasesLeaderChance = building.flags.Contains(SaveBuilding.Flag.IncreasesLeaderChance);

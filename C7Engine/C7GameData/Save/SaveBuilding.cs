@@ -38,6 +38,20 @@ namespace C7GameData.Save {
 			// Doubles combat strength against barbarians for the owning civ
 			// (The Great Wall in the shipped rules; 12_combat.md §2.2).
 			DoubleCombatVsBarbarians,
+			// The other two halves of the commerce multiplier (spec 14 §4.2
+			// step 5): +50% luxury (BLDG+0xec bit 3) and +50% tax (bit 4). The
+			// shipped rules put the tax flag on the Marketplace, Bank and Stock
+			// Exchange, and set the luxury flag on nothing.
+			Plus50PercentLuxury,
+			Plus50PercentCommerce,
+			// The Wealth build, which converts a city's net shields to gold
+			// instead of producing an item (spec 14 §4.2 step 6).
+			Capitalization,
+			// The shield multiplier's replacement rule (spec 14 §4.1 step 3):
+			// power plants never stack with each other, only the best one the
+			// city can use counts. The shipped Coal/Hydro/Nuclear/Solar plants
+			// carry it.
+			ReplacesOtherBuildings,
 		}
 
 		public class GreatWonderProperties {
@@ -79,6 +93,11 @@ namespace C7GameData.Save {
 		// The amount of pollution this building adds to its city each turn,
 		// from the BIQ's BLDG.Pollution field.
 		public int pollution;
+
+		// The building's shield multiplier, in units of 25 % (the shipped
+		// Factory is 2, i.e. +50 %), from the BIQ's BLDG.Production field
+		// (spec 14 §4.1 step 3).
+		public int production;
 		public int maintenanceCost;
 		public int iconRowIndex;
 		public ID? renderedObsoleteBy;
