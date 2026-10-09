@@ -325,7 +325,7 @@ public partial class UnitLayer : LooseLayer {
 
 		// Draw movement indicator for our units
 		if (looseView.mapView.game.controller == unit.owner) {
-			int moveIndIndex = (!unit.movementPoints.canMove) ? 4 : ((unit.movementPoints.remaining >= unit.unitType.movement) ? 0 : 2);
+			int moveIndIndex = (!unit.movementPoints.canMove) ? 4 : ((unit.movementPoints.remaining >= unit.MaxMovementPoints) ? 0 : 2);
 			Vector2 moveIndUpperLeft = new Vector2((1 + 7 * moveIndIndex), 1);
 			Rect2 moveIndRect = new Rect2(moveIndUpperLeft, movementLedCropping);
 			Rect2 screenRect = new Rect2(hpIndBackgroundRect.Position - (new Vector2(2, 6) / cameraZoom), movementLedSize);

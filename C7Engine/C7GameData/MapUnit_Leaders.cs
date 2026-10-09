@@ -51,6 +51,42 @@ public partial class MapUnit {
 		return location.unitsOnTile.Where(u => u.loadedOnUnitId == id).ToList();
 	}
 
+	// Civ3's Unit_get_max_move_points army branch (0x5be470): an army's maximum
+	// movement is the SMALLEST maximum among the units whose container is the
+	// army, plus RULE.MovementAlongRoads internal units. The comparison at
+	// 0x5be528 keeps the running value whenever it is the smaller of the two, so
+	// the branch takes the minimum and an army moves at its SLOWEST member's
+	// rate, plus one point (11_movement.md §2.2, gap G11).
+	//
+	// The running value starts at -1 and the "+ MovementAlongRoads" happens
+	// before the empty test (0x5be569-0x5be573), so an army with no members
+	// returns MovementAlongRoads - 1 internal units - two thirds of a movement
+	// point at the shipped scale - and NOT its own type's movement rate
+	// (11_movement.md §2.2).
+	//
+	// C7 counts movement in movement points - TilePath divides an improvement's
+	// internal cost by RULE.MovementAlongRoads - so the arithmetic below is done
+	// in internal units and converted once. That keeps the one-point bonus exact
+	// and the empty-army shortfall of one internal unit exact at any scale. [C]
+	public float MaxMovementPoints {
+		get {
+			if (IsArmy) {
+				int scale = Math.Max(1, owner?.rules?.MovementAlongRoads
+					?? EngineStorage.gameData?.rules?.MovementAlongRoads
+					?? Rules.DefaultMovementAlongRoads);
+				float running = -1f;  // internal units, as in the binary
+				foreach (MapUnit member in Members()) {
+					float memberMax = member.MaxMovementPoints * scale;
+					if (running == -1f || memberMax < running) {
+						running = memberMax;
+					}
+				}
+				return (running + scale) / scale;
+			}
+			return unitType.movement;
+		}
+	}
+
 	// The container this unit is loaded into, if any.
 	private MapUnit Container() {
 		if (!IsLoaded() || location == null) {
@@ -215,7 +251,7 @@ public partial class MapUnit {
 		army.experienceLevelKey = gameData.defaultExperienceLevelKey;
 		army.experienceLevel = gameData.defaultExperienceLevel;
 		army.hitPointsRemaining = army.maxHitPoints;
-		army.movementPoints.reset(armyType.movement);
+		army.movementPoints.reset(army.MaxMovementPoints);
 
 		location.unitsOnTile.Add(army);
 		gameData.mapUnits.Add(army);
@@ -255,7 +291,16 @@ public partial class MapUnit {
 		// the member's own damage is zeroed.
 		int armyDamage = army.maxHitPoints - army.hitPointsRemaining;
 		int memberDamage = maxHitPoints - hitPointsRemaining;
-		float memberMovement = movementPoints.remaining;
+
+		// Civ3 folds the member's SPENT movement into the army's spent movement
+		// (Unit_load_into_army @ 0x5bcc90: army.Moves = max(army.Moves,
+		// member.Moves)), and the army's maximum is recomputed on demand from its
+		// members. A load therefore never hands the army more movement than the
+		// aggregation allows, and a slow member slows the army down at once. C7
+		// stores remaining movement, so the same rule is applied to the spent
+		// values (11_movement.md §2.2).
+		float armySpent = Math.Max(0f, army.MaxMovementPoints - army.movementPoints.remaining);
+		float memberSpent = Math.Max(0f, MaxMovementPoints - movementPoints.remaining);
 
 		loadedOnUnitId = army.id;
 		hitPointsRemaining = maxHitPoints;
@@ -263,9 +308,7 @@ public partial class MapUnit {
 		isFortified = true;
 
 		army.hitPointsRemaining = Math.Max(0, army.maxHitPoints - armyDamage - memberDamage);
-
-		// The army moves as fast as its fastest member.
-		army.movementPoints.reset(Math.Max(army.movementPoints.remaining, memberMovement));
+		army.movementPoints.reset(Math.Max(0f, army.MaxMovementPoints - Math.Max(armySpent, memberSpent)));
 		army.Wake();
 
 		return true;

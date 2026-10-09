@@ -9,7 +9,9 @@ namespace C7GameData;
 
 public partial class MapUnit {
 	public void OnBeginTurn(bool skipTurn = false) {
-		int maxMP = unitType.movement;
+		// An army's maximum is its SLOWEST member's rate plus one point, not its
+		// own prototype's rate (11_movement.md §2.2).
+		float maxMP = MaxMovementPoints;
 		if (movementPoints.remaining >= maxMP && !skipTurn) {
 			int maxHP = maxHitPoints;
 			if (hitPointsRemaining < maxHP)

@@ -567,16 +567,94 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(damaged.maxHitPoints, damaged.hitPointsRemaining);
 	}
 
+	// Loading is where the aggregation reaches the movement points: Civ3's
+	// Unit_load_into_army folds the member's spent movement into the army's, so
+	// a fresh member hands the army its aggregated maximum - min(3) + 1 = 4 -
+	// and not the fast member's own rate of 3. The test used to be called
+	// AnArmyMovesAsFastAsItsFastestMember and expected 3, which encoded the
+	// fastest-member rule the binary does not have (11_movement.md §2.2).
 	[Fact]
-	public void AnArmyMovesAsFastAsItsFastestMember() {
+	public void LoadingAMemberGivesTheArmyItsAggregatedRate() {
 		var (player, army) = SetupArmy();
+		// A freshly created army starts on its own type's field of 1, which is
+		// not the aggregation: the empty army's real maximum is 2/3.
 		Assert.Equal(1, army.movementPoints.remaining);
+		Assert.Equal(2.0 / 3.0, army.MaxMovementPoints, 0.0001);
 
 		MapUnit fast = MakeUnit(player, MakeLandPrototype(1, 1, movement: 3), army.location, experience: "Regular");
 		Assert.True(fast.LoadIntoArmy(army));
 
-		Assert.Equal(3, army.movementPoints.remaining);
+		Assert.Equal(4.0, army.MaxMovementPoints, 0.0001);
+		Assert.Equal(4.0, army.movementPoints.remaining, 0.0001);
 		Assert.Equal(0, fast.movementPoints.remaining);
+	}
+
+	// The second-attack gate at its new boundary. An army carries Blitz, so the
+	// movement points are the only limit on repeat attacks; with one 1-move
+	// member the aggregation gives min(1) + 1 = 2 points, so exactly two
+	// one-point attacks are available and the third is refused
+	// (23_leaders_armies_golden_age.md §6.8, 11_movement.md §2.2).
+	[Fact]
+	public void AnArmyWithOneSlowMemberAttacksTwiceAndStops() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit army = MakeUnit(player, armyType, attackerTile, experience: "Regular");
+		Assert.True(MakeUnit(player, MakeLandPrototype(100, 0, movement: 1), attackerTile, experience: "Regular").LoadIntoArmy(army));
+		MapUnit first = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		MapUnit second = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		MapUnit third = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+
+		Assert.True(army.unitType.isBlitz);
+		Assert.Equal(2.0, army.MaxMovementPoints, 0.0001);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1; // the attacker wins every round
+
+		Assert.True(army.Move(TileDirection.EAST).Result);
+		Assert.True(army.Move(TileDirection.EAST).Result);
+
+		Assert.DoesNotContain(first, gd.mapUnits);
+		Assert.DoesNotContain(second, gd.mapUnits);
+		// The bit does not block the Blitz type; the exhausted movement points
+		// do, so the slow army's third attack never happens.
+		Assert.True(army.CanAttack());
+		Assert.False(army.movementPoints.canMove);
+		Assert.Contains(third, gd.mapUnits);
+	}
+
+	// The other side of the same gate: an army of fast members still gets its
+	// slowest member's three points plus one, so the Blitz rule buys four attacks
+	// in one turn and the fifth is refused. The test exists so the correction to
+	// the minimum cannot over-shrink a fast army.
+	[Fact]
+	public void AnArmyOfFastMembersAttacksFourTimesAndStops() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit army = MakeUnit(player, armyType, attackerTile, experience: "Regular");
+		Assert.True(MakeUnit(player, MakeLandPrototype(100, 0, movement: 3), attackerTile, experience: "Regular").LoadIntoArmy(army));
+
+		List<MapUnit> defenders = [];
+		for (int i = 0; i < 5; ++i) {
+			defenders.Add(MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile));
+		}
+
+		Assert.Equal(4.0, army.MaxMovementPoints, 0.0001);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1; // the attacker wins every round
+
+		for (int i = 0; i < 4; ++i) {
+			Assert.True(army.Move(TileDirection.EAST).Result);
+		}
+
+		for (int i = 0; i < 4; ++i) {
+			Assert.DoesNotContain(defenders[i], gd.mapUnits);
+		}
+		Assert.True(army.CanAttack());
+		Assert.False(army.movementPoints.canMove);
+		Assert.Contains(defenders[4], gd.mapUnits);
 	}
 
 	[Fact]
