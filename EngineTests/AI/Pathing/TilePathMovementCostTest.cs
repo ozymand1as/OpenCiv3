@@ -83,6 +83,10 @@ public sealed class TilePathMovementCostTest : MapBase {
 		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
 		Player player = Walker();
 		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+		// A founded city tile carries a road (11_movement.md section 4.2,
+		// 0x4ae2a0), so clear it: this test is about a city tile that carries
+		// no road overlay, which a save can still produce.
+		startTile.overlays.Clear();
 
 		var destination = AddNeighborsAndUpdateMap(startTile, MakePlainsTile(), TileDirection.NORTH);
 		destination.overlays.Add(road);
@@ -97,9 +101,11 @@ public sealed class TilePathMovementCostTest : MapBase {
 		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
 		Player player = Walker();
 		startTile.cityAtTile = new City(startTile, player, "From", ID.None(""));
+		startTile.overlays.Clear();
 
 		var destination = AddNeighborsAndUpdateMap(startTile, MakePlainsTile(), TileDirection.NORTH);
 		destination.cityAtTile = new City(destination, player, "To", ID.None(""));
+		destination.overlays.Clear();
 
 		// Neither city tile carries a road, so the step is not free.
 		Assert.Equal(1.0, TilePath.GetMovementCost(player, startTile, TileDirection.NORTH, destination), Tolerance);

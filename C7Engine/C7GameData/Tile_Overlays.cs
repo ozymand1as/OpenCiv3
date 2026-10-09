@@ -8,24 +8,6 @@ using static C7GameData.Tile.TileOverlays;
 namespace C7GameData;
 
 public partial class Tile {
-	public static void TryAddRoad(Tile tile, bool hasRoad, bool hasRailroad) {
-		var shouldConnectToToNetwork = !hasRailroad && tile.neighbors.Any(p => p.Value.HasRoad());
-		if (shouldConnectToToNetwork || hasRoad) {
-			var roadTerraform = ToTerraform(ROAD);
-			if (roadTerraform != null && tile.cityAtTile.owner.HasTech(roadTerraform.RequiredTech)) {
-				tile.overlays.Add(roadTerraform.Improvement);
-			}
-		}
-	}
-	public static void TryAddRailroad(Tile tile, bool hasRailroad) {
-		var shouldConnectToToNetwork = !hasRailroad && tile.neighbors.Any(p => p.Value.HasRailroad());
-		if (shouldConnectToToNetwork || hasRailroad) {
-			var railroadTerraform = ToTerraform(RAILROAD);
-			if (railroadTerraform != null && tile.cityAtTile.owner.HasTech(railroadTerraform.RequiredTech)) {
-				tile.overlays.Add(railroadTerraform.Improvement);
-			}
-		}
-	}
 	public static void TryAddRuins(Tile tile) {
 		var ruins =
 			EngineStorage.gameData.terrainImprovements.FirstOrDefault(i => i.key == RUINS);
@@ -184,27 +166,36 @@ public partial class Tile {
 			return canBeReplaced;
 		}
 
-		// The movement cost of this tile's road or railroad improvement, in
+		// The movement cost of this tile's road or railroad participation, in
 		// Civ3's internal movement units (one whole movement point is
-		// RULE.MovementAlongRoads of them), or null when the tile carries
-		// neither. Roads and railroads share the Roads layer, so this returns the
-		// cost of whichever is present.
+		// RULE.MovementAlongRoads of them), or null when the tile contributes
+		// neither. Roads and railroads share the Roads layer, so this is the
+		// cost of whichever one participates.
+		//
+		// Participation, not the raw overlay bit, is what decides the cost:
+		// Tile.HasRoad and Tile.HasRailroad apply the city-tile owner-technology
+		// gate of Tile_Check_Roads / Tile_Check_Railroads (11_movement.md
+		// section 4.2). Because a railroad also sets the road bit, a city tile
+		// whose owner lacks the railroad technology still participates as a
+		// road, so the step costs the road cost rather than nothing.
 		//
 		// The cost is the original's constant for the improvement
-		// (11_movement.md §3.2, §3.3), read from the rules at runtime rather than
-		// from the improvement's save-carried movementCost field: a save written
-		// before the scale existed carries the old fraction 0.33333334 there, and
-		// an old save must still move at the shipped rate.
+		// (11_movement.md section 3.2, 3.3), read from the rules at runtime
+		// rather than from the improvement's save-carried movementCost field: a
+		// save written before the scale existed carries the old fraction
+		// 0.33333334 there, and an old save must still move at the shipped rate.
 		//
-		// Returning null for "no improvement" (rather than a sentinel cost such
-		// as -1) keeps callers from mistaking a tile without an improvement for
-		// a cheap one.
+		// Returning null for "no participation" (rather than a sentinel cost
+		// such as -1) keeps callers from mistaking a tile without an improvement
+		// for a cheap one.
 		public float? RoadMovementCost() {
-			if (terrainImprovementByLayer.TryGetValue(Layer.Roads, out TerrainImprovement roads)) {
-				return roads.StepCostInInternalUnits;
+			if (!tile.HasRoad()) {
+				return null;
 			}
 
-			return null;
+			return tile.HasRailroad()
+				? Rules.RailroadStepInternalUnits
+				: Rules.RoadStepInternalUnits;
 		}
 
 		public int GetBaseYieldBonus(YieldType type) {

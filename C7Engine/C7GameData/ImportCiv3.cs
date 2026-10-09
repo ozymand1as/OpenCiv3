@@ -2296,6 +2296,20 @@ namespace C7GameData {
 				if (t.Required > -1) {
 					tf.RequiredTech = save.Techs[t.Required].id;
 				}
+
+				// The Road and Railroad records' Required fields are also the
+				// technologies a city or colony tile's owner must know before the
+				// tile counts as a road or a railroad (11_movement.md section 4.2):
+				// the original's Tile_Check_Roads and Tile_Check_Railroads read
+				// them through the rules object. Record them on the rules so the
+				// movement code does not search the terraform list per query. The
+				// shipped conquests.biq leaves the road at -1 and sets the railroad
+				// to Steam Power, so only the railroad gate is live.
+				if (tfKey == TerraformKey.BuildRoad) {
+					save.Rules.CityRoadRequiredTech = tf.RequiredTech;
+				} else if (tfKey == TerraformKey.BuildRailroad) {
+					save.Rules.CityRailroadRequiredTech = tf.RequiredTech;
+				}
 				if (t.RequiredResource1 > -1) {
 					tf.RequiredResources.Add(save.Resources[t.RequiredResource1].Key);
 				}

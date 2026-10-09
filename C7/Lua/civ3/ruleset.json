@@ -12120,6 +12120,8 @@
   },
   "rules": {
     "movementAlongRoads": 3,
+    "cityRoadRequiredTech": null,
+    "cityRailroadRequiredTech": "tech-45",
     "maximumResearchTime": 50,
     "minimumResearchTime": 4,
     "futureTechCost": 400,

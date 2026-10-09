@@ -1057,8 +1057,6 @@ namespace C7GameData {
 			int progress = beakers;
 
 			knownTechs.Add(tech.id);
-			// trigger callback for techs that enable improvements to redraw map
-			TechImprovementCallback(this, tech);
 
 			AwardVictoryPointsForAdvance(gameData, tech);
 
@@ -1097,7 +1095,6 @@ namespace C7GameData {
 			}
 
 			knownTechs.Add(tech.id);
-			TechImprovementCallback(this, tech);
 
 			AwardVictoryPointsForAdvance(gameData, tech);
 
@@ -1115,17 +1112,6 @@ namespace C7GameData {
 			string nextEra = EraUtils.GetNextEraNameByIndex(gameData.eras, EraUtils.GetEraIndex(gameData.eras, eraCivilopediaName));
 			if (nextEra != null) {
 				eraCivilopediaName = nextEra;
-			}
-		}
-
-		private static void TechImprovementCallback(Player player, Tech tech) {
-			var terraforms = EngineStorage.gameData.Terraforms;
-			if (terraforms.Any(t => t.Improvement is { layer: TerrainImprovement.Layer.Roads } && t.RequiredTech == tech.id)) {
-				foreach (var city in player.cities) {
-					var cityLoc = city.location;
-					TryAddRoad(cityLoc, cityLoc.HasRoad(), cityLoc.HasRailroad());
-					TryAddRailroad(cityLoc, cityLoc.HasRailroad());
-				}
 			}
 		}
 

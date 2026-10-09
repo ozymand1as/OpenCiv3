@@ -129,8 +129,14 @@ namespace C7GameData {
 		}
 
 		private void BuildCityCallback() {
-			var hasRoad = this.HasRoad();
-			var hasRailroad = this.HasRailroad();
+			// The raw road and railroad overlay bits are a property of the tile,
+			// not of its owner: the original reads them through the owner gate of
+			// Tile_Check_Roads / Tile_Check_Railroads (11_movement.md section 4.2)
+			// but never rewrites them from the owner's technology. Capture them
+			// before the overlay clear below, so a city that arrives through a
+			// save keeps whatever the save carried even when its owner cannot use
+			// it yet - the gate, not the overlay, decides participation.
+			bool hadRailroad = HasRawRailroadOverlay();
 
 			// remove stuff like a forest, jungle etc (whatever can be cleared by a worker action), but not hills/mountains etc
 			if (this.overlayTerrainType.allowedFoliageAction != TerrainType.Civ3FoliageAction.None)
@@ -138,13 +144,39 @@ namespace C7GameData {
 
 			overlays.Clear();
 
-			// Auto connect cities to adjacent road/railroad network
-			TryAddRoad(this, hasRoad, hasRailroad);
-			TryAddRailroad(this, hasRailroad);
+			// Founding a city sets the tile's road flag, and sets its railroad
+			// flag too when the city's owner knows the rules' railroad
+			// technology; the original ORs the bits, so a railroad flag that was
+			// already there survives either way (0x4ae2a0: the terrain
+			// Tile_get_road_bonus test at 0x4ae651, the rules field +0x218 read
+			// at 0x4ae66b, and Set_Tile_Flags at 0x4ae6e1 with 1 for road and 3
+			// for road+railroad). Tile_get_road_bonus reads the terrain's
+			// RoadsBonus (+0x54), which is non-zero for every terrain a city can
+			// be founded on in the shipped rules, so the road flag is always set.
+			//
+			// The road is added without consulting the road technology: the
+			// original never checks it here, and a rules set that requires one
+			// still gates the tile at query time through CityRoadRequiredTech.
+			if (hadRailroad || OwnerKnows(CityRailroadRequiredTech)) {
+				AddImprovement(RAILROAD);
+			} else {
+				AddImprovement(ROAD);
+			}
 
 			// Somehow in the base game, craters persist when a city is built on top.
 			// I choose to implement this differently here,
 			// where ruins are cleared when the city is built
+		}
+
+		// Adds the named terrain improvement to this tile's road layer, if the
+		// rules know the improvement. Used by the city-founding path, which knows
+		// the key but not the improvement object.
+		private void AddImprovement(string key) {
+			TerrainImprovement improvement =
+				EngineStorage.gameData?.terrainImprovements?.FirstOrDefault(i => i.key == key);
+			if (improvement != null) {
+				overlays.Add(improvement);
+			}
 		}
 
 		private void DestroyCityCallback() {
@@ -380,23 +412,60 @@ namespace C7GameData {
 			return this.HasRoad() || this.HasRailroad();
 		}
 
-		public bool HasRoad() {
-			if (this.HasRailroad())
-				return true;
-
+		// Whether this tile's road overlay bit is set, without the
+		// owner-technology gate. This is the original's Plot_Check_Roads
+		// (0x5ea8f0), the raw reader the live Tile_Check_Roads falls back to. A
+		// railroad also sets the road bit (11_movement.md section 3.3), so a
+		// railroad tile answers true here.
+		private bool HasRawRoadOverlay() {
 			if (this.overlays.terrainImprovementByLayer.TryGetValue(Layer.Roads, out var value)) {
-				if (this.overlays.ImprovementAtLayer(value.layer).key == ROAD)
-					return true;
+				string key = this.overlays.ImprovementAtLayer(value.layer).key;
+				return key == ROAD || key == RAILROAD;
 			}
 			return false;
 		}
 
-		public bool HasRailroad() {
+		// Whether this tile's railroad overlay bit is set, without the
+		// owner-technology gate: the original's Plot_Check_Railroads (0x5ea8c0).
+		private bool HasRawRailroadOverlay() {
 			if (this.overlays.terrainImprovementByLayer.TryGetValue(Layer.Roads, out var value)) {
-				if (this.overlays.ImprovementAtLayer(value.layer).key == RAILROAD)
-					return true;
+				return this.overlays.ImprovementAtLayer(value.layer).key == RAILROAD;
 			}
 			return false;
+		}
+
+		// The road technology the rules require of a city or colony tile's owner
+		// before the tile counts as a road (the rules field at +0x1A4,
+		// 11_movement.md section 4.2). Null is the original's -1: no technology.
+		private ID CityRoadRequiredTech {
+			get => cityAtTile?.owner?.rules?.CityRoadRequiredTech
+				?? EngineStorage.gameData?.rules?.CityRoadRequiredTech;
+		}
+
+		// The railroad technology, the rules field at +0x218. Null is -1.
+		private ID CityRailroadRequiredTech {
+			get => cityAtTile?.owner?.rules?.CityRailroadRequiredTech
+				?? EngineStorage.gameData?.rules?.CityRailroadRequiredTech;
+		}
+
+		// Civ3's owner-technology gate for city and colony tiles
+		// (11_movement.md section 4.2): a tile that carries a city contributes
+		// its road or railroad only when its owner knows the rules technology
+		// for that improvement. The gate is skipped when the tile has no owner
+		// (the original's owner id of -1) and when the required technology is
+		// -1, because Leader_has_tech(0x561440) answers true for -1 and
+		// Player.HasTech answers true for a null id.
+		private bool OwnerKnows(ID requiredTech) {
+			Player owner = cityAtTile?.owner;
+			return owner == null || owner.HasTech(requiredTech);
+		}
+
+		public bool HasRoad() {
+			return HasRawRoadOverlay() && OwnerKnows(CityRoadRequiredTech);
+		}
+
+		public bool HasRailroad() {
+			return HasRawRailroadOverlay() && OwnerKnows(CityRailroadRequiredTech);
 		}
 
 		public bool HasIrrigation() {
