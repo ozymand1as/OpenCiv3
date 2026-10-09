@@ -1610,6 +1610,23 @@ namespace C7GameData {
 			if (prto.ClearPollution) yield return TerraformKey.ClearDamage;
 		}
 
+		// PRTO.IgnoreMovementCost is one flag byte per Civ3 terrain. A set flag
+		// means a step onto that terrain costs one movement point instead of the
+		// terrain's MovementCost, unless a road or railroad already discounted
+		// the step (11_movement.md §3.6). The shipped rules set the Sea entry on
+		// nearly every unit type, land units included, where it is inert - a land
+		// unit cannot legally enter a sea tile - so the whole array is imported
+		// and the movement code applies whatever the mod declared.
+		internal static IEnumerable<string> GetIgnoredMovementCostTerrains(PRTO prto) {
+			for (int i = 0; i < 14; i++) {
+				if (!prto.IgnoreMovementCost[i]) continue;
+
+				string terrainKey = TerrainType.KeyForCiv3TerrainId(i);
+				if (terrainKey != null)
+					yield return terrainKey;
+			}
+		}
+
 		private static bool IsUnproducible(PRTO prto) {
 			int[] availableTo = prto.AvailableTo.GetAvailableCivIndexes().ToArray();
 
@@ -1681,6 +1698,7 @@ namespace C7GameData {
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
 				prototype.aiStrategies.UnionWith(GetUnitAIStrategies(prto));
+				prototype.ignoreMovementCost.UnionWith(GetIgnoredMovementCostTerrains(prto));
 
 				prototype.unproducible = IsUnproducible(prto);
 

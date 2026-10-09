@@ -87,6 +87,14 @@ namespace C7GameData.Save {
 		// reason as the flags above; the shipped rules put exactly one bit here.
 		public HashSet<AIStrategy> aiStrategies = [];
 
+		// The terrain types this unit type ignores the movement cost of (the
+		// BIQ's PRTO.IgnoreMovementCost, one flag byte per Civ3 terrain). A set
+		// flag means a step onto that terrain costs one movement point instead
+		// of the terrain's MovementCost, after the road and railroad discounts
+		// have been ruled out (11_movement.md §3.6). Stored as terrain keys,
+		// like TerrainType.impassableTo, so a mod's terrain set is honoured.
+		public HashSet<string> ignoreMovementCost = [];
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];
@@ -105,6 +113,8 @@ namespace C7GameData.Save {
 			(proto.name, proto.art, proto.shieldCost, proto.populationCost, proto.unproducible,
 			 proto.attack, proto.defense, proto.bombard, proto.bombardRange, proto.rateOfFire, proto.movement,
 			 proto.capacity, proto.hpBonus);
+
+			ignoreMovementCost = new HashSet<string>(proto.ignoreMovementCost);
 
 			if (proto.requiredTech != null)
 				requiredTech = proto.requiredTech.id;

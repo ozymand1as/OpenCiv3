@@ -88,42 +88,49 @@ namespace C7GameData {
 			return new TilePath(destination, new Queue<Tile>());
 		}
 
-		public static float GetMovementCost(Player player, Tile from, TileDirection dir, Tile newLocation) {
+		public static float GetMovementCost(Player player, Tile from, TileDirection dir, Tile newLocation, MapUnit unit = null) {
 			// If the player hasn't yet explored a tile, assume it's a generic tile
 			// and give back a generic cost, since we don't know yet what it is.
 			if (player.isHuman && !player.HasExploredTile(newLocation))
 				return 1f;
 
-			// River crossings disrupt roads, so check that first.
-			if (from.HasRiverCrossing(dir)) {
-				if (!player.CanBridgeRoads()) {
-					return newLocation.MovementCost();
+			// River crossings disrupt roads, so check that first. Foreign territory
+			// does the same without a right of passage (11_movement.md §3.4 and
+			// §3.10). Both conditions deny only the road/railroad discount: the
+			// per-terrain ignore rule below still applies when they fail.
+			bool roadDiscountAllowed = (!from.HasRiverCrossing(dir) || player.CanBridgeRoads())
+				&& Player.CanMoveFreely(player, from, newLocation);
+
+			if (roadDiscountAllowed) {
+				// Special case: if we are a water unit, traveling from the water into
+				// a city, it doesn't matter if the city is on hills or on grassland,
+				// the cost should always be 1.
+				if (from.IsWater() && newLocation.HasCity()) return 1;
+
+				// Movement costs of terrain improvements (roads and railroads). A road
+				// or railroad only discounts a step when both the source and the
+				// destination carry the improvement; when only one end does, the
+				// destination's terrain cost applies. A tile with no improvement at
+				// all - including a city tile with no road on it - yields null rather
+				// than a cost, so it cannot be mistaken for a cheap end.
+				float? fromRoadCost = from.overlays.RoadMovementCost();
+				float? toRoadCost = newLocation.overlays.RoadMovementCost();
+
+				if (fromRoadCost.HasValue && toRoadCost.HasValue) {
+					// Railroads are free and also count as roads, so the slower end
+					// determines the step: rail-to-rail is free, while rail-to-road
+					// and road-to-road cost the road improvement's movement cost.
+					return Math.Max(fromRoadCost.Value, toRoadCost.Value);
 				}
 			}
 
-			if (!Player.CanMoveFreely(player, from, newLocation)) {
-				return newLocation.MovementCost();
-			}
-
-			// Special case: if we are a water unit, traveling from the water into
-			// a city, it doesn't matter if the city is on hills or on grassland,
-			// the cost should always be 1.
-			if (from.IsWater() && newLocation.HasCity()) return 1;
-
-			// Movement costs of terrain improvements (roads and railroads). A road
-			// or railroad only discounts a step when both the source and the
-			// destination carry the improvement; when only one end does, the
-			// destination's terrain cost applies. A tile with no improvement at
-			// all - including a city tile with no road on it - yields null rather
-			// than a cost, so it cannot be mistaken for a cheap end.
-			float? fromRoadCost = from.overlays.RoadMovementCost();
-			float? toRoadCost = newLocation.overlays.RoadMovementCost();
-
-			if (fromRoadCost.HasValue && toRoadCost.HasValue) {
-				// Railroads are free and also count as roads, so the slower end
-				// determines the step: rail-to-rail is free, while rail-to-road
-				// and road-to-road cost the road improvement's movement cost.
-				return Math.Max(fromRoadCost.Value, toRoadCost.Value);
+			// Some unit types ignore the movement cost of particular terrains: the
+			// step costs one movement point instead of the terrain's MoveCost, but
+			// only when the road/railroad branch above did not already discount it
+			// (11_movement.md §3.6). This is what makes the Keshik's and the
+			// Chasqui Scout's hill and mountain steps cheap.
+			if (unit != null && unit.unitType.IgnoresMovementCostOf(newLocation.overlayTerrainType)) {
+				return 1f;
 			}
 
 			return newLocation.MovementCost(); // terrain movement cost

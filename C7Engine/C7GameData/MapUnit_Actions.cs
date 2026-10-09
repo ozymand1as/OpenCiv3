@@ -286,7 +286,7 @@ public partial class MapUnit {
 		}
 
 		facingDirection = dir;
-		float movementCost = TilePath.GetMovementCost(this.owner, location, dir, newLoc);
+		float movementCost = TilePath.GetMovementCost(this.owner, location, dir, newLoc, this);
 
 		// Leave old tile
 		if (!location.unitsOnTile.Remove(this))
