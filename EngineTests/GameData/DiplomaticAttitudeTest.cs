@@ -54,8 +54,8 @@ public class DiplomaticAttitudeTest {
 		return from.playerRelationships[to.id];
 	}
 
-	private static int Score(Player a, Player b, C7GameData.GameData gd, Player halvingException = null) {
-		return DiplomaticAttitude.HostilityScore(a, b, gd, halvingException);
+	private static int Score(Player a, Player b, C7GameData.GameData gd, bool suppressStrengthHalving = false) {
+		return DiplomaticAttitude.HostilityScore(a, b, gd, suppressStrengthHalving);
 	}
 
 	// ------------------------------------------------------------------
@@ -76,7 +76,7 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(0, Relationship(a, b).reputation.field3C3);
 
 		Assert.Equal(-10, Score(a, b, gd));
-		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd));
+		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
 	}
 
 	// The seed is A's own aggression level, so the same state gives A a
@@ -231,11 +231,11 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(20 - 10 + 3, Score(a, b, gd));
 	}
 
-	// The original's third argument is NOT the third-party loop's exclusion;
-	// it only gates the strength halving. Passing a real civ therefore leaves
-	// that civ's contribution to the sum intact.
+	// The strength-halving gate is NOT the third-party loop's exclusion; it only
+	// gates the halving. Suppressing the halving therefore leaves a third civ's
+	// contribution to the sum intact.
 	[Fact]
-	public void TheHalvingExceptionDoesNotRemoveACivFromTheThirdPartySum() {
+	public void SuppressingTheHalvingDoesNotRemoveACivFromTheThirdPartySum() {
 		(C7GameData.GameData gd, Player a, Player b) = NewPair();
 		Player c = NewPlayer(gd, "C", 0, 2);
 		gd.players.Add(c);
@@ -244,7 +244,7 @@ public class DiplomaticAttitudeTest {
 		Relationship(c, b).reputation.trustCounter = 10;
 
 		Assert.Equal(-10 + 3, Score(a, b, gd));
-		Assert.Equal(-10 + 3, Score(a, b, gd, halvingException: c));
+		Assert.Equal(-10 + 3, Score(a, b, gd, suppressStrengthHalving: true));
 	}
 
 	// ------------------------------------------------------------------
@@ -309,13 +309,13 @@ public class DiplomaticAttitudeTest {
 		// +4 x 4 remembered war declarations, minus the -10 peace term: +6.
 		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
 		Assert.Equal(6, Score(a, b, gd));
-		Assert.Equal(DiplomaticMood.Angry, DiplomaticAttitude.MoodToward(a, b, gd));
+		Assert.Equal(DiplomaticMood.Angry, DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
 
 		SharedEnemy(gd, a, b, caughtSpies: 5, field14: 9, warDamageMemory: 9, warDamageThisTurn: 9);
 
 		// 3 + min(5,2) + min(9,4) + min(9,5) + min(9,1) = 15.
 		Assert.Equal(6 - 15, Score(a, b, gd));
-		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd));
+		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
 	}
 
 	// Each of the four counters keeps its own cap: with every counter at 1 the
@@ -353,6 +353,27 @@ public class DiplomaticAttitudeTest {
 
 		Assert.False(AtWar(b, p));
 		Assert.Equal(6 - 2, Score(a, b, gd));
+	}
+
+	// The original's first loop has TWO guards: the live-player mask
+	// (`p_player_bits` @ `0xa526c0`, tested at `0x440482`) and A's at-war byte
+	// (`A+0xD30+p`, `0x440490`). The engine has no bits mask, but its AtWar()
+	// refuses a defeated player (PlayerRelationship.TryGetRelationship), so a
+	// defeated civ is skipped exactly as a cleared live bit would skip it. This
+	// pins that equivalence: without it the defeated civ would still contribute
+	// its full 15-point war memory.
+	[Fact]
+	public void DefeatedCivsAreSkippedByTheSharedEnemyLoopLikeAClearedLiveBit() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+
+		Player p = SharedEnemy(gd, a, b, caughtSpies: 5, field14: 9, warDamageMemory: 9, warDamageThisTurn: 9);
+		Assert.Equal(6 - 15, Score(a, b, gd));
+
+		// The relationships still exist and A is still nominally at war with p,
+		// but p is out of the game, so the loop skips it.
+		p.defeated = true;
+		Assert.Equal(6, Score(a, b, gd));
 	}
 
 	// The loop only visits civs the OBSERVER is at war with. B being at war with
@@ -469,16 +490,17 @@ public class DiplomaticAttitudeTest {
 
 		// -20 reputation + 5 war term = -15, floored to 0.
 		Assert.Equal(0, Score(a, b, gd));
-		Assert.Equal(DiplomaticMood.Cautious, DiplomaticAttitude.MoodToward(a, b, gd));
+		Assert.Equal(DiplomaticMood.Cautious, DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
 	}
 
-	// With no halving exception - the original's third argument is 0, which is
-	// what all three call sites push - a negative score is halved when the subject
-	// is the stronger civ. Passing a real third civ (the original's non-zero
-	// argument) suppresses the halving; it does not change the third-party sum,
-	// which is a separate test.
+	// The direct callers push 0 for the gate - `0x44c95e`, `0x5186d2` and
+	// `0x51b518` - as do the indirect Leader-vtable callers at `0x4384da` and
+	// `0x447957`/`0x447972`, so a negative score is halved when the subject is the
+	// stronger civ. The indirect caller at `0x441bef` pushes 1 and suppresses the
+	// halving; that non-zero gate is what `suppressStrengthHalving: true` models.
+	// Suppression does not change the third-party sum, a separate test.
 	[Fact]
-	public void FriendlinessIsHalvedWhenTheSubjectIsStrongerAndNoCivIsExcluded() {
+	public void FriendlinessIsHalvedWhenTheSubjectIsStrongerAndTheGateIsZero() {
 		(C7GameData.GameData gd, Player a, Player b) = NewPair();
 		Player c = NewPlayer(gd, "C", 0, 2);
 		gd.players.Add(c);
@@ -489,16 +511,58 @@ public class DiplomaticAttitudeTest {
 			[b.id.ToString()] = new List<HistTurnRecord> { new() { Power = 500 } },
 		};
 
-		// -20 - 10 = -30, halved to -15 because B is the stronger civ.
+		// -20 - 10 = -30, halved to -15 because B is the stronger civ and the
+		// gate is zero; a non-zero gate leaves it at -30.
 		Assert.Equal(-15, Score(a, b, gd));
-		Assert.Equal(-30, Score(a, b, gd, halvingException: c));
+		Assert.Equal(-30, Score(a, b, gd, suppressStrengthHalving: true));
 
 		// With equal power there is no halving.
 		gd.history[b.id.ToString()][0].Power = 100;
 		Assert.Equal(-30, Score(a, b, gd));
 	}
 
-	// UNVERIFIED PROXY (spec section 11.4): the halving compares the engine's
+	// The suppressed branch is the indirect path: the Leader-vtable caller at
+	// `0x441bef` pushes 1 for the gate. The original only tests the byte for
+	// zero, so that 1 and the civ index `0x535380` forwards are the same branch.
+	// This pins that a suppressing caller is NOT halved, against the halved value
+	// in the test above.
+	[Fact]
+	public void SuppressingTheStrengthHalvingLeavesANegativeScoreUnhalved() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.observedMilitaryAggression = 10;
+		gd.history = new() {
+			[a.id.ToString()] = new List<HistTurnRecord> { new() { Power = 100 } },
+			[b.id.ToString()] = new List<HistTurnRecord> { new() { Power = 500 } },
+		};
+
+		// -10 - 10 = -20. The zero gate halves it to -10; the non-zero gate does
+		// not.
+		Assert.Equal(-10, Score(a, b, gd, suppressStrengthHalving: false));
+		Assert.Equal(-20, Score(a, b, gd, suppressStrengthHalving: true));
+	}
+
+	// The mood function relays its own second stack argument into the same gate
+	// (`0x440ade`), so a mood query can suppress the halving too: the mood caller
+	// at `0x441b72` pushes 1 and `0x535380` forwards a civ index. The bands differ
+	// here, so the relay is visible in the mood and not only in the score.
+	[Fact]
+	public void MoodTowardForwardsTheSuppressionToTheScore() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.observedMilitaryAggression = 10;
+		gd.history = new() {
+			[a.id.ToString()] = new List<HistTurnRecord> { new() { Power = 100 } },
+			[b.id.ToString()] = new List<HistTurnRecord> { new() { Power = 500 } },
+		};
+
+		// The zero gate halves -20 to -10, which is POLITE on a 100x100 map; the
+		// non-zero gate leaves -20, which is GRACIOUS.
+		Assert.Equal(DiplomaticMood.Polite,
+			DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
+		Assert.Equal(DiplomaticMood.Gracious,
+			DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: true));
+	}
+
+	// UNVERIFIED PROXY (spec section 11 item 12): the halving compares the engine's
 	// histograph `Power` value because it has no `power_rank`. This pins which
 	// entry of the history is read - the LAST one - so switching to the maximum,
 	// the first, or an average is a visible change.
@@ -520,7 +584,7 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(-15, Score(a, b, gd));
 	}
 
-	// UNVERIFIED PROXY (spec section 11.4): with no history at all a civ reads as
+	// UNVERIFIED PROXY (spec section 11 item 12): with no history at all a civ reads as
 	// 100, the same stand-in Player.cs uses for the power value.
 	[Fact]
 	public void TheStrengthHalvingFallsBackTo100WithoutHistory() {
@@ -539,7 +603,7 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(-15, Score(a, b, gd));
 	}
 
-	// UNVERIFIED PROXY (spec section 11.4): the -5 term keys off
+	// UNVERIFIED PROXY (spec section 11 item 13): the -5 term keys off
 	// `resourcesInBorders` (the tiles owned by the subject's cities, refreshed
 	// only by the tile-owner pass), not off the original's own Available_Resources
 	// table. This pins the current reading in all three states.
@@ -734,7 +798,7 @@ public class DiplomaticAttitudeTest {
 		// Two remembered war declarations: +8 on the score.
 		Relationship(a, b).reputation.warDeclarationsAgainstUs = 2;
 		Assert.Equal(-2, Score(a, b, gd));
-		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd));
+		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd, suppressStrengthHalving: false));
 
 		for (int turn = 0; turn < 2; turn++) {
 			DecayReputationMemories(a, gd, _ => 0);

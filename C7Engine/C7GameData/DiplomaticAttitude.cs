@@ -245,19 +245,39 @@ public static class DiplomaticAttitude {
 	/// terms, the relation/contact flags and third-party opinion, then the
 	/// at-war floor, the "we are weaker" halving and the map-size clamp.
 	/// </summary>
-	/// <param name="halvingException">
-	/// The original's third argument. It is read in exactly one place, `0x440673`,
-	/// as a byte: when it is zero and the score is negative and the subject is the
-	/// stronger civ, the score is halved. It is NOT the third-party loop's
-	/// exclusion: that loop's guard compares the candidate against the subject
-	/// itself (`0x44056f` tests the same stack slot whose value indexes
-	/// `A.reputations` at `0x440135`), which is `other` below. All three callers
-	/// push 0 for this argument - `0x44c95e`, `0x5186d2` and `0x51b518` - so the
-	/// halving applies to every query the shipped engine makes, and the engine's
-	/// barbarian player stands for civ 0. The argument's intended meaning in the
-	/// original source is unlabelled; spec 20 section 11 item 2 records that.
+	/// <param name="suppressStrengthHalving">
+	/// The gate on the "we are weaker" halving, made explicit. The original reads
+	/// its third argument (its second stack argument, the first being the Leader
+	/// `this`) in exactly one place, `0x440673`, as a byte: when that byte is zero
+	/// and the score is negative and the subject is the stronger civ, the score is
+	/// halved; when it is non-zero the halving is skipped. This parameter is that
+	/// byte's zero/non-zero test: `false` is a zero gate (halve), `true` is a
+	/// non-zero gate (do not halve).
+	///
+	/// It is NOT the third-party loop's exclusion: that loop's guard compares the
+	/// candidate against the subject itself (`0x44056f` tests the same stack slot
+	/// whose value indexes `A.reputations` at `0x440135`), which is `other` below.
+	///
+	/// BOTH populations of callers matter, because the attitude function is a
+	/// Leader vtable slot (slot `0x84` of the vtable at `0x66cb38`) as well as a
+	/// directly called function, so a search for a direct `call 0x440100` finds
+	/// only the first population (`PROGRESS.md` finding 48). The direct callers
+	/// push 0 - `0x44c95e`, `0x5186d2` and `0x51b518` - as do the indirect ones at
+	/// `0x4384da` and `0x447957`/`0x447972` (the per-turn `Leader_begin_turn`), so
+	/// they pass `false`. The indirect caller at `0x441bef` pushes 1 and so passes
+	/// `true`. The mood function (slot `0x88`, `0x440ad0`) relays its own second
+	/// stack argument into the same gate at `0x440ade`, so its callers decide:
+	/// `0x441b72` pushes 1 and `0x535380` forwards a civ index, while the rest
+	/// push 0. Spec 20 section 3.6 and the note under its open item 2 record both
+	/// populations.
+	///
+	/// The argument's intended meaning in the original source is still unlabelled
+	/// (spec 20 section 11 item 2); what is measured is only its zero/non-zero
+	/// test, which is all this parameter models. The old model used the barbarian
+	/// `Player` as a sentinel for "gate zero", which conflated "no argument given"
+	/// with "do not halve" and could not express a suppressing caller at all.
 	/// </param>
-	public static int HostilityScore(Player self, Player other, GameData gameData, Player halvingException = null) {
+	public static int HostilityScore(Player self, Player other, GameData gameData, bool suppressStrengthHalving) {
 		if (self == null || other == null)
 			throw new ArgumentNullException(nameof(self), "Hostility must be queried between two known players.");
 		if (self.id == other.id)
@@ -366,8 +386,12 @@ public static class DiplomaticAttitude {
 		foreach (Player p in gameData.players) {
 			if (p == null || p.isBarbarians || p.id == self.id)
 				continue;
-			// A.At_War[p], and implicitly "p is still live": the original's
-			// player-bits guard and its at-war bytes are separate tests.
+			// A.At_War[p] (`A+0xD30+p`, `0x440490`). The original's live-player
+			// mask (`p_player_bits` @ `0xa526c0`, `0x440482`) is a separate test,
+			// but the engine's AtWar() refuses a defeated player through
+			// TryGetRelationship, so a cleared live bit and a defeated civ are the
+			// same skip here. The original's loop index starts at 1, so the
+			// barbarian slot is never visited; the isBarbarians skip above is that.
 			if (!PlayerRelationship.AtWar(self, p))
 				continue;
 
@@ -413,7 +437,7 @@ public static class DiplomaticAttitude {
 		// the third argument's low byte being zero.
 		if (score < 0 && atWar)
 			score = 0;
-		if ((halvingException == null || halvingException.isBarbarians) && score < 0
+		if (!suppressStrengthHalving && score < 0
 				&& Power(other, gameData) > Power(self, gameData))
 			score /= 2;
 
@@ -443,10 +467,12 @@ public static class DiplomaticAttitude {
 
 	/// <summary>
 	/// A's mood toward B: the attitude score of <see cref="HostilityScore"/>
-	/// mapped through <see cref="MoodForScore"/>.
+	/// mapped through <see cref="MoodForScore"/>. The original's mood function
+	/// relays its own second stack argument into the attitude function's halving
+	/// gate (`0x440ade`), so `suppressStrengthHalving` reaches the score unchanged.
 	/// </summary>
-	public static DiplomaticMood MoodToward(Player self, Player other, GameData gameData, Player halvingException = null) {
-		int score = HostilityScore(self, other, gameData, halvingException);
+	public static DiplomaticMood MoodToward(Player self, Player other, GameData gameData, bool suppressStrengthHalving) {
+		int score = HostilityScore(self, other, gameData, suppressStrengthHalving);
 		return MoodForScore(score, gameData.map.numTilesWide, gameData.map.numTilesTall);
 	}
 
