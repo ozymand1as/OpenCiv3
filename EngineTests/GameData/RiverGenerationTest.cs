@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using C7Engine;
@@ -192,13 +193,180 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 		}
 	}
 
-	// A 60x60 map that is land above row 30 and ocean below it has exactly one
-	// tile with the water pattern the pass looks for, at (0,30). From there
-	// only one continuation of each step keeps clear of the river already
-	// laid, so the river is forced: a 21-step staircase north-east to (21,9),
-	// each tile marked on its north-east and south-west edges.
+	// Rule 2.9.17's divisor, read at `0x5f015c` (the counter-clockwise turn) and
+	// `0x5f01e7` (the clockwise one). The lateral counter falls with every
+	// counter-clockwise turn and rises with every clockwise one, and a sideways
+	// step is halved only when that counter already stands on the side the turn
+	// is taking the river. The counter-clockwise case used to be inverted - it
+	// returned 2 at a lateral value of 0 and 0 at -1, the opposite of the binary -
+	// so every counter-clockwise continuation was scaled the wrong way.
+	[Theory]
+	[InlineData(0, 0, 0, 0)]
+	[InlineData(0, 0, -1, 2)]
+	[InlineData(0, 0, -2, 2)]
+	[InlineData(2, 0, 0, 0)]
+	[InlineData(2, 0, 1, 2)]
+	[InlineData(2, 0, 2, 2)]
+	[InlineData(1, 0, 0, 0)]
+	[InlineData(1, 1, 0, 0)]
+	[InlineData(1, 2, 0, 2)]
+	[InlineData(1, 5, 0, 16)]
+	public void TheSidewaysDivisorDependsOnTheSideTheRiverIsTurning(int turn, int straight, int lateral, int expected) {
+		Assert.Equal(expected, MapGenerator.RiverScoreDivisor(turn, straight, lateral));
+	}
+
+	// Rule 2.9.17.1, read at `0x5f0141` and `0x5f01d1`: the pass refuses a
+	// counter-clockwise continuation once the lateral counter has run two turns
+	// that way, and a clockwise one once it has run two turns the other way. The
+	// boundary values on the permitted side are still offered, and a straight step
+	// is never refused. The port had no refusal at all before this round, so it
+	// could keep turning the same way for ever.
+	[Theory]
+	[InlineData(0, -3, true)]
+	[InlineData(0, -2, true)]
+	[InlineData(0, -1, false)]
+	[InlineData(0, 0, false)]
+	[InlineData(2, 3, true)]
+	[InlineData(2, 2, true)]
+	[InlineData(2, 1, false)]
+	[InlineData(2, 0, false)]
+	[InlineData(1, -5, false)]
+	[InlineData(1, 5, false)]
+	public void ThePassRefusesAContinuationThatKeepsTurningTheSameWay(int turn, int lateral, bool refused) {
+		Assert.Equal(refused, MapGenerator.RiverContinuationIsRefused(turn, lateral));
+	}
+
+	// What the refusal does to the ranking (rule 2.9.17.1, read at `0x5f0530`): a
+	// refused continuation scores -1, so it can never lead the step when another
+	// continuation is offered, and a step whose best score is the refusal leads
+	// nowhere; a refused continuation also earns no second or third branch, so
+	// the draw for one is not made and the pass's random stream is not advanced.
+	[Fact]
+	public void ARefusedContinuationCanNeverLeadTheStepAndEarnsNoBranch() {
+		Assert.Equal(-1, MapGenerator.RiverRefusedScore);
+
+		// Scores in the order the three continuations are offered: straight on 5,
+		// counter-clockwise refused, clockwise -4. The refusal trails the offered
+		// -4 by value, but it is the second best score, and a refusal never earns
+		// the second branch, so the pass takes the best alone and draws nothing.
+		Random rand = new Random(20240607);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 5, -1, -4 }, rand,
+			out List<int> order, out int branches));
+		Assert.Equal(new[] { 0, 1, 2 }, order);
+		Assert.Equal(1, branches);
+		Assert.Equal(new Random(20240607).Next(2), rand.Next(2));
+
+		// Here the refusal is the best score, so the step leads nowhere even
+		// though the counter-clockwise and clockwise continuations are offered.
+		Assert.False(MapGenerator.RiverContinuationPlan(2, new[] { -1, -4, -9 }, new Random(1), out _, out _));
+		Assert.False(MapGenerator.RiverContinuationPlan(2, new[] { -1, -1, -1 }, new Random(1), out _, out _));
+
+		// The draw for a second or third branch, when it is made, advances the
+		// pass's stream; a refused third does not earn one.
+		Random reference = new Random(99);
+		int firstDraw = reference.Next(2);
+		int secondDraw = reference.Next(2);
+
+		rand = new Random(99);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 80, 70, -1 }, rand, out order, out branches));
+		Assert.Equal(2, branches);
+		Assert.Equal(firstDraw, rand.Next(2));
+
+		rand = new Random(99);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 80, 70, 60 }, rand, out order, out branches));
+		Assert.InRange(branches, 2, 3);
+		Assert.Equal(secondDraw, rand.Next(2));
+	}
+
+	// A 60x70 map that is land above row 50 and ocean below it has a single
+	// land source at (0,50). Its first probe is the only one of the four that is
+	// on the map and not water, so the point handed to the tracer is half its
+	// own coordinates (rule 2.9.14), the tile at (0,24). From there only one
+	// continuation of each step keeps clear of the river already laid, so the
+	// river is forced: a 21-step staircase north-east to (21,3), each tile
+	// marked on its north-east and south-west edges.
 	[Fact]
 	public void ASyntheticCoastlineCarriesTheRiverThePassDerives() {
+		List<TerrainType> terrains = RuleTerrains();
+		GameMap m = MakeSyntheticMap(60, 70, terrains, (x, y) => y <= 50);
+
+		WorldCharacteristics wc = new() {
+			landform = WorldCharacteristics.Landform.Pangaea,
+			oceanCoverage = WorldCharacteristics.OceanCoverage.Percent_70,
+			age = WorldCharacteristics.Age.Billion_4,
+			climate = WorldCharacteristics.Climate.Normal,
+			temperature = WorldCharacteristics.Temperature.Temperate,
+			worldSize = new WorldSize() { width = 60, height = 70 },
+			terrainTypes = terrains,
+			mapSeed = 7,
+		};
+
+		Assert.Equal(1, MapGenerator.AddRivers(wc, m));
+
+		List<(int x, int y)> marked = m.tiles.Where(t => t.BordersRiver())
+			.Select(t => (t.XCoordinate, t.YCoordinate))
+			.OrderBy(p => p.YCoordinate).ToList();
+
+		List<(int x, int y)> expected = Enumerable.Range(0, 22).Select(i => (21 - i, 3 + i)).ToList();
+		Assert.Equal(expected, marked);
+
+		foreach (Tile t in m.tiles.Where(t => t.BordersRiver())) {
+			Assert.True(t.riverNortheast, $"({t.XCoordinate},{t.YCoordinate}) is missing its north-east edge");
+			Assert.True(t.riverSouthwest, $"({t.XCoordinate},{t.YCoordinate}) is missing its south-west edge");
+			Assert.False(t.riverNorth);
+			Assert.False(t.riverEast);
+			Assert.False(t.riverSoutheast);
+			Assert.False(t.riverSouth);
+			Assert.False(t.riverWest);
+			Assert.False(t.riverNorthwest);
+		}
+	}
+
+	// The probes are read a second time and the tracer is handed the sum of the
+	// positions of the probes that are not water (rule 2.9.14), so the tile a
+	// trace starts from is not always the source tile.
+	[Fact]
+	public void TheTracerStartsAtTheSumOfTheProbesThatAreNotWater() {
+		List<TerrainType> terrains = RuleTerrains();
+
+		// Source (10,10) with its first two probes land and its last two water:
+		// the land probes are the source itself and its south-west neighbour, so
+		// the sum halves back to the source, and the pattern picks the
+		// north-west diagonal.
+		GameMap twoLandFirst = MakeSyntheticMap(60, 60, terrains,
+			(x, y) => !((x == 11 && y == 11) || (x == 10 && y == 12)));
+		Tile source = twoLandFirst.tileAt(10, 10);
+		Assert.Equal(TileDirection.NORTHWEST, MapGenerator.RiverSourceDirection(twoLandFirst, source));
+		Assert.Equal(source, MapGenerator.RiverSourceStart(twoLandFirst, source, TileDirection.NORTHWEST));
+
+		// Source (10,10) with only the source and its south-east neighbour under
+		// water: the land probes are its south-west and south neighbours, and the
+		// sum halves to the south one, two rows below the source, so the trace
+		// starts there instead. The pattern picks the south-west diagonal.
+		GameMap twoWaterFirst = MakeSyntheticMap(60, 60, terrains,
+			(x, y) => !((x == 10 && y == 10) || (x == 11 && y == 11)));
+		source = twoWaterFirst.tileAt(10, 10);
+		Tile below = twoWaterFirst.tileAt(10, 12);
+		Assert.NotEqual(source, below);
+		Assert.Equal(TileDirection.SOUTHWEST, MapGenerator.RiverSourceDirection(twoWaterFirst, source));
+		Assert.Equal(below, MapGenerator.RiverSourceStart(twoWaterFirst, source, TileDirection.SOUTHWEST));
+
+		// A source whose other land probe falls off the map is handed a point at
+		// half its own coordinates, because a probe that is not on the map is
+		// not water but is not added to the sum either.
+		GameMap coast = MakeSyntheticMap(60, 70, terrains, (x, y) => y <= 50);
+		source = coast.tileAt(0, 50);
+		Tile half = MapGenerator.RiverSourceStart(coast, source, TileDirection.NORTHWEST);
+		Assert.Equal(0, half.XCoordinate);
+		Assert.Equal(24, half.YCoordinate);
+	}
+
+	// The other side of rule 2.9.14. A source whose only other land probe is off
+	// the map is handed a point at half its own coordinates, so on a map where
+	// that point leaves too little room for a 21-step run the pass keeps no
+	// river at all, even though the source itself looked like a start.
+	[Fact]
+	public void ASourceHandedAHalfPointCanFailToCarryARiver() {
 		List<TerrainType> terrains = RuleTerrains();
 		GameMap m = MakeSyntheticMap(60, 60, terrains, (x, y) => y <= 30);
 
@@ -213,25 +381,14 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 			mapSeed = 7,
 		};
 
-		Assert.Equal(1, MapGenerator.AddRivers(wc, m));
+		// The source at (0,30) is the one the pass finds, and its start tile is
+		// (0,14): half its own coordinates, because the probe that would have
+		// been added to the sum is off the map.
+		Tile source = m.tileAt(0, 30);
+		Assert.Equal(14, MapGenerator.RiverSourceStart(m, source, TileDirection.NORTHWEST).YCoordinate);
 
-		List<(int x, int y)> marked = m.tiles.Where(t => t.BordersRiver())
-			.Select(t => (t.XCoordinate, t.YCoordinate))
-			.OrderBy(p => p.YCoordinate).ToList();
-
-		List<(int x, int y)> expected = Enumerable.Range(0, 22).Select(i => (21 - i, 9 + i)).ToList();
-		Assert.Equal(expected, marked);
-
-		foreach (Tile t in m.tiles.Where(t => t.BordersRiver())) {
-			Assert.True(t.riverNortheast, $"({t.XCoordinate},{t.YCoordinate}) is missing its north-east edge");
-			Assert.True(t.riverSouthwest, $"({t.XCoordinate},{t.YCoordinate}) is missing its south-west edge");
-			Assert.False(t.riverNorth);
-			Assert.False(t.riverEast);
-			Assert.False(t.riverSoutheast);
-			Assert.False(t.riverSouth);
-			Assert.False(t.riverWest);
-			Assert.False(t.riverNorthwest);
-		}
+		Assert.Equal(0, MapGenerator.AddRivers(wc, m));
+		Assert.DoesNotContain(m.tiles, t => t.BordersRiver());
 	}
 
 	// Builds a map with the tile ordering the generator uses, so that
