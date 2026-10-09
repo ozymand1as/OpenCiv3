@@ -22,7 +22,15 @@ public class PollutionTest {
 	private const int DesertId = 0;
 	private const int PlainsId = 1;
 	private const int GrasslandId = 2;
+	private const int TundraId = 3;
+	private const int FloodPlainId = 4;
+	private const int HillsId = 5;
+	private const int MountainsId = 6;
+	private const int MarshId = 9;
+	private const int VolcanoId = 10;
 	private const int CoastId = 11;
+	private const int SeaId = 12;
+	private const int OceanId = 13;
 	private const int UnderlyingId = TerrainType.UnderlyingTerrainPollutionEffect;
 
 	private static TerrainType MakeTerrain(string key, int pollutionEffect, int food = 1, int shields = 1, int commerce = 0) {
@@ -78,6 +86,17 @@ public class PollutionTest {
 			MakeTerrain("jungle", UnderlyingId, food: 1, shields: 0, commerce: 0),
 			MakeTerrain("marsh", CoastId, food: 1, shields: 0, commerce: 0),
 			MakeTerrain("coast", -1, food: 1, shields: 0, commerce: 2),
+			// The rest of the shipped TERR.PollutionEffect column: every one of
+			// these is immune, either because the column says so (-1) or because
+			// Marsh's real target (11, the coast terrain id) is rejected by the
+			// engine's "target id below 11" test.
+			MakeTerrain("tundra", -1, food: 1, shields: 0, commerce: 0),
+			MakeTerrain("flood plain", -1, food: 3, shields: 0, commerce: 0),
+			MakeTerrain("hills", -1, food: 1, shields: 1, commerce: 0),
+			MakeTerrain("mountains", -1, food: 0, shields: 1, commerce: 0),
+			MakeTerrain("volcano", -1, food: 0, shields: 1, commerce: 0),
+			MakeTerrain("sea", -1, food: 1, shields: 0, commerce: 1),
+			MakeTerrain("ocean", -1, food: 1, shields: 0, commerce: 1),
 		};
 		gameData.terrainImprovements = new List<TerrainImprovement> {
 			new("pollution", TerrainImprovement.Layer.Pollution),
@@ -182,6 +201,31 @@ public class PollutionTest {
 		}
 
 		return gameData;
+	}
+
+	/// <summary>
+	/// Builds a map of land tiles and a city whose total pollution is exactly
+	/// <paramref name="totalPollution"/>, seeds the game RNG with
+	/// <paramref name="seed"/>, rolls once for a new polluted tile, and reports
+	/// both whether the roll produced a tile and how many polluted tiles the map
+	/// holds afterwards (so a failed roll can be told from a roll that found no
+	/// eligible tile).
+	/// </summary>
+	private static (bool spawned, int pollutedTiles) SpawnOnceWithSeedAndPollution(int seed, int totalPollution) {
+		C7GameData.GameData gameData = MakeGameData();
+		Player player = MakePlayer(gameData);
+		GameMap map = MakeMap(16, 16, (x, y) => MakeLandTile(gameData));
+		gameData.map = map;
+
+		Tile center = map.tileAt(6, 6);
+		City city = MakeCity(gameData, player, 1,
+			MakeBuilding(gameData, "Polluter", pollution: totalPollution));
+		city.location = center;
+		center.cityAtTile = city;
+
+		C7GameData.GameData.rng = new Random(seed);
+		bool spawned = Pollution.SpawnPollution(city);
+		return (spawned, map.tiles.Count(t => t.HasPollution()));
 	}
 
 	// ---- Population pollution (section 6.1) ----
@@ -341,7 +385,59 @@ public class PollutionTest {
 		Assert.DoesNotContain(center.GetTilesWithinRankDistance(2), t => t != Tile.NONE && t.HasPollution());
 	}
 
-	// ---- Tile yields (section 6.4) ----
+	[Fact]
+	public void SpawnPollution_PollutesOnlyWhenTheRollIsBelowTheCitysTotalPollution() {
+		// Civ3 rolls rand() % 100 once and pollutes when the roll is below the
+		// city's total pollution (City_update_spawn_pollution @ 0x4b2f80), so a
+		// total equal to the roll must not pollute and a total one higher must.
+		// The roll is read from the same seed the game uses, and the two cases
+		// straddle it, so the test pins the comparison rather than a tile choice.
+		const int rollSeed = 7;
+		int roll = new Random(rollSeed).Next(100);
+
+		// The premise: a roll strictly inside the 0..99 band, so neither case is
+		// vacuous (0 and 99 would make one of them trivial).
+		Assert.InRange(roll, 1, 98);
+
+		// The roll is not below the total, so nothing spawns even though every
+		// radius tile is eligible land.
+		Assert.Equal((false, 0), SpawnOnceWithSeedAndPollution(rollSeed, roll));
+
+		// The same roll is below the total, so exactly one tile is polluted.
+		Assert.Equal((true, 1), SpawnOnceWithSeedAndPollution(rollSeed, roll + 1));
+	}
+
+	[Fact]
+	public void SpawnPollution_RemarksAnAlreadyPollutedTile() {
+		// Measured against the binary (City_update_spawn_pollution @ 0x4b2f80):
+		// the candidate loop tests only the area id (the tile's word at +0x6C
+		// against the city's dword at +0x20) and the water bit, then sets overlay
+		// bit 0x40 unconditionally. An already-polluted candidate is therefore
+		// re-marked rather than skipped, so a city whose whole radius is already
+		// polluted still reports a spawn. (The spec's section 6.3 step 3 lists
+		// "not already polluted" as a fourth test; it is not in the binary.)
+		C7GameData.GameData gameData = MakeGameData();
+		Player player = MakePlayer(gameData);
+		GameMap map = MakeMap(16, 16, (x, y) => MakeLandTile(gameData));
+		gameData.map = map;
+
+		Tile center = map.tileAt(6, 6);
+		City city = MakeCity(gameData, player, 1,
+			MakeBuilding(gameData, "Guaranteed Polluter", pollution: 100));
+		city.location = center;
+		center.cityAtTile = city;
+
+		foreach (Tile t in center.GetTilesWithinRankDistance(2)) {
+			if (t != Tile.NONE && t != center) {
+				Tile.TryAddPollution(t);
+			}
+		}
+		int pollutedBefore = map.tiles.Count(t => t.HasPollution());
+		Assert.True(pollutedBefore > 0);
+
+		Assert.True(Pollution.SpawnPollution(city));
+		Assert.Equal(pollutedBefore, map.tiles.Count(t => t.HasPollution()));
+	}
 
 	[Fact]
 	public void PollutionZeroesTheTilesFoodShieldsAndCommerce() {
@@ -453,6 +549,36 @@ public class PollutionTest {
 	}
 
 	[Fact]
+	public void GlobalWarming_StripsJungleDownToItsUnderlyingTerrain() {
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("jungle", baseTerrainKey: "plains");
+		MakeCity(gameData, MakePlayer(gameData), 1, MakeBuilding(gameData, "Factory", pollution: 1));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal("plains", tile.overlayTerrainType.Key);
+		Assert.Equal("plains", tile.baseTerrainType.Key);
+	}
+
+	[Theory]
+	// Civ3 makes floor(P / 10) + 1 attempts, so at least one always happens. A
+	// one-tile map makes every attempt hit, and the shipped grassland chain
+	// (grassland -> plains -> desert, desert immune) turns the attempt count into
+	// an observable terrain: P = 9 gives one attempt and plains, P = 10 gives two
+	// and desert.
+	[InlineData(9, "plains")]
+	[InlineData(10, "desert")]
+	public void GlobalWarming_MakesFloorPOverTenPlusOneAttempts(int accumulatedPollution, string expectedTerrain) {
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("grassland");
+		MakeCity(gameData, MakePlayer(gameData), 1,
+			MakeBuilding(gameData, "Polluter", pollution: accumulatedPollution));
+		Assert.Equal(accumulatedPollution, Pollution.AccumulatedPollution(gameData));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal(expectedTerrain, tile.overlayTerrainType.Key);
+	}
+
+	[Fact]
 	public void GlobalWarming_ClearsMinesAndIrrigation() {
 		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("grassland");
 		TerrainImprovement mine = gameData.terrainImprovements.First(ti => ti.key == "mine");
@@ -462,6 +588,92 @@ public class PollutionTest {
 		Pollution.DoPerTurnGlobalWarming(gameData);
 
 		Assert.Null(tile.overlays.ImprovementAtLayer(TerrainImprovement.Layer.ResourceDevelopment));
+	}
+
+	[Theory]
+	// Global warming clears overlay bits 0xC, i.e. both mine and irrigation. In
+	// OpenCiv3's layered model they share the ResourceDevelopment layer, so a
+	// tile carries at most one of them and either one must be gone afterwards.
+	[InlineData("mine")]
+	[InlineData("irrigation")]
+	public void GlobalWarming_ClearsMineAndIrrigation(string improvementKey) {
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("grassland");
+		TerrainImprovement improvement = gameData.terrainImprovements.First(ti => ti.key == improvementKey);
+		tile.overlays.Add(improvement);
+		Assert.Equal(improvement, tile.overlays.ImprovementAtLayer(TerrainImprovement.Layer.ResourceDevelopment));
+		MakeCity(gameData, MakePlayer(gameData), 1, MakeBuilding(gameData, "Factory", pollution: 1));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Null(tile.overlays.ImprovementAtLayer(TerrainImprovement.Layer.ResourceDevelopment));
+	}
+
+	[Fact]
+	public void GlobalWarming_TellsTheLocalHumanAboutDamageToAVisibleTile() {
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("grassland");
+		Player human = MakePlayer(gameData);
+		human.isHuman = true;
+		human.tileKnowledge.knownTiles.Add(tile);
+		gameData.players.Add(human);
+		MakeCity(gameData, human, 1, MakeBuilding(gameData, "Factory", pollution: 1));
+		EngineStorage.messagesToUI.Clear();
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		MsgShowTemporaryPopup popup = Assert.Single(EngineStorage.messagesToUI.OfType<MsgShowTemporaryPopup>());
+		Assert.Equal("Global warming has damaged the land!", popup.message);
+		Assert.Equal(tile, popup.location);
+	}
+
+	[Fact]
+	public void GlobalWarming_TellsTheLocalHumanAboutALostForestOrJungle() {
+		// The engine chooses the message from the value m72_Get_Pollution_Effect
+		// returned at 0x4f4380, not from the terrain the tile ends up with: a
+		// forest or jungle whose 0xE sentinel resolved to a terrain past the four
+		// basic ones takes the forest/jungle message. Hills (Civ3 terrain 5)
+		// stands in for that resolved value here.
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame("forest", baseTerrainKey: "hills");
+		Player human = MakePlayer(gameData);
+		human.isHuman = true;
+		human.tileKnowledge.knownTiles.Add(tile);
+		gameData.players.Add(human);
+		MakeCity(gameData, human, 1, MakeBuilding(gameData, "Factory", pollution: 1));
+		EngineStorage.messagesToUI.Clear();
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal("hills", tile.overlayTerrainType.Key);
+		MsgShowTemporaryPopup popup = Assert.Single(EngineStorage.messagesToUI.OfType<MsgShowTemporaryPopup>());
+		Assert.Equal("Global warming has destroyed the forest!", popup.message);
+		Assert.Equal(tile, popup.location);
+	}
+
+	[Theory]
+	// The shipped TERR.PollutionEffect column leaves all of these immune: -1
+	// means "nothing happens", and Marsh's target (11, the coast terrain id) is
+	// rejected by the engine's "target id must be below 11" test. The three
+	// water terrains are also skipped by the land test before their column is
+	// even read.
+	[InlineData("tundra", TundraId, -1)]
+	[InlineData("flood plain", FloodPlainId, -1)]
+	[InlineData("hills", HillsId, -1)]
+	[InlineData("mountains", MountainsId, -1)]
+	[InlineData("volcano", VolcanoId, -1)]
+	[InlineData("coast", CoastId, -1)]
+	[InlineData("sea", SeaId, -1)]
+	[InlineData("ocean", OceanId, -1)]
+	[InlineData("marsh", MarshId, CoastId)]
+	public void GlobalWarming_LeavesEveryImmuneTerrainAlone(string terrainKey, int civ3TerrainId, int pollutionEffect) {
+		(C7GameData.GameData gameData, Tile tile) = MakeSingleTileGame(terrainKey);
+		// The warming target resolution depends on the terrain id each key maps
+		// to, so both halves of that mapping are pinned here.
+		Assert.Equal(civ3TerrainId, TerrainType.Civ3TerrainIdForKey(terrainKey));
+		Assert.Equal(pollutionEffect, tile.overlayTerrainType.pollutionEffect);
+		MakeCity(gameData, MakePlayer(gameData), 1, MakeBuilding(gameData, "Factory", pollution: 1));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		Assert.Equal(terrainKey, tile.overlayTerrainType.Key);
 	}
 
 	[Fact]
@@ -482,6 +694,43 @@ public class PollutionTest {
 		Pollution.DoPerTurnGlobalWarming(gameData);
 
 		Assert.Equal(GrasslandId, TerrainType.Civ3TerrainIdForKey(tile.overlayTerrainType.Key));
+	}
+
+	[Fact]
+	public void GlobalWarming_LeavesTheWholeMapUnchangedWhenThereIsNoPollution() {
+		// P = 0 still makes one attempt every turn (floor(0 / 10) + 1), but the
+		// attempt's first draw can never come in below zero, so no tile is ever
+		// chosen. This is asserted over a whole mixed map, not one tile.
+		C7GameData.GameData gameData = MakeGameData();
+		Player player = MakePlayer(gameData);
+		// Every tile here is a terrain global warming would convert (grassland to
+		// plains, plains to desert), so a pass that ignored the zero-pollution
+		// guard would change the tile it picked however the draw came out.
+		string[] keys = { "grassland", "plains" };
+		GameMap map = MakeMap(12, 12, (x, y) => {
+			TerrainType terrain = gameData.terrainTypes.First(t => t.Key == keys[(x + y) % keys.Length]);
+			return new Tile(ID.None("tile")) {
+				baseTerrainType = terrain,
+				overlayTerrainType = terrain,
+			};
+		});
+		gameData.map = map;
+
+		Tile center = map.tileAt(6, 6);
+		City city = MakeCity(gameData, player, 12);
+		city.location = center;
+		center.cityAtTile = city;
+
+		List<(Tile tile, string key)> before = map.tiles
+			.Select(t => (t, t.overlayTerrainType.Key)).ToList();
+		Assert.Equal(0, Pollution.AccumulatedPollution(gameData));
+
+		Pollution.DoPerTurnGlobalWarming(gameData);
+
+		foreach ((Tile tile, string key) in before) {
+			Assert.Equal(key, tile.overlayTerrainType.Key);
+		}
+		Assert.Equal(0, gameData.globalWarmingSeverity);
 	}
 
 	// ---- Severity indicator (section 7 step 2) ----
