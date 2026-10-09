@@ -72,9 +72,15 @@ public static class EraUtils {
 		return eras[Math.Clamp(index, 0, eras.Count - 1)].civilopediaName;
 	}
 
-	public static string GetNiceEraName(IReadOnlyList<Era> eras, string civilopediaName) {
-		Era era = GetEra(eras, civilopediaName);
-		return era != null ? era.name : $"Not A Valid Era: {civilopediaName}";
+	// The era a new game starts in: the first era the rules list. Null when the
+	// rules carry no eras - a game with no era list has no era to start in, and
+	// the caller has to say so rather than fall back to a built-in era the
+	// rules do not describe.
+	public static string GetStartingEraCivilopediaName(IReadOnlyList<Era> eras) {
+		if (eras == null || eras.Count == 0) {
+			return null;
+		}
+		return eras[0].civilopediaName;
 	}
 
 	public static string GetNextEraNameByIndex(IReadOnlyList<Era> eras, int index) {
@@ -83,16 +89,6 @@ public static class EraUtils {
 
 	public static string GetPreviousEraNameByIndex(IReadOnlyList<Era> eras, int index) {
 		return EraIndexToEra(eras, index - 1);
-	}
-
-	public static string GetNextEraNiceName(IReadOnlyList<Era> eras, string civilopediaName) {
-		int index = GetEraIndex(eras, civilopediaName);
-		return index < 0 ? GetNiceEraName(eras, civilopediaName) : GetNiceEraName(eras, EraIndexToEra(eras, index + 1));
-	}
-
-	public static string GetPreviousEraNiceName(IReadOnlyList<Era> eras, string civilopediaName) {
-		int index = GetEraIndex(eras, civilopediaName);
-		return index < 0 ? GetNiceEraName(eras, civilopediaName) : GetNiceEraName(eras, EraIndexToEra(eras, index - 1));
 	}
 
 	// The texture-registry key for an era's art. The art itself is an art

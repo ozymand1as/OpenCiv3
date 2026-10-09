@@ -156,7 +156,6 @@ public class EraModelTest : IClassFixture<SaveGameFixture> {
 		for (int i = 0; i < eras.Count; i++) {
 			Assert.Equal(i, EraUtils.GetEraIndex(eras, eras[i].civilopediaName));
 			Assert.Equal(eras[i].civilopediaName, EraUtils.EraIndexToEra(eras, i));
-			Assert.Equal(eras[i].name, EraUtils.GetNiceEraName(eras, eras[i].civilopediaName));
 		}
 
 		// The old four-era functions clamped at both ends, and so do these.
@@ -168,13 +167,56 @@ public class EraModelTest : IClassFixture<SaveGameFixture> {
 		// Next/previous stop at the ends of the list.
 		Assert.Equal(eras[0].civilopediaName, EraUtils.GetPreviousEraNameByIndex(eras, 0));
 		Assert.Equal(eras[^1].civilopediaName, EraUtils.GetNextEraNameByIndex(eras, eras.Count - 1));
-		Assert.Equal(eras[1].name, EraUtils.GetNextEraNiceName(eras, eras[0].civilopediaName));
-		Assert.Equal(eras[2].name, EraUtils.GetNextEraNiceName(eras, eras[1].civilopediaName));
-		Assert.Equal(eras[1].name, EraUtils.GetPreviousEraNiceName(eras, eras[2].civilopediaName));
 
 		// An era the rules do not describe has no index.
 		Assert.Equal(-1, EraUtils.GetEraIndex(eras, "ERAS_Not_An_Era"));
-		Assert.Equal("Not A Valid Era: ERAS_Not_An_Era", EraUtils.GetNiceEraName(eras, "ERAS_Not_An_Era"));
+	}
+
+	[Fact]
+	public void TheStartingEraIsTheFirstEraOfTheRules() {
+		// A new game starts in the head of the rules' list, whatever length
+		// that list has.
+		Assert.Equal("ERAS_Ancient_Times", EraUtils.GetStartingEraCivilopediaName(Shipped()));
+		Assert.Equal("ERA_Alpha", EraUtils.GetStartingEraCivilopediaName(SixEras()));
+
+		// A rules file with no era list has no starting era. It does not fall
+		// back to one of the shipped four, and it does not index the empty list.
+		Assert.Null(EraUtils.GetStartingEraCivilopediaName(new List<Era>()));
+		Assert.Null(EraUtils.GetStartingEraCivilopediaName(null));
+	}
+
+	[Fact]
+	public void ARulesFileWithNoErasIsRejectedWithAnActionableMessage() {
+		// A game mode whose ruleset.json has no "eras" array cannot start a
+		// game: there is no era to put the players in. Setting up a game used
+		// to index the empty list and throw ArgumentOutOfRangeException (the
+		// List indexer's "Index was out of range") from deep inside the player
+		// loop. It must name the missing block instead.
+		//
+		// The ruleset (not the BIQ) path is the one that can be era-less: a
+		// BIQ always carries four ERAS records, and the format rejects any
+		// other count with BIC_ERROR_ERAS (spec 28_formats.md).
+		SaveGame save = fixture.saveGame.Clone();
+		save.Eras.Clear();
+		save.Players.Clear();
+
+		GameSetup gameSetup = new() {
+			playerCivilization = save.Civilizations.Find(c => !c.isBarbarian),
+			difficulty = save.Difficulties.First(),
+			worldCharacteristics = new WorldCharacteristics(save),
+			opponents = [],
+			victoryConditions = new VictoryConditions(),
+		};
+
+		// The clone already has a generated map, so Populate reaches the player
+		// setup without regenerating the world.
+		InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => gameSetup.Populate(save));
+		Assert.Contains("define no eras", error.Message);
+		Assert.Contains("ruleset.json", error.Message);
+		Assert.Contains("\"eras\"", error.Message);
+
+		// The game failed before it was half-built.
+		Assert.Empty(save.Players);
 	}
 
 	[Fact]
@@ -184,7 +226,6 @@ public class EraModelTest : IClassFixture<SaveGameFixture> {
 		for (int i = 0; i < eras.Count; i++) {
 			Assert.Equal(i, EraUtils.GetEraIndex(eras, eras[i].civilopediaName));
 			Assert.Equal(eras[i].civilopediaName, EraUtils.EraIndexToEra(eras, i));
-			Assert.Equal(eras[i].name, EraUtils.GetNiceEraName(eras, eras[i].civilopediaName));
 			Assert.Equal(eras[i].artName, EraUtils.GetEraArtName(eras, eras[i].civilopediaName));
 		}
 
