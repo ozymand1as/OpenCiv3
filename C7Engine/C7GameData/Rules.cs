@@ -23,6 +23,31 @@ namespace C7GameData {
 		public const int RoadStepInternalUnits = 1;
 		public const int RailroadStepInternalUnits = 0;
 
+		// The technology a city or colony tile's owner must know before the tile
+		// participates in the road / railroad network at all (11_movement.md
+		// section 4.2). The original's Tile_Check_Roads (0x5d9ff0) and
+		// Tile_Check_Railroads (0x5da0d0) read the two fields at +0x1A4 and
+		// +0x218 of the rules object reached through 0x9c7324 and hand them to
+		// Leader_has_tech (0x561440). A city or colony tile whose owner does not
+		// know the field's technology contributes no improvement, whatever its
+		// raw overlay bit says; a tile without a city or colony uses the raw bit
+		// unconditionally.
+		//
+		// The two fields are the Required technology of the Road and Railroad
+		// terrain-improvement records - BIQ TFRM[3].Required and
+		// TFRM[4].Required, at the record stride 0x74 that puts them at
+		// rules+0x48+3*0x74 and rules+0x48+4*0x74. Measured in the shipped
+		// conquests.biq the road is -1 and the railroad is 44 (Steam Power), so
+		// the shipped road gate is inert and the shipped railroad gate is live.
+		//
+		// Both paths carry them: ImportTerraforms copies them out of the two
+		// TFRM records, and C7/Lua/civ3/ruleset.json carries
+		// cityRailroadRequiredTech. A null ID is the -1 case, because
+		// Player.HasTech(null) is true, the same answer Leader_has_tech gives
+		// for a tech id of -1.
+		public ID CityRoadRequiredTech;
+		public ID CityRailroadRequiredTech;
+
 		public int MaximumResearchTime;
 		public int MinimumResearchTime;
 

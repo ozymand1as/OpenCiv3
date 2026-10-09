@@ -1057,8 +1057,8 @@ namespace C7GameData {
 			int progress = beakers;
 
 			knownTechs.Add(tech.id);
-			// trigger callback for techs that enable improvements to redraw map
-			TechImprovementCallback(this, tech);
+
+			InvalidateTradeNetworkIfCityTileGateTech(gameData, tech);
 
 			AwardVictoryPointsForAdvance(gameData, tech);
 
@@ -1097,7 +1097,8 @@ namespace C7GameData {
 			}
 
 			knownTechs.Add(tech.id);
-			TechImprovementCallback(this, tech);
+
+			InvalidateTradeNetworkIfCityTileGateTech(gameData, tech);
 
 			AwardVictoryPointsForAdvance(gameData, tech);
 
@@ -1118,14 +1119,21 @@ namespace C7GameData {
 			}
 		}
 
-		private static void TechImprovementCallback(Player player, Tech tech) {
-			var terraforms = EngineStorage.gameData.Terraforms;
-			if (terraforms.Any(t => t.Improvement is { layer: TerrainImprovement.Layer.Roads } && t.RequiredTech == tech.id)) {
-				foreach (var city in player.cities) {
-					var cityLoc = city.location;
-					TryAddRoad(cityLoc, cityLoc.HasRoad(), cityLoc.HasRailroad());
-					TryAddRailroad(cityLoc, cityLoc.HasRailroad());
-				}
+		// Learning a technology that a city or colony tile must know before it
+		// participates in the road or railroad network can change that network,
+		// so the cached trade network is no longer valid (11_movement.md section
+		// 4.2). The shipped road gate is -1 (inert) and the shipped railroad gate
+		// does not change connectivity, because a gated-off railroad still
+		// participates as a road; a rules set that requires a road technology can
+		// make this matter.
+		private static void InvalidateTradeNetworkIfCityTileGateTech(GameData gameData, Tech tech) {
+			Rules rules = gameData?.rules;
+			if (rules == null) {
+				return;
+			}
+
+			if (rules.CityRoadRequiredTech == tech.id || rules.CityRailroadRequiredTech == tech.id) {
+				gameData.InvalidateCachedTradeNetwork();
 			}
 		}
 
