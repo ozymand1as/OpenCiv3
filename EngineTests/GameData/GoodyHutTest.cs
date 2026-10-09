@@ -840,5 +840,13 @@ public class GoodyHutTest {
 
 		Assert.Equal(GoodyHutOutcome.Maps, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Maps));
 		Assert.True(gd.mapHasBeenRevealed);
+
+		// The flag is a notice that the reveal state changed, not a reveal-all
+		// mode: the per-tile 3/4 roll still bounds what the player knows. The
+		// loader's reveal-all flag of 28_formats.md section 2.3 is a different
+		// field, because it does mean "every tile is revealed".
+		int revealed = gd.map.tiles.Count(t => player.tileKnowledge.isTileKnown(t));
+		Assert.InRange(revealed, 1, GoodyHutInteractions.MapsRevealWindow);
+		Assert.True(gd.map.tiles.Count - revealed > 0);
 	}
 }

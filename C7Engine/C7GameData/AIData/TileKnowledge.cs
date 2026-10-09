@@ -148,6 +148,28 @@ namespace C7GameData {
 			return result;
 		}
 
+		/// <summary>
+		/// Reveal every tile of the map to this player at once.
+		///
+		/// This is the engine's form of Civ3's reveal-all pass: when
+		/// Map_process_after_placing is called with a non-zero argument it walks
+		/// every tile and calls Leader_reveal_tile for each player whose liveness
+		/// bit is set (28_formats.md section 3.2). A scenario whose own file
+		/// predates per-tile reveal tracking is loaded that way (section 2.3), so
+		/// every tile becomes known, including tiles no unit has ever seen. That
+		/// is what makes it different from AddTilesToKnown, which only marks what
+		/// a unit can currently see.
+		/// </summary>
+		public void RevealAllTiles(GameMap map) {
+			knownTiles.UnionWith(map.tiles);
+
+			// A border tile is an unknown tile next to a known one. With every
+			// tile known there are none left.
+			borderTiles.Clear();
+
+			RecomputeActiveTiles();
+		}
+
 		// neighboring tiles should not be added when loading tile knowledge
 		// from a .sav file
 		internal bool AddTileToKnown(Tile unitLocation) {

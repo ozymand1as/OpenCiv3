@@ -83,9 +83,22 @@ namespace C7GameData {
 
 		public BarbarianInfo barbarianInfo = new BarbarianInfo();
 
-		// Set when a goody hut gives out maps ("the tribe gave us maps of
-		// their region"). Civ3 records the reveal in a global flag; OpenCiv3
-		// keeps it here for the same purpose. No consumer reads it yet.
+		// The global "the map has been revealed" flag of
+		// 22_barbarians_goody_huts.md section 5: the Maps goody-hut outcome records
+		// here that it has changed what its player can see.
+		//
+		// This is NOT the same engine field as the scenario loader's reveal-all
+		// mode of 28_formats.md section 2.3. They are two different bytes in the
+		// original: the Maps outcome writes 0x00a281c5, a map-view invalidation
+		// bit in the 0x00a281c4..c6 cluster that every reveal helper and the map
+		// view module also write, while the loader flag is BIC +0xba0, read once
+		// on the game-start path by Map_process_after_placing. They cannot be one
+		// field either: the Maps outcome reveals only the hut's neighbourhood
+		// (section 4.5), while the loader flag means "every tile is revealed".
+		//
+		// The decompiled image contains no reader of the Civ3 byte: its consumer
+		// is the map/minimap redraw, so the engine keeps the flag as the record of
+		// the reveal without deriving anything from it.
 		public bool mapHasBeenRevealed = false;
 
 		public StrengthBonus fortificationBonus;
@@ -502,6 +515,27 @@ namespace C7GameData {
 
 		public void InvalidateCachedTradeNetwork() {
 			tradeNetwork = null;
+		}
+
+		/// <summary>
+		/// Reveal every tile to every player in the game.
+		///
+		/// This is the reveal-all pass of 28_formats.md section 3.2: with a
+		/// non-zero argument Map_process_after_placing walks every tile and calls
+		/// Leader_reveal_tile for each player whose liveness bit is set, rather
+		/// than only the tiles that are already marked revealed. The scenario
+		/// loader runs it for a file that has no per-tile reveal data of its own
+		/// (section 2.3), which is what SaveGame.revealAllTilesOnLoad carries
+		/// across from the read to the game start.
+		/// </summary>
+		public void RevealAllTiles() {
+			foreach (Player player in players) {
+				// Defeated players are the ones whose liveness bit is clear.
+				if (player.defeated) {
+					continue;
+				}
+				player.tileKnowledge.RevealAllTiles(map);
+			}
 		}
 
 		// Rules taken from https://forums.civfanatics.com/threads/the-eight-laws-of-border-dynamics.106882/

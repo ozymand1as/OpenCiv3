@@ -337,9 +337,11 @@ namespace C7Engine {
 				player.tileKnowledge.AddTileToKnown(t);
 			}
 
-			// The outcome also records globally that the map has been revealed.
-			// OpenCiv3 has no consumer for the flag yet, but the original sets
-			// it, so the state is kept faithful.
+			// The outcome also records globally that the map has been revealed
+			// (gameData.mapHasBeenRevealed). That is the spec-22 section 5 flag, a
+			// notice that the reveal state changed; it is not the scenario
+			// loader's reveal-all mode, which means "every tile is revealed" and
+			// lives on SaveGame instead (28_formats.md section 2.3).
 			gameData.mapHasBeenRevealed = true;
 
 			player.tileKnowledge.RecomputeActiveTiles();
