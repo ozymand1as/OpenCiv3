@@ -522,10 +522,10 @@ public class DiplomaticAttitudeTest {
 	}
 
 	// The suppressed branch is the indirect path: the Leader-vtable caller at
-	// `0x441bef` pushes 1 for the gate. The original only tests the byte for
-	// zero, so that 1 and the civ index `0x535380` forwards are the same branch.
-	// This pins that a suppressing caller is NOT halved, against the halved value
-	// in the test above.
+	// `0x441bef` pushes 1 for the gate, one of the two genuinely suppressing sites
+	// (`0x441b72` is the other). The original only tests the byte for zero, so a 1
+	// and a 0 gate are opposite branches. This pins that a suppressing caller is
+	// NOT halved, against the halved value in the test above.
 	[Fact]
 	public void SuppressingTheStrengthHalvingLeavesANegativeScoreUnhalved() {
 		(C7GameData.GameData gd, Player a, Player b) = NewPair();
@@ -543,8 +543,10 @@ public class DiplomaticAttitudeTest {
 
 	// The mood function relays its own second stack argument into the same gate
 	// (`0x440ade`), so a mood query can suppress the halving too: the mood caller
-	// at `0x441b72` pushes 1 and `0x535380` forwards a civ index. The bands differ
-	// here, so the relay is visible in the mood and not only in the score.
+	// at `0x441b72` pushes 1. (The mood caller at `0x535380` pushes a register
+	// cleared to zero on every path - `PROGRESS.md` finding 53 - so it halves.)
+	// The bands differ here, so the relay is visible in the mood and not only in
+	// the score.
 	[Fact]
 	public void MoodTowardForwardsTheSuppressionToTheScore() {
 		(C7GameData.GameData gd, Player a, Player b) = NewPair();

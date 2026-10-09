@@ -267,15 +267,25 @@ public static class DiplomaticAttitude {
 	/// they pass `false`. The indirect caller at `0x441bef` pushes 1 and so passes
 	/// `true`. The mood function (slot `0x88`, `0x440ad0`) relays its own second
 	/// stack argument into the same gate at `0x440ade`, so its callers decide:
-	/// `0x441b72` pushes 1 and `0x535380` forwards a civ index, while the rest
-	/// push 0. Spec 20 section 3.6 and the note under its open item 2 record both
+	/// `0x441b72` pushes 1, while the rest push 0. The mood caller at `0x535380`
+	/// was first reported as forwarding a civ index and suppressing the halving;
+	/// it in fact pushes a register that is cleared to zero before every path
+	/// reaches it (`0x534df6` writes zero, and the only cross-references to
+	/// `0x53534c` are `0x534e04` and `0x5350e9`, both after that), so it is a
+	/// gate-0 site and the halving applies there (`PROGRESS.md` finding 53). The
+	/// only genuinely suppressing sites are therefore `0x441bef` and `0x441b72`,
+	/// both pushing 1.
+	/// Spec 20 section 3.6 and the note under its open item 2 record both
 	/// populations.
 	///
 	/// The argument's intended meaning in the original source is still unlabelled
 	/// (spec 20 section 11 item 2); what is measured is only its zero/non-zero
 	/// test, which is all this parameter models. The old model used the barbarian
-	/// `Player` as a sentinel for "gate zero", which conflated "no argument given"
-	/// with "do not halve" and could not express a suppressing caller at all.
+	/// `Player` as a sentinel for "gate zero". That sentinel did work - a
+	/// non-barbarian `Player` made the guard false and suppressed the halving, and
+	/// a test predating this API asserted exactly that - but its default
+	/// conflated "no exception supplied" with "halve", a silent default that a
+	/// required parameter removes.
 	/// </param>
 	public static int HostilityScore(Player self, Player other, GameData gameData, bool suppressStrengthHalving) {
 		if (self == null || other == null)
