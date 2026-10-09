@@ -1101,6 +1101,39 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.NotEqual(StartCoordinates(first), StartCoordinates(other));
 	}
 
+	// `Tile.NONE` is the process-global sentinel handed out for off-map
+	// coordinates. Generation used to write to it - the biome-region fill tested
+	// the tile being walked instead of its neighbour, so the sentinel slipped
+	// through that gate and the flood fill adopted it, and the body flood fill
+	// adopted it too. The consequence is that the FIRST generation in a process
+	// produced a different map from every later one, because the sentinel's own
+	// fields were the difference. The same-seed tests above therefore only
+	// passed once some other test had already generated a map in the process.
+	//
+	// This test restores the sentinel's declared initial state before generating,
+	// so it reproduces the defect no matter what ran earlier in the process, and
+	// then pins both halves: two same-seed generations agree, and generation does
+	// not touch the shared sentinel at all.
+	[Fact]
+	public void TwoGenerationsInOneProcessAgreeAndLeaveTheOffMapSentinelAlone() {
+		if (Civ3TestData.ShouldSkipCiv3DependentTests()) {
+			Skip.If(true, "Civ3 assets are not available");
+		}
+
+		// `Tile.NONE`'s declared state: continent 0 and no biome region.
+		Tile.NONE.biomeRegion = -1;
+		Tile.NONE.continent = 0;
+
+		GameMap first = MapGenerator.GenerateMap(GeneratedWorldCharacteristics(seed: 4242));
+		GameMap again = MapGenerator.GenerateMap(GeneratedWorldCharacteristics(seed: 4242));
+
+		Assert.Equal(TerrainSignature(first), TerrainSignature(again));
+		Assert.Equal(StartCoordinates(first), StartCoordinates(again));
+
+		Assert.Equal(-1, Tile.NONE.biomeRegion);
+		Assert.Equal(0, Tile.NONE.continent);
+	}
+
 	// The starts a generated map hands out: one per civ, distinct, on land, and
 	// never in a pole row.
 	[Fact]

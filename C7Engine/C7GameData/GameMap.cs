@@ -191,10 +191,15 @@ namespace C7GameData {
 					currentContinent.Add(x);
 
 					foreach (Tile n in x.neighbors.Values) {
-						if (!seen.Contains(n) && n.IsLand() == x.IsLand() && !IsLandStrip(x, n)) {
-							seen.Add(n);
-							toCheck.Enqueue(n);
+						// Never walk onto the off-map sentinel: it is shared by every
+						// map in the process, and adopting it into a body would both
+						// write the body's continent onto it and inflate the body's
+						// tile count.
+						if (n == Tile.NONE || seen.Contains(n) || n.IsLand() != x.IsLand() || IsLandStrip(x, n)) {
+							continue;
 						}
+						seen.Add(n);
+						toCheck.Enqueue(n);
 					}
 				}
 				++nextContinent;
