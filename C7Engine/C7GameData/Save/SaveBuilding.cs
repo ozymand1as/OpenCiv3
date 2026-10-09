@@ -52,6 +52,21 @@ namespace C7GameData.Save {
 			// city can use counts. The shipped Coal/Hydro/Nuclear/Solar plants
 			// carry it.
 			ReplacesOtherBuildings,
+			// The two sea-movement wonder features (11_movement.md §2.2),
+			// BLDG's wonder-feature word bits 0x8 and 0x4000 (ITW_Plus_One_
+			// Ship_Movement and ITW_Plus_Two_Ship_Movement in the C3X header).
+			// A civ that owns a wonder with one of them moves its SEA units one
+			// or two movement points further. Each flag is a boolean per civ -
+			// the original compares the count of carriers to zero - so a second
+			// 0x8 wonder adds nothing on top of the first.
+			//
+			// In the shipped conquests.biq the Great Lighthouse and Magellan's
+			// Voyage both carry 0x8 and nothing carries 0x4000 (the Civilopedia
+			// text for both wonders says "increased by one"); the shipped
+			// Conquests do use 0x4000 (the Norse Saga, the Navigation School and
+			// the Caracol Observatory, the last of which carries both bits).
+			PlusOneShipMovement,
+			PlusTwoShipMovement,
 		}
 
 		// The building's contribution to the naval power of the city that has it
