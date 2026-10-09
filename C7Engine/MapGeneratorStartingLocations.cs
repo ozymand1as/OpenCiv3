@@ -66,17 +66,17 @@ namespace C7Engine {
 		internal const int START_DRY_DIVISOR = 512;
 		internal const int START_FRESH_WATER_DIVISOR = 256;
 
-		// `FUN_005eeee0` initialises its start-order stream from the seed the
-		// driver stored in the world object (`0x5eb591`, world `+0x1ec`, the
-		// `Map_impl_generate` first argument) plus this constant plus the fourth
-		// argument (`0x5ef046`, where `lea` adds `0x16062` and the gate byte to
-		// the seed). The fourth argument is 1 on the path the port models - the
-		// driver's second argument is 0, i.e. single-player - so a single-player
-		// generation seeds with `mapSeed + 0x16062 + 1`. Every generation pass
-		// derives its own stream the same way; the state is not a word shared
-		// between passes. Matching the constant therefore makes the port's
-		// start-order stream the original's for a given seed, which the earlier
-		// placeholder `0x1337` did not.
+		// The constant the start placer adds to the world's map seed (`0x5eb591`,
+		// world `+0x1ec`, the driver's first argument) when it initialises its
+		// start-order stream (`0x5ef03d`, `0x5ef046`). The only other term in
+		// that sum is the routine's second argument, which the call site supplies
+		// as the literal 0 (`0x5eb7aa`), so a generation seeds with
+		// `mapSeed + 0x16062` whatever the driver's gate argument is - see
+		// `StartOrderStream` below. Every generation pass derives its own stream
+		// the same way, so the state is not a word shared between passes.
+		// Matching the constant therefore makes the port's start-order stream
+		// the original's for a given seed, which the earlier placeholder
+		// `0x1337` did not.
 		internal const int START_SEED_OFFSET = 0x16062;
 
 		// The driver's second argument reaches `FUN_005eeee0` twice: the call
@@ -87,6 +87,21 @@ namespace C7Engine {
 		// blocks run; the port keeps them behind this one flag rather than
 		// enabling one without the other.
 		internal const bool START_ORDERING_GATE = true;
+
+		// The start-order stream, seeded with the effective seed: the map seed
+		// plus `0x16062`, with no gate term. The start placer initialises its
+		// state (`0x5ef03d`, `0x5ef046`, stored at `0x5ef051`) from the world's
+		// seed plus this constant plus its SECOND argument, and the call site
+		// supplies the literal 0 for that argument (`0x5eb7aa`). The operand the
+		// routine reads at `0x5ef035` is that second argument, not the fourth:
+		// the argument words of the allocation calls at `0x5ef018` and
+		// `0x5ef030` are still on the stack when it is read, so every later
+		// argument slot is shifted eight bytes. The gate byte is the FOURTH
+		// argument (`0x5eb79f`) and reaches only the two ordering blocks below,
+		// never the stream.
+		internal static Civ3StartRandom StartOrderStream(WorldCharacteristics wc) {
+			return new Civ3StartRandom(wc.mapSeed + START_SEED_OFFSET);
+		}
 
 		// ------------------------------------------------------------- the spiral
 
@@ -728,8 +743,10 @@ namespace C7Engine {
 			Dictionary<int, int> bodyAreas = BodyAreas(m);
 			HashSet<Tile> cityRadiusTiles = CityRadiusTiles(m);
 
-			Civ3StartRandom rand = new(wc.mapSeed + START_SEED_OFFSET
-				+ (START_ORDERING_GATE ? 1 : 0));
+			// The stream is seeded from the map seed plus `0x16062`; the gate flag
+			// that governs the two ordering blocks below does not enter it (see
+			// `StartOrderStream`).
+			Civ3StartRandom rand = StartOrderStream(wc);
 			for (int i = 0; i < 32; ++i) {
 				rand.NextFloat();
 			}

@@ -733,13 +733,13 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 	// GAP 3 / record correction: the pinned order below is a REGRESSION PIN FOR
 	// THE PORT, not a verified Civ3 order. This unit test seeds the stream
 	// directly with 1234, whereas a real generation seeds it with
-	// `mapSeed + 0x16062 + 1` for the single-player path (`0x5ef046`, the
-	// `0x16062` constant plus the gate byte). The port now uses that formula at
-	// its call site (`MapGenerator.START_SEED_OFFSET`), but the unit test
-	// deliberately bypasses the offset so the reshuffle mechanics are pinned on
-	// their own. An earlier round recorded the offset as an arbitrary port
-	// choice and could not tell a measured order from a port one; the comment
-	// now says which this is.
+	// `mapSeed + 0x16062` (`0x5ef046`, the `0x16062` constant plus the routine's
+	// second argument, which the call site supplies as the literal 0 at
+	// `0x5eb7aa`). The port uses that formula at its call site through
+	// `MapGenerator.StartOrderStream`, but the unit test deliberately bypasses
+	// the offset so the reshuffle mechanics are pinned on their own. An earlier
+	// round recorded the offset as an arbitrary port choice and could not tell a
+	// measured order from a port one; the comment now says which this is.
 	[Fact]
 	public void TheFinalReshuffleCoversEveryStartAndLeavesOnlyTheBinariesUnusedSlotAlone() {
 		const int count = 8;
@@ -814,14 +814,55 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 	}
 
 	// GAP 3: the start-order stream must be seeded with the binary's formula,
-	// `seed + 0x16062 + the gate byte` (`0x5ef046`), not the placeholder `0x1337`
-	// the port used while the state was believed to be a word shared between
-	// passes. The `+ 1` is applied at the call site because the port models the
-	// single-player path, where the gate byte is 1.
+	// `seed + 0x16062` (`0x5ef046`). The only other term in that sum is the
+	// routine's SECOND argument, which the call site supplies as the literal 0
+	// (`0x5eb7aa`); the gate byte is the FOURTH argument and does not reach the
+	// seed. An earlier record read the operand at `0x5ef035` as the fourth
+	// argument - it is read while the two allocation argument words below it are
+	// still on the stack, which shifts every later argument slot by eight bytes -
+	// and so seeded at `seed + 0x16062 + 1`. The placeholder `0x1337` the port
+	// used while the state was believed to be a word shared between passes is
+	// also wrong; the tests that follow pin the formula itself.
 	[Fact]
 	public void TheStartStreamUsesTheBinariesSeedOffset() {
 		Assert.Equal(0x16062, MapGenerator.START_SEED_OFFSET);
 		Assert.True(MapGenerator.START_ORDERING_GATE);
+	}
+
+	// The constant alone cannot see a gate term added when the stream is built,
+	// so this pins the EFFECTIVE seed: the value the start placer actually hands
+	// its stream. The stream the start placer builds must draw exactly as a
+	// stream seeded at `mapSeed + 0x16062`, not the `mapSeed + 0x16062 + 1` the
+	// earlier record stated, which folded in the gate byte.
+	[Fact]
+	public void TheStreamIsSeededWithTheOffsetAndNoGateTerm() {
+		WorldCharacteristics wc = MakeWc(60, 8, numberOfCivs: 1, distanceBetweenCivs: 0, seed: 4242);
+
+		Civ3StartRandom corrected = new(4242 + 0x16062);
+		Civ3StartRandom placed = MapGenerator.StartOrderStream(wc);
+		for (int i = 0; i < 8; ++i) {
+			Assert.Equal(corrected.NextFloat(), placed.NextFloat());
+		}
+
+		// The two candidate seeds draw differently, which is what makes the loop
+		// above fail against a gate term rather than pass by accident.
+		Assert.NotEqual(new Civ3StartRandom(4242 + 0x16062 + 1).NextFloat(),
+			MapGenerator.StartOrderStream(wc).NextFloat());
+	}
+
+	// The observable consequence of the seed: for a fixed map and seed the
+	// search hands its starts out in a fixed order, which a gate term in the
+	// stream's seed changes. This is a REGRESSION PIN FOR THE PORT (the map is
+	// synthetic), and it covers the call site, unlike the constant test above.
+	[Fact]
+	public void TheStartOrderIsPinnedForAFixedSeed() {
+		WorldCharacteristics wc = MakeWc(60, 8, numberOfCivs: 4, distanceBetweenCivs: 6, seed: 4242);
+		GameMap m = MakeMap(60, 8, (x, y) => y == 0 || y == 7 ? Ocean() : Grassland());
+
+		List<Tile> starts = MapGenerator.PlaceStartingLocations(wc, m, out _);
+
+		Assert.Equal("8,2;31,5;21,5;53,5",
+			string.Join(";", starts.Select(t => $"{t.XCoordinate},{t.YCoordinate}")));
 	}
 
 	// ------------------------------------------- the same-body permutation
