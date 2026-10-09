@@ -58,6 +58,7 @@ namespace C7GameData {
 		private const int DefaultDominationPopulation = 66;
 		private const int DefaultOneCityCultureWin = 20000;
 		private const int DefaultAllCitiesCultureWin = 100000;
+		private const int DefaultCityEliminationCount = 1;
 
 		private ImportCiv3() {
 			save = new SaveGame();
@@ -509,6 +510,7 @@ namespace C7GameData {
 				CityConquestPopulation = game.CityConquestPopulation,
 				VictoryPointScoring = game.VictoryPointScoring,
 				CapturingSpecialUnit = game.CapturingSpecialUnit,
+				CityEliminationCount = OrDefault(game.CityEliminationCount, DefaultCityEliminationCount),
 			};
 
 			if (game.Winner > -1) {
@@ -565,6 +567,7 @@ namespace C7GameData {
 				CityConquestPopulation = game.CityConquestPopulation,
 				VictoryPointScoring = game.VictoryPointScoring,
 				CapturingSpecialUnit = game.CapturingSpecialUnit,
+				CityEliminationCount = OrDefault(game.CityEliminationCount, DefaultCityEliminationCount),
 			};
 		}
 
@@ -2222,13 +2225,23 @@ namespace C7GameData {
 		private void ImportGovernments() {
 			BiqData theBiq = biq.Govt is null ? defaultBiq : biq;
 
+			save.Governments.AddRange(BuildGovernments(theBiq, ids, save.Techs));
+		}
+
+		// Builds the government table, including each government's per-pair
+		// resistance-modifier row from the BIQ's GOVT_GOVT matrix (spec 17
+		// section 7: the government-pair term the resistance rolls add). The
+		// column order is the government list order, so callers must keep the
+		// rows in file order.
+		internal static List<Government> BuildGovernments(BiqData theBiq, ID.Factory ids, List<SaveTech> techs) {
+			List<Government> governments = new();
 			foreach (QueryCiv3.Biq.GOVT govt in theBiq.Govt) {
 				Government g = new();
 				g.id = ids.CreateID("Government");
 				g.name = govt.Name;
 				g.civilopediaEntry = govt.CivilopediaEntry;
 				if (govt.PrerequisiteTechnology != -1) {
-					g.prerequisiteTech = save.Techs[govt.PrerequisiteTechnology].id;
+					g.prerequisiteTech = techs[govt.PrerequisiteTechnology].id;
 				}
 				g.defaultType = govt.DefaultType == 1;
 				g.transitionType = govt.TransitionType == 1;
@@ -2248,8 +2261,26 @@ namespace C7GameData {
 				g.freeUnitsPerMetropolis = govt.FreeUnitsPerMetropolis;
 				g.unitCost = govt.UnitCost;
 
-				save.Governments.Add(g);
+				g.resistanceModifiers = ResistanceModifierRow(theBiq.GovtGovt, governments.Count);
+
+				governments.Add(g);
 			}
+			return governments;
+		}
+
+		// The government-pair resistance-modifier row of one government: the
+		// ResistanceModifier of every GOVT_GOVT triple in that government's
+		// row, in government-list order. An absent matrix (a file that never
+		// stored one) yields an empty row, which reads as no modifier.
+		internal static List<int> ResistanceModifierRow(QueryCiv3.Biq.GOVT_GOVT[,] pairs, int row) {
+			List<int> modifiers = new();
+			if (pairs == null || row < 0 || row >= pairs.GetLength(0)) {
+				return modifiers;
+			}
+			for (int column = 0; column < pairs.GetLength(1); column++) {
+				modifiers.Add(pairs[row, column].ResistanceModifier);
+			}
+			return modifiers;
 		}
 
 		// Imports the BIQ ESPN section, the mission rule table. The shipped
@@ -2289,6 +2320,8 @@ namespace C7GameData {
 					name = cult.Name,
 					chanceOfSuccessfulPropaganda = cult.ChanceOfSuccessfulPropaganda,
 					cultureRatioPercentage = cult.CultureRatioPercentage,
+					initialResistanceChance = cult.InitialResistanceChance,
+					continuedResistanceChance = cult.ContinuedResistanceChance,
 				});
 			}
 			return levels;

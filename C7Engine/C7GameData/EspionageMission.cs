@@ -31,5 +31,12 @@ namespace C7GameData {
 		// The lowest own:target culture percentage (100 * own / target) that
 		// reaches this level.
 		public int cultureRatioPercentage;
+
+		// The chance in one hundred that a citizen of a city captured from (or
+		// by) this level's civ begins resisting, and the chance in one hundred
+		// that a resisting citizen keeps resisting on a later turn (spec 17
+		// section 7; BIQ CULT InitialResistanceChance / ContinuedResistanceChance).
+		public int initialResistanceChance;
+		public int continuedResistanceChance;
 	}
 }

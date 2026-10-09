@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace C7GameData {
@@ -87,6 +88,21 @@ namespace C7GameData {
 		public int freeUnitsPerCity;
 		public int freeUnitsPerMetropolis;
 		public int unitCost;
+
+		// One entry per government in the game's government list, in list
+		// order: this government's resistance modifier against each other
+		// government (BIQ GOVT_GOVT ResistanceModifier; the government-pair
+		// term the resistance rolls add, spec 17 section 7). Missing entries
+		// mean no modifier, so a ruleset that predates the table plays with a
+		// zero modifier rather than failing to load.
+		public List<int> resistanceModifiers = new();
+
+		public int ResistanceModifierAgainst(int otherGovernmentIndex) {
+			if (otherGovernmentIndex < 0 || otherGovernmentIndex >= resistanceModifiers.Count) {
+				return 0;
+			}
+			return resistanceModifiers[otherGovernmentIndex];
+		}
 
 		private static void TradeBonus(Tile.Yield yield) {
 			if (yield.type == Tile.YieldType.Commerce && yield.baseYield > 0) {
