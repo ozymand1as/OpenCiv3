@@ -2,7 +2,6 @@ namespace C7Engine {
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
-	using System.Runtime.InteropServices;
 	using Serilog;
 	using C7GameData;
 	using C7GameData.Save;
@@ -194,13 +193,41 @@ namespace C7Engine {
 			return 0;
 		}
 
-		// The base-terrain food, shields and commerce the score sums over the
-		// big fat cross, plus the terrain's improvement bonuses and the resource's
-		// bonuses. The original reads the base terrain (`plot+0xc8`) rather than
-		// the tile's overlay terrain, so a forest on grassland scores as
-		// grassland.
-		internal static (int food, int shields, int commerce) BaseTerrainYields(WorldCharacteristics wc, Tile n) {
-			TerrainType terrain = n.baseTerrainType;
+		// The exact terrain a tile carries for the score. Civ3's plot keeps two
+		// four-bit terrain fields in the kind-1 word at `plot+0x2c`: bits 12..15
+		// (`plot+0xc8`) are the tile's terrain id and bits 8..11 (`plot+0xc4`)
+		// are the ground underneath it. `Plot_Set_Square_Type` @ `0x5e9940` is
+		// what writes the pair from a single terrain id: it stores the id in bits
+		// 12..15 and derives the substrate from it - grassland (2) for a forest,
+		// jungle, marsh, hill or mountain, desert (0) for a flood plain, and the
+		// id itself for desert, plains, grassland and tundra. Every reader that
+		// means "the tile's terrain" reads bits 12..15: is-water @ `0x5eaa30`,
+		// the resource candidacy test @ `0x5f33b2` and the game's own
+		// food/shield/commerce getters @ `0x5dbd80`, `0x5dbdd0` and `0x5dbe20`.
+		// In C7 that field is `overlayTerrainType` - grassland under a forest is
+		// `baseTerrainType`, and the fork's own rules (allowed resources, water,
+		// hills, and the yields in `Tile_Yield.cs`) all read the overlay. So the
+		// score's terrain is the overlay, not the base.
+		internal static TerrainType ScoreTerrain(Tile n) {
+			return n.overlayTerrainType;
+		}
+
+		// `plot+0x8c` @ `0x5eaa30` reads that same terrain field and reports true
+		// for the three water terrains 11..13, so "is water" is a test on the
+		// effective terrain as well.
+		internal static bool IsWaterTerrain(Tile n) {
+			return ScoreTerrain(n).isWater();
+		}
+
+		// The terrain's food, shields and commerce, plus its irrigation, mining
+		// and road bonuses and any resource's bonuses. Civ3 reads the tile's
+		// terrain (`plot+0xc8`), then that terrain record's first
+		// food/shield/commerce triple (`+0x64`/`+0x68`/`+0x6c`), the resource
+		// record's bonuses (`+0x50`/`+0x54`/`+0x58`) and the terrain's second
+		// triple (`+0x4c`/`+0x50`/`+0x54`, the irrigation, mining and road
+		// bonuses) - in that order, at `0x4429b1`-`0x442b46`.
+		internal static (int food, int shields, int commerce) TerrainYields(WorldCharacteristics wc, Tile n) {
+			TerrainType terrain = ScoreTerrain(n);
 			int food = terrain.baseFoodProduction
 				+ ImprovementBonus(wc, Tile.TileOverlays.IRRIGATION, terrain.Key, Tile.YieldType.Food);
 			int shields = terrain.baseShieldProduction
@@ -221,18 +248,31 @@ namespace C7Engine {
 			return n.Resource != null && n.Resource != Resource.NONE;
 		}
 
+		// The terrain record's irrigation bonus - the `+0x4c` field of the tile's
+		// terrain. `FUN_00442480` uses this, not the terrain's food, as its
+		// "may a city stand here" gate (`0x442c7c` calls the irrigation-bonus
+		// getter @ `0x5dbe70` and rejects the tile when the result is zero), and
+		// the fresh-water lake pass @ `0x5ed5d0` uses the same getter as its
+		// "irrigable ground" test. It is a rules value, so it exists on both the
+		// BIQ import path (TERR.IrrigationBonus, ImportCiv3.cs) and in
+		// C7/Lua/civ3/ruleset.json.
+		internal static int IrrigationBonus(WorldCharacteristics wc, Tile t) {
+			return ImprovementBonus(wc, Tile.TileOverlays.IRRIGATION, ScoreTerrain(t).Key, Tile.YieldType.Food);
+		}
+
 		// The food, shields and commerce one big-fat-cross tile contributes to the
-		// score: its base-terrain yields, plus the tile's improvement bonuses and
-		// resource bonuses, plus the two bonuses the score adds per tile - one food
-		// for water (`0x442a0c` adds 1 when `plot+0x8c` is set) and one shield for
-		// water on a body of more than twenty tiles (`0x442a44`) - and, for the
-		// tile itself, the "a city tile always feeds two" override at `0x442970`.
-		// `index` is the tile's position in the Civ3 spiral; 0 is the site itself.
+		// score: its terrain's yields, plus the terrain's improvement bonuses and
+		// the tile's resource bonuses, plus the two bonuses the score adds per
+		// tile - one food for water (`0x442a0c` adds 1 when `plot+0x8c` is set)
+		// and one shield for water on a body of more than twenty tiles
+		// (`0x442a44`) - and, for the tile itself, the "a city tile always feeds
+		// two" override at `0x442970`. `index` is the tile's position in the Civ3
+		// spiral; 0 is the site itself.
 		internal static (int food, int shields, int commerce) StartScoreTileYields(
 				WorldCharacteristics wc, GameMap m, Dictionary<int, int> bodyAreas, Tile n, int index) {
-			(int food, int shields, int commerce) = BaseTerrainYields(wc, n);
+			(int food, int shields, int commerce) = TerrainYields(wc, n);
 
-			if (n.IsWater()) {
+			if (IsWaterTerrain(n)) {
 				food += 1;
 				if (BodyAreaOf(bodyAreas, n) > START_FRESH_WATER_MAX_AREA) {
 					shields += 1;
@@ -243,9 +283,10 @@ namespace C7Engine {
 				food = 2;
 			}
 
-			// A bonus grassland shield, for a tile whose base terrain is grassland
-			// and whose bonus flag is set (`0x442aa8`-`0x442b12`).
-			if (n.baseTerrainType.Key == "grassland" && n.isBonusShield) {
+			// A bonus grassland shield, for a tile whose terrain is grassland and
+			// whose bonus-shield flag is set (`0x442aa8`-`0x442b12`: the terrain id
+			// is compared against 2, which is grassland).
+			if (ScoreTerrain(n).Key == "grassland" && n.isBonusShield) {
 				shields += 1;
 			}
 
@@ -285,14 +326,49 @@ namespace C7Engine {
 
 		// ------------------------------------------------- the candidate score
 
+		// The tiles that lie inside an existing city's working radius. Civ3 marks
+		// these with kind-2 bit 17 (`0x20000`): the city constructor
+		// `FUN_004ae2a0` @ `0x4ae2a0` sets it on the city's own plot and on the
+		// twenty tiles of the big fat cross around it (`0x4ae513` sets it inside
+		// that loop), and `City_raze` @ `0x4aecc0` clears it again on the tiles
+		// around the razed plot that no longer have a city within their own cross
+		// (`0x4af06f`) and re-marks the crosses of the cities that survive
+		// (`0x4af3cd`). No pass of the generator sets it, so on a generated map
+		// this set is empty; it is modelled because the same score function also
+		// serves the AI's own city siting.
+		internal static HashSet<Tile> CityRadiusTiles(GameMap m) {
+			HashSet<Tile> tiles = new();
+			foreach (Tile cityTile in m.tiles) {
+				if (!cityTile.HasCity()) {
+					continue;
+				}
+				for (int i = 0; i < 21; ++i) {
+					Tile n = TileAtSpiral(m, cityTile, i);
+					if (InBounds(n)) {
+						tiles.Add(n);
+					}
+				}
+			}
+			return tiles;
+		}
+
 		// The part of `Match_ai_eval_city_location` @ `0x442480` that does not
-		// depend on the AI-evaluation flag: the base terrain yields summed over
-		// the twenty-one big-fat-cross tiles, classified into
-		// food/shield/commerce buckets, plus the resource, river and fresh-water
-		// terms, over the constant 1000000. The flag-selected branch then divides
-		// this down; see `ScoreStartCandidate`.
+		// depend on the AI-evaluation flag: the terrain yields summed over the
+		// twenty-one big-fat-cross tiles, classified into food/shield/commerce
+		// buckets, plus the resource, river and fresh-water terms, over the
+		// constant 1000000 (`0x442bc4`). The flag-selected branch then divides this
+		// down; see `ScoreStartCandidate`.
+		//
+		// The term assignment, read off the sum at `0x442ba2`-`0x442c0e`, is
+		//   food1/3 + 2 * (great - insideACityRadius) + 1000000 + food2/2
+		//   - dead + food3NoShield + luxuryCount + resourcePoints + riverTiles
+		//   + freshWater
+		// where `insideACityRadius` counts the cross tiles carrying kind-2 bit 17
+		// and `food2/2` is a signed division. A tile carrying that bit is skipped
+		// outright (`0x4427c6` jumps to the next spiral position), so it also
+		// contributes no resource points, no river and no bucket.
 		internal static int StartScoreBucketSum(WorldCharacteristics wc, GameMap m,
-				Dictionary<int, int> bodyAreas, Tile t) {
+				Dictionary<int, int> bodyAreas, HashSet<Tile> cityRadiusTiles, Tile t) {
 			int food1 = 0;            // food == 1, with a shield or a commerce
 			int food2 = 0;            // food == 2, with a shield or a commerce
 			int food3NoShield = 0;    // food >= 3, no shield, some commerce
@@ -301,10 +377,15 @@ namespace C7Engine {
 			int resourcePoints = 0;
 			int luxuryCount = 0;
 			int riverTiles = 0;
+			int insideACityRadius = 0;
 
 			for (int i = 0; i < 21; ++i) {
 				Tile n = TileAtSpiral(m, t, i);
 				if (!InBounds(n)) {
+					continue;
+				}
+				if (cityRadiusTiles.Contains(n)) {
+					insideACityRadius++;
 					continue;
 				}
 
@@ -319,7 +400,8 @@ namespace C7Engine {
 						resourcePoints += 1;
 					} else {
 						// Four points for a luxury or strategic resource in the
-						// inner three-by-three, two in the outer ring.
+						// inner three-by-three, two in the outer ring
+						// (`0x442884`: the spiral index is compared against 9).
 						resourcePoints += i < 9 ? 4 : 2;
 						if (n.Resource.Category == ResourceCategory.LUXURY) {
 							luxuryCount++;
@@ -348,7 +430,7 @@ namespace C7Engine {
 
 			return START_CANDIDATE_BASE
 				+ food1 / 3
-				+ 2 * great
+				+ 2 * (great - insideACityRadius)
 				+ food2 / 2
 				- dead
 				+ food3NoShield
@@ -358,17 +440,67 @@ namespace C7Engine {
 				+ (HasFreshWater(t) ? 4 : 0);
 		}
 
+		// The pre-pass `Match_ai_eval_city_location` runs over the first
+		// forty-nine spiral positions before it sums anything (`0x4424f7`-
+		// `0x442653`). It rejects:
+		//  * a tile inside an existing city's working radius within the first
+		//    twenty-five spiral positions (`0x442597`, `0x44259c`); that is the
+		//    same kind-2 bit 17 the sum reads;
+		//  * more than three tiles owned by a civ among positions nine to twenty,
+		//    the outer ring of the cross less its axis tiles (`0x4425a7`-
+		//    `0x4425df` counts, `0x44262d` compares against four);
+		//  * more than nine tiles inside a city's working radius anywhere in the
+		//    cross (`0x442603`-`0x442610` counts, `0x442640` compares against
+		//    ten).
+		// During generation no tile is owned and no city exists, so no candidate
+		// trips any of the three; they are modelled because the same function
+		// serves the AI's own site evaluation.
+		internal static bool StartPrePassRejected(GameMap m, HashSet<Tile> cityRadiusTiles, Tile t) {
+			int ownedInTheOuterRing = 0;
+			int insideACityRadius = 0;
+			for (int i = 0; i < 49; ++i) {
+				Tile n = TileAtSpiral(m, t, i);
+				if (!InBounds(n)) {
+					continue;
+				}
+				if (IsOwned(n)) {
+					if (i < 25) {
+						return true;
+					}
+					if (i < 21) {
+						ownedInTheOuterRing++;
+					}
+				}
+				if (i < 21 && cityRadiusTiles.Contains(n)) {
+					insideACityRadius++;
+				}
+			}
+			return ownedInTheOuterRing > 3 || insideACityRadius > 9;
+		}
+
+		// A tile that belongs to a civ. Civ3 stores the owning civ's id in the
+		// plot's first flag byte (`plot+0x05`, read by `plot+0x98` @ `0x5eaa80`),
+		// zero meaning unclaimed; C7's equivalent is the city whose border
+		// contains the tile.
+		private static bool IsOwned(Tile n) {
+			return n.owningCity != null;
+		}
+
 		// `Map_check_city_location` @ `0x5f3160` plus the two extra rejection
-		// gates the score applies before it sums anything: the tile must allow
-		// cities, its base terrain must produce food (`FUN_005dbe70` @ `0x5dbe70`,
-		// the gate at `0x442c4a`), and at least one of its eight neighbours must
-		// be able to feed more than one citizen (`0x443146`).
+		// gates the score applies to a candidate before it divides anything: the
+		// tile must allow cities, its terrain's irrigation bonus must be non-zero
+		// (`0x442c7c` calls the irrigation-bonus getter @ `0x5dbe70` and rejects
+		// the tile when it returns zero), and at least one of its eight
+		// neighbours must be able to feed more than one citizen (`0x443146`).
+		// A neighbour's food is its terrain's food, plus one for water on a body
+		// of twenty tiles or fewer, plus the food bonus of a resource with no
+		// prerequisite.
 		internal static bool StartSiteRejected(WorldCharacteristics wc, GameMap m,
 				Dictionary<int, int> bodyAreas, Tile t) {
 			if (!InBounds(t) || !t.IsAllowCities()) {
 				return true;
 			}
-			if (t.baseTerrainType.baseFoodProduction == 0) {
+			if (IrrigationBonus(wc, t) == 0) {
 				return true;
 			}
 
@@ -377,8 +509,8 @@ namespace C7Engine {
 				if (!InBounds(n)) {
 					continue;
 				}
-				int neighbourFood = n.baseTerrainType.baseFoodProduction;
-				if (n.IsWater() && BodyAreaOf(bodyAreas, n) <= START_FRESH_WATER_MAX_AREA) {
+				int neighbourFood = ScoreTerrain(n).baseFoodProduction;
+				if (IsWaterTerrain(n) && BodyAreaOf(bodyAreas, n) <= START_FRESH_WATER_MAX_AREA) {
 					neighbourFood += 1;
 				}
 				if (HasResource(n) && n.Resource.Prerequisite == null) {
@@ -400,19 +532,22 @@ namespace C7Engine {
 		// a river or lake within reach, keeps twice as much of its score as a dry
 		// one), a river-tile term in the sum, and a food/terrain penalty chain.
 		internal static int ScoreStartCandidate(WorldCharacteristics wc, GameMap m,
-				Dictionary<int, int> bodyAreas, Tile t) {
+				Dictionary<int, int> bodyAreas, HashSet<Tile> cityRadiusTiles, Tile t) {
+			if (!InBounds(t) || StartPrePassRejected(m, cityRadiusTiles, t)) {
+				return 0;
+			}
 			if (StartSiteRejected(wc, m, bodyAreas, t)) {
 				return 0;
 			}
 
-			int score = StartScoreBucketSum(wc, m, bodyAreas, t);
+			int score = StartScoreBucketSum(wc, m, bodyAreas, cityRadiusTiles, t);
 
 			// Divide by one plus the number of water tiles among the eight
 			// neighbours (`0x442d51` divides by that count).
 			int waterNeighbours = 0;
 			for (int i = 1; i <= 8; ++i) {
 				Tile n = TileAtSpiral(m, t, i);
-				if (InBounds(n) && n.IsWater()) {
+				if (InBounds(n) && IsWaterTerrain(n)) {
 					waterNeighbours++;
 				}
 			}
@@ -435,7 +570,7 @@ namespace C7Engine {
 			int jungleNeighbours = 0;
 			for (int i = 1; i <= 20; ++i) {
 				Tile n = TileAtSpiral(m, t, i);
-				if (InBounds(n) && n.baseTerrainType.Key == "jungle") {
+				if (InBounds(n) && ScoreTerrain(n).Key == "jungle") {
 					jungleNeighbours++;
 				}
 			}
@@ -451,8 +586,8 @@ namespace C7Engine {
 					continue;
 				}
 
-				int neighbourFood = n.baseTerrainType.baseFoodProduction;
-				if (n.IsWater() && BodyAreaOf(bodyAreas, n) <= START_FRESH_WATER_MAX_AREA) {
+				int neighbourFood = ScoreTerrain(n).baseFoodProduction;
+				if (IsWaterTerrain(n) && BodyAreaOf(bodyAreas, n) <= START_FRESH_WATER_MAX_AREA) {
 					neighbourFood += 1;
 				}
 				if (HasResource(n) && n.Resource.Prerequisite == null) {
@@ -463,8 +598,8 @@ namespace C7Engine {
 				}
 				foodRichNeighbours++;
 
-				bool improved = n.baseTerrainType.baseShieldProduction >= 1;
-				if (!improved && n.baseTerrainType.Key == "grassland" && n.isBonusShield) {
+				bool improved = ScoreTerrain(n).baseShieldProduction >= 1;
+				if (!improved && ScoreTerrain(n).Key == "grassland" && n.isBonusShield) {
 					improved = true;
 				}
 				if (!improved && HasResource(n) && n.Resource.Prerequisite == null
@@ -497,13 +632,13 @@ namespace C7Engine {
 			}
 
 			// Terrain penalties for the site itself.
-			if (t.baseTerrainType.Key == "jungle") {
+			if (ScoreTerrain(t).Key == "jungle") {
 				score /= 1024;
 			}
-			if (t.baseTerrainType.Key == "desert") {
+			if (ScoreTerrain(t).Key == "desert") {
 				score /= 2048;
 			}
-			if (t.baseTerrainType.Key == "tundra") {
+			if (ScoreTerrain(t).Key == "tundra") {
 				score /= 4096;
 			}
 
@@ -535,19 +670,36 @@ namespace C7Engine {
 			}
 			int[] passes = new int[wanted];
 
-			// Score every tile, then sort by descending score. The original
-			// shuffles the tile indices before sorting, so ties are broken by the
-			// shuffle; ours is a seeded shuffle of the tile list and a stable
-			// sort, which is the same thing and is reproducible.
+			// Score every tile, then sort by descending score. The tiles inside an
+			// existing city's working radius, and the order the candidates are tried
+			// in: the original fills an index array with `0..n-1` and then, for each
+			// position from the front, swaps it with `i + rand_int(n - i)`
+			// (`0x5ef0ff`-`0x5ef14b`) - a forward Fisher-Yates, which is what
+			// `Civ3StartRandom` reproduces. Before that it draws thirty-two times
+			// while it clears the thirty-two start slots (`0x5ef06d`-`0x5ef082`), so
+			// the port draws the same number. The score array is indexed by the
+			// shuffled order, so ties in the (stable) sort keep that order.
 			Dictionary<int, int> bodyAreas = BodyAreas(m);
-			Random rand = new(wc.mapSeed + START_SEED_OFFSET);
+			HashSet<Tile> cityRadiusTiles = CityRadiusTiles(m);
+
+			Civ3StartRandom rand = new(wc.mapSeed + START_SEED_OFFSET);
+			for (int i = 0; i < 32; ++i) {
+				rand.NextFloat();
+			}
+
 			List<Tile> shuffled = new(m.tiles);
-			rand.Shuffle<Tile>(CollectionsMarshal.AsSpan(shuffled));
+			for (int i = 0; i < shuffled.Count; ++i) {
+				int j = i + rand.Next(shuffled.Count - i);
+				(shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+			}
 
 			Dictionary<Tile, int> scores = new(shuffled.Count);
 			foreach (Tile t in shuffled) {
-				scores[t] = ScoreStartCandidate(wc, m, bodyAreas, t);
+				scores[t] = ScoreStartCandidate(wc, m, bodyAreas, cityRadiusTiles, t);
 			}
+			// The original sorts the shuffled (tile, score) pairs by descending
+			// score (`0x5cdcd0`); a stable sort keeps the shuffled order for equal
+			// scores, which is what the shuffle is for.
 			List<Tile> ordered = shuffled.OrderByDescending(t => scores[t]).ToList();
 
 			// The per-body counters: `FUN_005eeee0` counts the luxury resources
@@ -581,15 +733,8 @@ namespace C7Engine {
 						continue;
 					}
 
-					// The plot "existence" screens. At generation time the map
-					// has no cities, colonies, units or features, so only the
-					// "already a start" and "is land" screens can fire; the
-					// original also tests the plot's city/building id fields and
-					// two of its flag words.
-					if (startingLocations.Contains(t)) {
-						continue;
-					}
-					if (!t.IsLand()) {
+					// The seven acceptance screens (`0x5ef2ee`-`0x5ef3b1`).
+					if (StartScreenRejects(t, startingLocations)) {
 						continue;
 					}
 
@@ -636,15 +781,75 @@ namespace C7Engine {
 				log.Error("More civs than available starting locations.");
 			}
 
-			// The original's final block reshuffles the start order so that the
-			// human player does not always get the best spot. Its shuffle keeps
-			// one slot near the middle of the list; ours is a plain seeded
-			// Fisher-Yates, which keeps the property that matters (the same seed
-			// gives the same order) without pretending to the exact placement.
-			rand.Shuffle<Tile>(CollectionsMarshal.AsSpan(startingLocations));
+			// The original's final reshuffle (`0x5ef655`-`0x5ef6de`), which the
+			// driver always asks for (it passes 1 for the flag the block tests).
+			ReshuffleStartOrder(rand, startingLocations);
 
 			passOfStart = passes[..startingLocations.Count];
 			return startingLocations;
+		}
+
+		// The seven acceptance screens `FUN_005eeee0` runs on a candidate before
+		// its body-size, per-body counter, score and spacing gates
+		// (`0x5ef2ee`-`0x5ef3b1`). Each tests something on the plot that has to
+		// come back empty:
+		//  * `plot+0x80` (`0x5ea9c0`), kind-2 bit 19: this tile is already a
+		//    starting location;
+		//  * `plot+0x8c` (`0x5eaa30`): the tile's terrain is water, so the site
+		//    must be land;
+		//  * `plot+0x3c(0)` (`0x5ea7a0`), kind-0 bit 5: the sparse-feature mark,
+		//    which the sparse pass `FUN_005f21b0` @ `0x5f21b0` sets. Civ3 runs
+		//    that pass *before* the starts (driver `0x5eb773` against `0x5eb7b0`),
+		//    so a Civ3 start is never on a goody hut or a barbarian camp. The
+		//    fork's generator places its starts before both of those, so the
+		//    screen cannot fire on a generated map here - which is a pipeline
+		//    difference the spec records;
+		//  * `plot+0x1a` (`0x5ea6c0`): the barbarian tribe id, which must be -1;
+		//  * `plot+0x1c` (`0x5ea6e0`): the city id, which must be -1 unless one
+		//    of kind-0 bits 29/30/31 is set;
+		//  * `plot+0x0c` (`0x5ea9f0`): the unit id, which must be -1;
+		//  * `plot+0x1c(0)` (`0x5ea630`), kind-0 bit 7: whose only writer in the
+		//    binary is the by-id tile-flag setter `Tile_vf73` @ `0x5e9c90`, which
+		//    the generator never calls. C7 has no counterpart for it, so it is
+		//    modelled as always clear and that is recorded as an open item.
+		internal static bool StartScreenRejects(Tile t, List<Tile> startingLocations) {
+			if (startingLocations.Contains(t)) {
+				return true;
+			}
+			if (IsWaterTerrain(t)) {
+				return true;
+			}
+			if (t.hasGoodyHut || t.hasBarbarianCamp) {
+				return true;
+			}
+			if (t.barbarianTribeId != BarbarianTribes.None) {
+				return true;
+			}
+			if (t.HasCity()) {
+				return true;
+			}
+			if (t.unitsOnTile.Count > 0) {
+				return true;
+			}
+			return false;
+		}
+
+		// The original's final reshuffle (`0x5ef655`-`0x5ef6de`). It walks the
+		// start list from position 1 to the second-to-last, swapping each
+		// position with itself or with a later one - so the last start is never
+		// touched - and at the very first step it does not draw at all but swaps
+		// position 0 with the fixed slot `(2n - 2) / 3`. That is what keeps the
+		// human player's start out of the single best site; the drawn steps
+		// continue the same stream the candidate shuffle used.
+		internal static void ReshuffleStartOrder(Civ3StartRandom rand, List<Tile> startingLocations) {
+			int n = startingLocations.Count;
+			for (int i = 1; i < n; ++i) {
+				int j = i == 1 ? (2 * n - 2) / 3 + 1 : i + rand.Next(n - i);
+				if (j != i) {
+					(startingLocations[i - 1], startingLocations[j - 1]) =
+						(startingLocations[j - 1], startingLocations[i - 1]);
+				}
+			}
 		}
 
 		// The spacing test. The original compares the wrapped distance with its
