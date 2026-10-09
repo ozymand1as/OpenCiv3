@@ -133,7 +133,34 @@ namespace C7GameData {
 				return 1f;
 			}
 
+			// A barricade in territory the mover has no right of passage through
+			// consumes all of the unit's remaining movement, whatever the step
+			// would otherwise have cost (11_movement.md §3.8). The original reads
+			// the spent-movement field and charges the remainder times the movement
+			// scale, an overshoot that leaves the remainder at zero; clamping the
+			// remainder at zero makes "charge everything left" the same result.
+			if (unit != null && BarricadeConsumesRemainingMovement(player, newLocation)) {
+				return unit.movementPoints.remaining;
+			}
+
 			return newLocation.MovementCost(); // terrain movement cost
+		}
+
+		// Whether stepping onto this tile triggers the barricade movement rule:
+		// a barricade on a tile owned by a civ that is neither the mover nor
+		// unowned, with no active right of passage for the mover (11_movement.md
+		// §3.8). A fortress on the same tile has no movement effect.
+		private static bool BarricadeConsumesRemainingMovement(Player player, Tile destination) {
+			if (!destination.HasBarricade()) {
+				return false;
+			}
+
+			Player owner = destination.OwningPlayer();
+			if (owner == null || owner == player) {
+				return false;
+			}
+
+			return !PlayerRelationship.HaveActiveRightOfPassage(player, owner);
 		}
 	}
 }
