@@ -85,6 +85,53 @@ public class CommerceBuildingsTest : IClassFixture<SaveGameFixture> {
 		Assert.False(shipped.Buildings.Find(b => b.name == "Marketplace").plus50PercentLuxury);
 	}
 
+	// The complete carrier set of every flag this feature reads, asserted on the
+	// ruleset (generated-game) path unconditionally. This is the guard against
+	// the project's recurring BIQ-only defect: the CommerceMultiplierNumerators
+	// and WealthBuildGoldIncome code paths read these flags, so a generated game
+	// whose ruleset.json is missing one of them silently loses the effect.
+	//
+	// Measured from BLDG/TECH of the shipped conquests.biq with the QueryCiv3
+	// probe (and re-measured raw):
+	//   Plus50PercentCommerce   {Marketplace, Bank, Stock Exchange}
+	//   Plus50PercentLuxury     {} - the Marketplace's Flags[0] word is 0x0410,
+	//                           i.e. bit 4 (commerce) plus bit 10
+	//                           (IncreasesLuxuryTrade, a different flag); bit 3
+	//                           (Plus50PercentLuxury) is clear. No shipped
+	//                           building sets bit 3, so the luxury counter is
+	//                           always 2 in the base rules.
+	//   Capitalization          {Wealth} (modelled as an inflow here)
+	//   DoublesWealthProduction {Economics} - TECH Flags[1] bit 4, the spec's
+	//                           0x1000 advance flag (ATF_Doubles_Effect_Of_Wealth).
+	[Fact]
+	public void TheShippedRulesetCarriesTheCompleteFlagSets() {
+		Assert.Equal(
+			new List<string> { "Bank", "Marketplace", "Stock Exchange" },
+			fixture.saveGame.Buildings
+				.Where(b => b.flags.Contains(SaveBuilding.Flag.Plus50PercentCommerce))
+				.Select(b => b.name)
+				.OrderBy(n => n)
+				.ToList());
+
+		Assert.DoesNotContain(
+			fixture.saveGame.Buildings,
+			b => b.flags.Contains(SaveBuilding.Flag.Plus50PercentLuxury));
+
+		Assert.Equal(
+			new List<string> { "Wealth" },
+			fixture.saveGame.Inflows
+				.Where(i => i.capitalization)
+				.Select(i => i.name)
+				.ToList());
+
+		Assert.Equal(
+			new List<string> { "Economics" },
+			fixture.saveGame.Techs
+				.Where(t => t.flags.Contains(SaveTech.Flag.DoublesWealthProduction))
+				.Select(t => t.Name)
+				.ToList());
+	}
+
 	// The Wealth build is modelled as an inflow rather than a building (it is
 	// skipped by ImportBuildings), so the Capitalization marker has to ride on
 	// the inflow for both the generated (ruleset.json) and BIQ-imported games.
@@ -379,6 +426,26 @@ public class CommerceBuildingsTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(1, otherCity.CurrentCommerceYield().wealth);
 	}
 
+	// The same max(1, K/2) branch, reached through ruleset.json instead of a
+	// throwaway Tech whose flag is set by hand: this is the path a generated
+	// (non-BIQ) game takes, and it fails if the ruleset gives Economics no
+	// doublesWealthProduction flag.
+	[Fact]
+	public void TheRulesetWealthTechnologyReachesTheHalvedRate() {
+		C7GameData.GameData gameData = fixture.saveGame.ToGameData(fixture.behaviors);
+		Tech economics = gameData.techs.Single(t => t.Name == "Economics");
+		Assert.True(economics.DoublesWealthProduction);
+
+		Player player = MakePlayer(gameData);
+		player.knownTechs.Add(economics.id);
+		City city = MakeCity(gameData, player, commerce: 1, shields: 4);
+		city.SetItemBeingProduced(gameData.Inflows.Find(i => i.name == "Wealth"));
+		EngineStorage.InitializeGameDataForTests(gameData);
+
+		// max(1, 4/2) = 2 shields per gold, so 4 shields give 2 gold, not 1.
+		Assert.Equal(2, city.CurrentCommerceYield().wealth);
+	}
+
 	[Fact]
 	public void WealthYieldsNothingWhenTheCityHasNoNetShields() {
 		// Civil disorder zeroes the city's useful production, so the guard on
@@ -568,8 +635,54 @@ public class CommerceBuildingsTest : IClassFixture<SaveGameFixture> {
 			ImportCiv3.LoadBuildingFlags(biq.Bldg.First(b => b.Name == "Marketplace")));
 		Assert.DoesNotContain(biq.Bldg, b => b.Plus50PercentLuxury);
 
+		// The Marketplace's 0x0410 word: bit 4 (commerce) plus bit 10
+		// (IncreasesLuxuryTrade). The luxuries are the marketplace's +1 trade
+		// per luxury, not the 0x8 Plus50PercentLuxury multiplier; that bit is
+		// clear, so no ruleset entry should set it either.
+		Assert.True(biq.Bldg.First(b => b.Name == "Marketplace").IncreasesLuxuryTrade);
+		Assert.False(biq.Bldg.First(b => b.Name == "Marketplace").Plus50PercentLuxury);
+
 		// Economics is the only technology carrying 0x1000.
 		Assert.Equal("Economics", biq.Tech.Single(t => t.DoublesWealthProduction).Name);
+	}
+
+	// Both import paths must carry the same carrier sets: the BIQ (a game
+	// imported from a scenario file) and the ruleset (a generated game). A flag
+	// added to only one path is exactly the defect this guards against.
+	[SkippableFact]
+	public void ShippedBiqAndRulesetCarryTheSameFlagSets() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), SkipReason);
+
+		BiqData biq = BiqData.LoadFile(ConquestsBiqPath);
+
+		List<string> biqCommerce = biq.Bldg
+			.Where(b => b.Plus50PercentCommerce).Select(b => b.Name).OrderBy(n => n).ToList();
+		List<string> rulesetCommerce = fixture.saveGame.Buildings
+			.Where(b => b.flags.Contains(SaveBuilding.Flag.Plus50PercentCommerce))
+			.Select(b => b.name).OrderBy(n => n).ToList();
+		Assert.Equal(biqCommerce, rulesetCommerce);
+
+		List<string> biqLuxury = biq.Bldg
+			.Where(b => b.Plus50PercentLuxury).Select(b => b.Name).OrderBy(n => n).ToList();
+		List<string> rulesetLuxury = fixture.saveGame.Buildings
+			.Where(b => b.flags.Contains(SaveBuilding.Flag.Plus50PercentLuxury))
+			.Select(b => b.name).OrderBy(n => n).ToList();
+		Assert.Equal(biqLuxury, rulesetLuxury);
+
+		// The Wealth improvement is a building in the BIQ but an inflow in the
+		// ruleset, so compare the carrier *names* rather than the object kind.
+		List<string> biqCapitalization = biq.Bldg
+			.Where(b => b.Capitalization).Select(b => b.Name).OrderBy(n => n).ToList();
+		List<string> rulesetCapitalization = fixture.saveGame.Inflows
+			.Where(i => i.capitalization).Select(i => i.name).OrderBy(n => n).ToList();
+		Assert.Equal(biqCapitalization, rulesetCapitalization);
+
+		List<string> biqWealthTechs = biq.Tech
+			.Where(t => t.DoublesWealthProduction).Select(t => t.Name).OrderBy(n => n).ToList();
+		List<string> rulesetWealthTechs = fixture.saveGame.Techs
+			.Where(t => t.flags.Contains(SaveTech.Flag.DoublesWealthProduction))
+			.Select(t => t.Name).OrderBy(n => n).ToList();
+		Assert.Equal(biqWealthTechs, rulesetWealthTechs);
 	}
 
 	[SkippableFact]

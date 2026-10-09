@@ -12432,6 +12432,9 @@
       "y": 276,
       "prerequisites": [
         "tech-32"
+      ],
+      "flags": [
+        "doublesWealthProduction"
       ]
     },
     {
