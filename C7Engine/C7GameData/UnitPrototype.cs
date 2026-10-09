@@ -150,6 +150,21 @@ namespace C7GameData {
 		// amphibious assault bonus (12_combat.md §2.1.2).
 		public bool isAmphibious => flags.Contains(SaveUnitPrototype.Flag.Amphibious);
 
+		// Wheeled units cannot enter terrain that Civ3 marks as impassable to
+		// wheeled units (mountains, jungle, marsh and volcano in the base game)
+		// unless both the tile they leave and the tile they enter carry an
+		// improvement that lifts the restriction (11_movement.md §4.1).
+		public bool wheeled {
+			get => flags.Contains(SaveUnitPrototype.Flag.Wheeled);
+			set {
+				if (value) {
+					flags.Add(SaveUnitPrototype.Flag.Wheeled);
+				} else {
+					flags.Remove(SaveUnitPrototype.Flag.Wheeled);
+				}
+			}
+		}
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];

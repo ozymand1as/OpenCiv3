@@ -27,6 +27,10 @@ namespace C7GameData.Save {
 			// from water onto land, and gets the +25% amphibious assault bonus
 			// (12_combat.md §2.1.2).
 			Amphibious,
+			// The Wheeled ability (PRTO Flags1[0] bit 0): the type may not enter
+			// terrain whose ImpassableByWheeled flag is set unless the tile carries
+			// an improvement that lifts the restriction (11_movement.md §4.1).
+			Wheeled,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The

@@ -1614,6 +1614,7 @@ namespace C7GameData {
 				if (prto.LethalLandBombardment) prototype.flags.Add(SaveUnitPrototype.Flag.LethalLandBombardment);
 				if (prto.LethalSeaBombardment) prototype.flags.Add(SaveUnitPrototype.Flag.LethalSeaBombardment);
 				if (prto.Radar) prototype.flags.Add(SaveUnitPrototype.Flag.Radar);
+				if (prto.Wheeled) prototype.flags.Add(SaveUnitPrototype.Flag.Wheeled);
 				if (prto.Army) prototype.flags.Add(SaveUnitPrototype.Flag.Army);
 				if (prto.Leader) prototype.flags.Add(SaveUnitPrototype.Flag.Leader);
 				if (prto.StartsGoldenAge) prototype.flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
