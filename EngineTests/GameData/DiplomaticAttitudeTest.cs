@@ -54,8 +54,8 @@ public class DiplomaticAttitudeTest {
 		return from.playerRelationships[to.id];
 	}
 
-	private static int Score(Player a, Player b, C7GameData.GameData gd, Player excluded = null) {
-		return DiplomaticAttitude.HostilityScore(a, b, gd, excluded);
+	private static int Score(Player a, Player b, C7GameData.GameData gd, Player halvingException = null) {
+		return DiplomaticAttitude.HostilityScore(a, b, gd, halvingException);
 	}
 
 	// ------------------------------------------------------------------
@@ -210,6 +210,43 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(-9, Score(a, b, gd));
 	}
 
+	// The third-party sum already excludes the observer (its own record is the
+	// score's own section 3.1 term, and counting it again here would double it)
+	// and the subject (a civ's opinion of itself is meaningless).
+	[Fact]
+	public void TheThirdPartyLoopExcludesTheObserverAndTheSubject() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Player c = NewPlayer(gd, "C", 0, 2);
+		gd.players.Add(c);
+		a.EnsureRelationshipExists(c);
+		b.EnsureRelationshipExists(c);
+
+		// A's own record toward B is the section 3.1 term: +4 x 5 = +20. C's own
+		// record toward B is worth min(10, 3) = 3 through the third-party sum.
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 5;
+		Relationship(c, b).reputation.trustCounter = 10;
+
+		// 20 - 10 (peace) + 3. If the observer were summed with itself as a third
+		// party this would be 15 instead.
+		Assert.Equal(20 - 10 + 3, Score(a, b, gd));
+	}
+
+	// The original's third argument is NOT the third-party loop's exclusion;
+	// it only gates the strength halving. Passing a real civ therefore leaves
+	// that civ's contribution to the sum intact.
+	[Fact]
+	public void TheHalvingExceptionDoesNotRemoveACivFromTheThirdPartySum() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Player c = NewPlayer(gd, "C", 0, 2);
+		gd.players.Add(c);
+		a.EnsureRelationshipExists(c);
+		b.EnsureRelationshipExists(c);
+		Relationship(c, b).reputation.trustCounter = 10;
+
+		Assert.Equal(-10 + 3, Score(a, b, gd));
+		Assert.Equal(-10 + 3, Score(a, b, gd, halvingException: c));
+	}
+
 	// ------------------------------------------------------------------
 	// Third-party opinion (spec section 3.4)
 	// ------------------------------------------------------------------
@@ -234,6 +271,189 @@ public class DiplomaticAttitudeTest {
 	}
 
 	// ------------------------------------------------------------------
+	// The shared-enemy loop (the original's *first* loop, spec section 3.4a)
+	// ------------------------------------------------------------------
+
+	// A third civ that is at war with both A and B, with the four war-memory
+	// counters of its own record toward B set to the given values.
+	private static Player SharedEnemy(C7GameData.GameData gd, Player a, Player b,
+			int caughtSpies, int field14, int warDamageMemory, int warDamageThisTurn) {
+		Player p = NewPlayer(gd, "P", 0, 2);
+		gd.players.Add(p);
+		a.EnsureRelationshipExists(p);
+		b.EnsureRelationshipExists(p);
+		DeclareWar(a, p, sneakAttack: false, refuseContactUntilTurn: 10);
+		DeclareWar(b, p, sneakAttack: false, refuseContactUntilTurn: 10);
+
+		DiplomaticReputation ofB = Relationship(p, b).reputation;
+		// The declaration above recorded a war declaration in P's own memory of
+		// B; clear it so only the counters under test are non-zero.
+		ofB.warDeclarationsAgainstUs = 0;
+		ofB.caughtSpies = caughtSpies;
+		ofB.field14 = field14;
+		ofB.warDamageMemory = warDamageMemory;
+		ofB.warDamageThisTurn = warDamageThisTurn;
+		return p;
+	}
+
+	// Sharing an enemy makes A *less* hostile to B. The contribution is 3 plus
+	// four counters of P's own record toward B - caught spies capped at 2,
+	// field_14 at 4, war-damage memory at 5 and this turn's war damage at 1 -
+	// so a single shared enemy can move 15 points, a full mood band on a
+	// 100x100 map. Before the shared-enemy loop was modelled this case scored +6
+	// (ANGRY); it must now score -9 (POLITE).
+	[Fact]
+	public void SharedEnemyLowersHostilityByTheClampedWarMemoryAndMovesAMoodBand() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+
+		// +4 x 4 remembered war declarations, minus the -10 peace term: +6.
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+		Assert.Equal(6, Score(a, b, gd));
+		Assert.Equal(DiplomaticMood.Angry, DiplomaticAttitude.MoodToward(a, b, gd));
+
+		SharedEnemy(gd, a, b, caughtSpies: 5, field14: 9, warDamageMemory: 9, warDamageThisTurn: 9);
+
+		// 3 + min(5,2) + min(9,4) + min(9,5) + min(9,1) = 15.
+		Assert.Equal(6 - 15, Score(a, b, gd));
+		Assert.Equal(DiplomaticMood.Polite, DiplomaticAttitude.MoodToward(a, b, gd));
+	}
+
+	// Each of the four counters keeps its own cap: with every counter at 1 the
+	// contribution is the flat 3 plus four single points, not 3 plus the caps.
+	[Fact]
+	public void SharedEnemyCountersUseTheirOwnCaps() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+
+		SharedEnemy(gd, a, b, caughtSpies: 1, field14: 1, warDamageMemory: 1, warDamageThisTurn: 1);
+
+		Assert.Equal(6 - 7, Score(a, b, gd));
+	}
+
+	// When B is NOT at war with the shared enemy, the counter branch cannot fire
+	// and B's own trade embargo against P is worth -2 instead.
+	[Fact]
+	public void SubjectEmbargoingTheSharedEnemyIsWorthTwoInstead() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+
+		Player p = NewPlayer(gd, "P", 0, 2);
+		gd.players.Add(p);
+		a.EnsureRelationshipExists(p);
+		b.EnsureRelationshipExists(p);
+		DeclareWar(a, p, sneakAttack: false, refuseContactUntilTurn: 10);
+		// B embargoes P but stays at peace with them.
+		RegisterMultiTurnDeal(b, p, new MultiTurnDeal(DealType.Embargo, DealSubType.TradeEmbargo,
+			DealDetails.Exchange, 0, null, 20, 0, p.id));
+		DiplomaticReputation ofB = Relationship(p, b).reputation;
+		ofB.caughtSpies = 9;
+		ofB.field14 = 9;
+		ofB.warDamageMemory = 9;
+		ofB.warDamageThisTurn = 9;
+
+		Assert.False(AtWar(b, p));
+		Assert.Equal(6 - 2, Score(a, b, gd));
+	}
+
+	// The loop only visits civs the OBSERVER is at war with. B being at war with
+	// P is not enough, and adding A to that war changes the score by the full
+	// clamp, which is what makes this test double-sided.
+	[Fact]
+	public void TheSharedEnemyLoopNeedsWarBetweenTheObserverAndTheEnemy() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+
+		Player p = NewPlayer(gd, "P", 0, 2);
+		gd.players.Add(p);
+		a.EnsureRelationshipExists(p);
+		b.EnsureRelationshipExists(p);
+		DeclareWar(b, p, sneakAttack: false, refuseContactUntilTurn: 10);
+		DiplomaticReputation ofB = Relationship(p, b).reputation;
+		ofB.warDeclarationsAgainstUs = 0;
+		ofB.caughtSpies = 9;
+		ofB.field14 = 9;
+		ofB.warDamageMemory = 9;
+		ofB.warDamageThisTurn = 9;
+
+		// A is at peace with P, so P is ignored by the shared-enemy loop.
+		Assert.Equal(6, Score(a, b, gd));
+
+		// A joins the war against P: the same P state now costs A 15 points.
+		DeclareWar(a, p, sneakAttack: false, refuseContactUntilTurn: 10);
+		Assert.Equal(6 - 15, Score(a, b, gd));
+	}
+
+	// The original's loop starts at civ index 1, so the barbarian slot can never
+	// contribute however many enemies are shared with it.
+	[Fact]
+	public void TheSharedEnemyLoopSkipsTheBarbarianSlot() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.warDeclarationsAgainstUs = 4;
+
+		Civilization barbarianCiv = new Civilization("Barbarians") { isBarbarian = true };
+		Player barbs = new Player {
+			id = gd.ids.CreateID("player"),
+			civilization = barbarianCiv,
+			government = new Government { name = "Despotism" },
+		};
+		gd.players.Add(barbs);
+
+		// Everyone is at war with the barbarians, so a loop without the skip
+		// would subtract the flat 3 here.
+		Assert.True(AtWar(a, barbs));
+		Assert.True(AtWar(b, barbs));
+		Assert.Equal(6, Score(a, b, gd));
+	}
+
+	// ------------------------------------------------------------------
+	// The contact grievance bits (spec section 3.3)
+	// ------------------------------------------------------------------
+
+	// `A.Contacts[B]` bit 0x10 is worth the same +5 the at-war branch gives, and
+	// bit 0x8 is worth +1 only when neither that bit nor the war bit is set.
+	[Fact]
+	public void ContactGrievanceBit16IsWorthFiveAndBit8IsWorthOne() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Assert.Equal(-10, Score(a, b, gd));
+
+		Relationship(a, b).contactGrievances = PlayerRelationship.ContactGrievanceBit8;
+		Assert.Equal(-9, Score(a, b, gd));
+
+		Relationship(a, b).contactGrievances = PlayerRelationship.ContactGrievanceBit16;
+		Assert.Equal(-5, Score(a, b, gd));
+
+		// Both bits: 0x10 takes the +5 branch, so 0x8 does not add its +1.
+		Relationship(a, b).contactGrievances =
+			PlayerRelationship.ContactGrievanceBit8 | PlayerRelationship.ContactGrievanceBit16;
+		Assert.Equal(-5, Score(a, b, gd));
+	}
+
+	// Being at war and grievance bit 0x10 share one branch, so a pair that is at
+	// war and has the bit set gains +5 once, not +10, and the +1 of bit 0x8
+	// never applies while the war is on.
+	[Fact]
+	public void TheWarBranchAndTheGrievanceBitShareTheSameFivePoints() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		DeclareWar(a, b, sneakAttack: false, refuseContactUntilTurn: 10);
+		Assert.Equal(5, Score(a, b, gd));
+
+		Relationship(a, b).contactGrievances =
+			PlayerRelationship.ContactGrievanceBit8 | PlayerRelationship.ContactGrievanceBit16;
+		Assert.Equal(5, Score(a, b, gd));
+	}
+
+	// Only the two grievance bits of an imported contact word reach the attitude
+	// model; "met" (bit 1), "mutual" (bit 2) and "plotting war" (0x20) have
+	// their own engine-side state and must not leak in as extra hostility.
+	[Fact]
+	public void OnlyTheTwoGrievanceBitsSurviveTheSavedContactWord() {
+		Assert.Equal(0x18,
+			PlayerRelationship.GrievanceBitsOfContactWord(0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x40));
+		Assert.Equal(0x8, PlayerRelationship.GrievanceBitsOfContactWord(0x3 | 0x8));
+		Assert.Equal(0, PlayerRelationship.GrievanceBitsOfContactWord(0x1 | 0x2 | 0x20 | 0x40));
+	}
+
+	// ------------------------------------------------------------------
 	// The two special cases and the halving rule (spec section 3.5)
 	// ------------------------------------------------------------------
 
@@ -252,10 +472,11 @@ public class DiplomaticAttitudeTest {
 		Assert.Equal(DiplomaticMood.Cautious, DiplomaticAttitude.MoodToward(a, b, gd));
 	}
 
-	// With no excluded civ - the original's third argument is 0, which is what
-	// every ordinary query passes - a negative score is halved when the subject
+	// With no halving exception - the original's third argument is 0, which is
+	// what all three call sites push - a negative score is halved when the subject
 	// is the stronger civ. Passing a real third civ (the original's non-zero
-	// argument) suppresses the halving.
+	// argument) suppresses the halving; it does not change the third-party sum,
+	// which is a separate test.
 	[Fact]
 	public void FriendlinessIsHalvedWhenTheSubjectIsStrongerAndNoCivIsExcluded() {
 		(C7GameData.GameData gd, Player a, Player b) = NewPair();
@@ -270,11 +491,143 @@ public class DiplomaticAttitudeTest {
 
 		// -20 - 10 = -30, halved to -15 because B is the stronger civ.
 		Assert.Equal(-15, Score(a, b, gd));
-		Assert.Equal(-30, Score(a, b, gd, excluded: c));
+		Assert.Equal(-30, Score(a, b, gd, halvingException: c));
 
 		// With equal power there is no halving.
 		gd.history[b.id.ToString()][0].Power = 100;
 		Assert.Equal(-30, Score(a, b, gd));
+	}
+
+	// UNVERIFIED PROXY (spec section 11.4): the halving compares the engine's
+	// histograph `Power` value because it has no `power_rank`. This pins which
+	// entry of the history is read - the LAST one - so switching to the maximum,
+	// the first, or an average is a visible change.
+	[Fact]
+	public void TheStrengthHalvingReadsTheLastHistographPowerEntry() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.observedMilitaryAggression = 20;
+
+		gd.history = new() {
+			[a.id.ToString()] = new List<HistTurnRecord> { new() { Power = 900 }, new() { Power = 100 } },
+			[b.id.ToString()] = new List<HistTurnRecord> { new() { Power = 500 }, new() { Power = 100 } },
+		};
+
+		// The last entries agree (100/100), so the score is not halved even
+		// though A's maximum is higher and B's earlier entry is higher.
+		Assert.Equal(-30, Score(a, b, gd));
+
+		gd.history[b.id.ToString()][1].Power = 101;
+		Assert.Equal(-15, Score(a, b, gd));
+	}
+
+	// UNVERIFIED PROXY (spec section 11.4): with no history at all a civ reads as
+	// 100, the same stand-in Player.cs uses for the power value.
+	[Fact]
+	public void TheStrengthHalvingFallsBackTo100WithoutHistory() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Relationship(a, b).reputation.observedMilitaryAggression = 20;
+
+		// Neither side has a history entry: 100 against 100, so no halving.
+		Assert.Equal(-30, Score(a, b, gd));
+
+		// B below the fallback is the weaker civ, so still no halving.
+		gd.history = new() { [b.id.ToString()] = new List<HistTurnRecord> { new() { Power = 50 } } };
+		Assert.Equal(-30, Score(a, b, gd));
+
+		// B just above the fallback is the stronger civ, so the score halves.
+		gd.history[b.id.ToString()][0].Power = 101;
+		Assert.Equal(-15, Score(a, b, gd));
+	}
+
+	// UNVERIFIED PROXY (spec section 11.4): the -5 term keys off
+	// `resourcesInBorders` (the tiles owned by the subject's cities, refreshed
+	// only by the tile-owner pass), not off the original's own Available_Resources
+	// table. This pins the current reading in all three states.
+	[Fact]
+	public void TheResourceTermReadsTheSubjectsResourcesInBorders() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Assert.Equal(-10, Score(a, b, gd));
+
+		b.resourcesInBorders = new() { [new Resource()] = new List<Tile>() };
+		Assert.Equal(-15, Score(a, b, gd));
+
+		b.resourcesInBorders = new();
+		Assert.Equal(-10, Score(a, b, gd));
+
+		b.resourcesInBorders = null;
+		Assert.Equal(-10, Score(a, b, gd));
+	}
+
+	// ------------------------------------------------------------------
+	// The seed transform (spec section 3.5)
+	// ------------------------------------------------------------------
+
+	// `Race_get_effective_aggression_level` @ 0x53a0b0: the race's own
+	// AggressionLevel plus half the game difficulty index minus a sixth of the
+	// rules' difficulty-level count, then the five-way AI Aggression band, then a
+	// clamp to -2..2. Every branch of the jump table is asserted exactly.
+	[Fact]
+	public void TheSeedTransformMatchesRaceGetEffectiveAggressionLevel() {
+		// Neutral difficulty and no rules count: the race's own level, already in
+		// range, passes through.
+		Assert.Equal(0, DiplomaticAttitude.EffectiveAggressionSeed(0, 0, 0));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 0, 0));
+		Assert.Equal(-2, DiplomaticAttitude.EffectiveAggressionSeed(-2, 0, 0));
+
+		// + trunc(difficulty / 2), - trunc(difficultyLevelCount / 6).
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 3, 0));
+		Assert.Equal(1, DiplomaticAttitude.EffectiveAggressionSeed(1, 3, 8));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(1, 4, 8));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 6, 0));
+		Assert.Equal(-1, DiplomaticAttitude.EffectiveAggressionSeed(-1, 2, 8));
+
+		// The clamp, after the difficulty shift.
+		Assert.Equal(-2, DiplomaticAttitude.EffectiveAggressionSeed(-2, 0, 8));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 7, 0));
+
+		// The AI Aggression bands: 0 and 4 replace the value outright, 1 and 3
+		// shift it and then clamp, 2 and anything above 4 leave it alone.
+		Assert.Equal(-2, DiplomaticAttitude.EffectiveAggressionSeed(2, 6, 0, 0));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(-2, 0, 0, 4));
+		Assert.Equal(-1, DiplomaticAttitude.EffectiveAggressionSeed(0, 0, 0, 1));
+		Assert.Equal(1, DiplomaticAttitude.EffectiveAggressionSeed(0, 0, 0, 3));
+		Assert.Equal(-2, DiplomaticAttitude.EffectiveAggressionSeed(-2, 0, 0, 1));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 0, 0, 3));
+		Assert.Equal(0, DiplomaticAttitude.EffectiveAggressionSeed(0, 0, 0, 2));
+		Assert.Equal(2, DiplomaticAttitude.EffectiveAggressionSeed(2, 0, 0, 5));
+
+		// The engine has no AI Aggression setting, so the default is Normal (2).
+		Assert.Equal(DiplomaticAttitude.DefaultAiAggressionSetting, 2);
+		Assert.Equal(DiplomaticAttitude.EffectiveAggressionSeed(1, 0, 0),
+			DiplomaticAttitude.EffectiveAggressionSeed(1, 0, 0, DiplomaticAttitude.DefaultAiAggressionSetting));
+	}
+
+	// The seed reads the game's difficulty and the rules' difficulty list, so a
+	// mid-list difficulty on a full ruleset shifts the score by +1 - unlike a
+	// bare test game, whose empty difficulty list and absent game difficulty read
+	// as index 0 of 0.
+	[Fact]
+	public void TheScoreSeedReadsTheGameDifficultyAndTheRulesDifficultyList() {
+		(C7GameData.GameData gd, Player a, Player b) = NewPair();
+		Assert.Empty(gd.difficulties);
+		Assert.Equal(-10, Score(a, b, gd));
+
+		for (int i = 0; i < 8; i++) {
+			gd.difficulties.Add(new Difficulty { id = gd.ids.CreateID("difficulty"), Name = $"D{i}" });
+		}
+
+		// The fifth difficulty of eight: trunc(4/2) - trunc(8/6) = +1.
+		gd.gameDifficulty = gd.difficulties[4];
+		Assert.Equal(1 - 10, Score(a, b, gd));
+
+		// The first difficulty of eight: trunc(0/2) - trunc(8/6) = -1.
+		gd.gameDifficulty = gd.difficulties[0];
+		Assert.Equal(-1 - 10, Score(a, b, gd));
+
+		// A difficulty object that is not in the list reads as index 0, so the
+		// shift is the rules-count term alone.
+		gd.gameDifficulty = new Difficulty();
+		Assert.Equal(-1 - 10, Score(a, b, gd));
 	}
 
 	// ------------------------------------------------------------------

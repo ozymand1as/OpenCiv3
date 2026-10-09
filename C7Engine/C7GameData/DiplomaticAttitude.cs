@@ -245,26 +245,35 @@ public static class DiplomaticAttitude {
 	/// terms, the relation/contact flags and third-party opinion, then the
 	/// at-war floor, the "we are weaker" halving and the map-size clamp.
 	/// </summary>
-	/// <param name="excluded">
-	/// The original's third argument: a civ id to exclude from the third-party
-	/// opinion loop, which the shipped callers pass as 0 ("no exclusion") for
-	/// every ordinary query. `null` here stands for that same case.
+	/// <param name="halvingException">
+	/// The original's third argument. It is read in exactly one place, `0x440673`,
+	/// as a byte: when it is zero and the score is negative and the subject is the
+	/// stronger civ, the score is halved. It is NOT the third-party loop's
+	/// exclusion: that loop's guard compares the candidate against the subject
+	/// itself (`0x44056f` tests the same stack slot whose value indexes
+	/// `A.reputations` at `0x440135`), which is `other` below. All three callers
+	/// push 0 for this argument - `0x44c95e`, `0x5186d2` and `0x51b518` - so the
+	/// halving applies to every query the shipped engine makes, and the engine's
+	/// barbarian player stands for civ 0. The argument's intended meaning in the
+	/// original source is unlabelled; spec 20 section 11 item 2 records that.
 	/// </param>
-	public static int HostilityScore(Player self, Player other, GameData gameData, Player excluded = null) {
+	public static int HostilityScore(Player self, Player other, GameData gameData, Player halvingException = null) {
 		if (self == null || other == null)
 			throw new ArgumentNullException(nameof(self), "Hostility must be queried between two known players.");
 		if (self.id == other.id)
 			throw new ArgumentException("A civ has no attitude toward itself.");
 
 		DiplomaticReputation rep = Reputation(self, other);
-		bool met = Relationship(self, other) != null;
+		PlayerRelationship selfRel = Relationship(self, other);
+		bool met = selfRel != null;
 
-		// Section 3.5 seed: the race vtable slot 8 query of A's race record, the
-		// header's get_effective_aggression_level. The engine carries the BIQ's
-		// raw AggressionLevel; the shipped slot-8 body additionally shifts it by
-		// two game globals and a difficulty term and clamps it to -2..2
-		// (0x53a0b0), which is not modelled (see the report).
-		int score = self.civilization?.aggressionLevel ?? 0;
+		// Section 3.6 seed: the race vtable slot 8 query of A's race record, the
+		// header's get_effective_aggression_level (`Race_get_effective_aggression_level`
+		// @ 0x53a0b0). That body is modelled in full by
+		// EffectiveAggressionSeed below; the engine cannot supply one of its four
+		// inputs, so the default stands in for the shipped setup's setting.
+		int score = EffectiveAggressionSeed(self.civilization?.aggressionLevel ?? 0,
+			GameDifficultyIndex(gameData), gameData?.difficulties?.Count ?? 0);
 
 		// Section 3.1 - the reputation record.
 		score += rep.HostilityContribution();
@@ -295,16 +304,23 @@ public static class DiplomaticAttitude {
 			score += 10;
 		if (HasDealTargeting(other, self, DealSubType.TradeEmbargo))
 			score += atWar ? 2 : 10;
-		if (atWar)
+
+		// The relation/contact word (0x44032c-0x44033b): being at war is worth +5,
+		// and bit 0x10 of `A.Contacts[B]` is worth the same +5 through the same
+		// branch. Only when neither holds does bit 0x8 count, for +1. The bits are
+		// imported from the save's LEAD contact word; nothing in the shipped code
+		// ever sets them (see spec 20 section 3.3).
+		bool grievance16 = selfRel != null && selfRel.HasContactGrievance(PlayerRelationship.ContactGrievanceBit16);
+		bool grievance8 = selfRel != null && selfRel.HasContactGrievance(PlayerRelationship.ContactGrievanceBit8);
+		if (atWar || grievance16) {
 			score += 5;
-		// The original ORs in two `Contacts` grievance bits (0x8 and 0x10) here
-		// for a further +1; the engine keeps no equivalent state, so that half of
-		// the term is absent until a contact-grievance subsystem exists (see the
-		// report).
+		} else if (grievance8) {
+			score += 1;
+		}
 
 		// The embassy flag (the header's D50 array, written by
 		// Leader_establish_embassy @ 0x56b7d0): -2 at peace, +1 at war.
-		if (Relationship(self, other)?.embassyEstablished == true)
+		if (selfRel?.embassyEstablished == true)
 			score += atWar ? 1 : -2;
 
 		// Treaties: relation bit 1 (MPP) or bit 4 (peace) -> -10, bit 2
@@ -320,14 +336,60 @@ public static class DiplomaticAttitude {
 		score -= 2 * JointAllianceCount(self, other);
 
 		// FUN_0055e8e0: the subject holds at least one resource at all.
+		//
+		// UNVERIFIED PROXY (see spec 20 section 11 item 13). The original walks the
+		// subject's own `Available_Resources` table (leader `+0x1614`, one 0x60-byte
+		// row per resource, three bytes per civ) and returns true when any row's
+		// first byte for that civ is non-zero. That table is the *available*
+		// (visible/connected/imported) resource set, which is a different notion
+		// from "has a resource inside its borders". The engine's
+		// `resourcesInBorders` is the closest available state (and is refreshed
+		// only by GameData's tile-owner pass), so it stands in for the term. Tests
+		// pin the current behaviour so a future change is visible.
 		if (other.resourcesInBorders != null && other.resourcesInBorders.Count > 0)
 			score -= 5;
 
-		// Section 3.4 - third-party opinion: for every other live civ p that we
-		// have met and are not at war with (or that is already dead), add p's
-		// own clamped view of B. The caps are applied before summing.
+		// Section 3.4 - the shared-enemy loop, the original's FIRST loop
+		// (`0x440479`-`0x44051d`), which runs before the third-party loop below.
+		// For every live civ p (the original's loop starts at civ 1, so the
+		// barbarian slot is never visited) that A is AT WAR with:
+		//
+		//   * when B is also at war with p, subtract 3 plus four clamped counters
+		//     of p's own reputation record toward B: caught spies capped at 2,
+		//     `field_14` at 4, war-damage memory at 5 and this turn's war damage at
+		//     1 (15 points at most, i.e. a full mood band on a 100x100 map);
+		//   * otherwise, when B has a trade embargo against p, subtract 2.
+		//
+		// Sharing an enemy therefore makes A *less* hostile to B. The spec's
+		// section 3.5 ("the second loop") is the third-party sum below, a
+		// different rule; this loop was undocumented before this round.
 		foreach (Player p in gameData.players) {
-			if (p.id == self.id || (excluded != null && p.id == excluded.id))
+			if (p == null || p.isBarbarians || p.id == self.id)
+				continue;
+			// A.At_War[p], and implicitly "p is still live": the original's
+			// player-bits guard and its at-war bytes are separate tests.
+			if (!PlayerRelationship.AtWar(self, p))
+				continue;
+
+			if (PlayerRelationship.AtWar(other, p)) {
+				DiplomaticReputation ofB = Reputation(p, other);
+				score -= 3
+					+ Math.Min(ofB.caughtSpies, 2)
+					+ Math.Min(ofB.field14, 4)
+					+ Math.Min(ofB.warDamageMemory, 5)
+					+ Math.Min(ofB.warDamageThisTurn, 1);
+			} else if (HasDealTargeting(other, p, DealSubType.TradeEmbargo)) {
+				score -= 2;
+			}
+		}
+
+		// Section 3.5 - third-party opinion: for every other live civ p that we
+		// have met and are not at war with (or that is already dead), add p's
+		// own clamped view of B. The caps are applied before summing. The guard
+		// excludes A itself (`0x440566`) and the SUBJECT (`0x44056f`), not the
+		// function's third argument - that one only gates the strength halving.
+		foreach (Player p in gameData.players) {
+			if (p.id == self.id || p.id == other.id)
 				continue;
 			// The shipped guard is "not at war with p, or p is already dead". The
 			// engine's TryGetRelationship refuses defeated civs, so the "p is dead"
@@ -346,10 +408,13 @@ public static class DiplomaticAttitude {
 			score += Math.Min(theirs.field3C2, 1);
 		}
 
-		// Section 3.5 special cases, in the shipped order.
+		// Section 3.6 special cases, in the shipped order (`0x440664`-`0x440697`).
+		// The first is the at-war floor, the second the strength halving, gated on
+		// the third argument's low byte being zero.
 		if (score < 0 && atWar)
 			score = 0;
-		if ((excluded == null || excluded.isBarbarians) && score < 0 && Power(other, gameData) > Power(self, gameData))
+		if ((halvingException == null || halvingException.isBarbarians) && score < 0
+				&& Power(other, gameData) > Power(self, gameData))
 			score /= 2;
 
 		int half = (gameData.map.numTilesWide + gameData.map.numTilesTall) / 2;
@@ -380,8 +445,8 @@ public static class DiplomaticAttitude {
 	/// A's mood toward B: the attitude score of <see cref="HostilityScore"/>
 	/// mapped through <see cref="MoodForScore"/>.
 	/// </summary>
-	public static DiplomaticMood MoodToward(Player self, Player other, GameData gameData, Player excluded = null) {
-		int score = HostilityScore(self, other, gameData, excluded);
+	public static DiplomaticMood MoodToward(Player self, Player other, GameData gameData, Player halvingException = null) {
+		int score = HostilityScore(self, other, gameData, halvingException);
 		return MoodForScore(score, gameData.map.numTilesWide, gameData.map.numTilesTall);
 	}
 
@@ -441,9 +506,16 @@ public static class DiplomaticAttitude {
 	}
 
 	// The original's `power_rank` (leader + 0x24) is a per-civ ordering in which
-	// a larger value means a stronger civ. The engine stores only the histograph
-	// Power value, whose last recorded entry is the closest available stand-in.
-	// It is a comparison, so the ordering is what matters, not the scale.
+	// a LARGER value means a STRONGER civ (the external header: "31 = strongest,
+	// 30 = second strongest, ..."), and the halving branch at 0x44068c takes it
+	// when A.power_rank < B.power_rank, i.e. when B is stronger.
+	//
+	// UNVERIFIED PROXY (see spec 20 section 11 item 12). The engine has no power_rank:
+	// the closest available ordering is the last histograph `Power` entry, which
+	// Player.cs already uses as the civ's power value (its `?? 100` fallback is
+	// mirrored here). Power and power_rank need not rank the civs identically,
+	// so the halving can fire for a pair the original would not halve. Tests pin
+	// both the last-entry read and the fallback so a future change is visible.
 	private static int Power(Player player, GameData gameData) {
 		if (gameData.history != null && gameData.history.TryGetValue(player.id.ToString(), out var records)) {
 			HistTurnRecord last = records.LastOrDefault();
@@ -451,5 +523,72 @@ public static class DiplomaticAttitude {
 				return last.Power;
 		}
 		return 100;
+	}
+
+	// Section 3.6 seed. `Race_get_effective_aggression_level` @ 0x53a0b0 is race
+	// vtable slot 8 and returns a small integer in -2..2 that seeds the hostility
+	// score. Its four inputs are:
+	//
+	//   * `aggressionLevel` - the race record's own AggressionLevel (`+0x918`,
+	//     the BIQ RACE field the importer already carries);
+	//   * the game difficulty index (`p_game_difficulty` @ `0xa52684`, 0-based -
+	//     the same value the victory score multiplies by `index + 1`);
+	//   * a record count divided by six (the global at `0x9c3d94`);
+	//   * the game's AI Aggression setting (`0xa52b40`), a value 0..4 that the
+	//     shipped setup reads from the `[Conquests]` ini key `Aggression` with a
+	//     default of 2, and which the game setup screen stores on the game object
+	//     at `+0x2e24`.
+	//
+	// OpenCiv3 carries the first two. It has NO AI Aggression setting, so the
+	// band input is a named deviation and defaults to 2 (Normal), the value the
+	// shipped setup passes as the ini default; that makes the band adjustment the
+	// identity. The divided count at `0x9c3d94` is read but never written anywhere
+	// in the shipped code, so this models it from the rules' difficulty list; spec
+	// 20 section 11 items 10-11 record both deviations.
+	public const int DefaultAiAggressionSetting = 2;
+
+	/// <summary>
+	/// `Race_get_effective_aggression_level` @ `0x53a0b0`: the effective aggression
+	/// seed, clamped to -2..2, with the AI Aggression band applied afterwards.
+	/// Bands 0 and 4 return a hard -2 and +2 without looking at the clamped value
+	/// (the original's jump table entries `0x53a0e9` and `0x53a100`); bands 1 and 3
+	/// shift the clamped value by -1 and +1 (`0x53a0f1`, `0x53a0fd`); band 2 and
+	/// every value above 4 leave it alone.
+	/// </summary>
+	/// <param name="aiAggressionSetting">
+	/// The game's AI Aggression setting, 0..4. Defaults to Normal, the only value
+	/// OpenCiv3 can supply today.
+	/// </param>
+	public static int EffectiveAggressionSeed(int aggressionLevel, int gameDifficultyIndex,
+			int difficultyLevelCount, int aiAggressionSetting = DefaultAiAggressionSetting) {
+		// C# integer division truncates toward zero, which is what the original's
+		// sign-corrected shifts do for both signs.
+		int score = aggressionLevel + (gameDifficultyIndex / 2) - (difficultyLevelCount / 6);
+
+		switch (aiAggressionSetting) {
+			case 0:
+				return -2;
+			case 1:
+				score -= 1;
+				break;
+			case 3:
+				score += 1;
+				break;
+			case 4:
+				return 2;
+		}
+
+		return Math.Clamp(score, -2, 2);
+	}
+
+	// The 0-based position of the game's difficulty in the rules' list, i.e. the
+	// index the original keeps in `p_game_difficulty` and prints as "index + 1".
+	// A game whose difficulty object is not in the list (or a test that never
+	// builds one) reads as index 0, the same as the original's zeroed global.
+	private static int GameDifficultyIndex(GameData gameData) {
+		if (gameData?.difficulties == null || gameData.gameDifficulty == null)
+			return 0;
+		int index = gameData.difficulties.IndexOf(gameData.gameDifficulty);
+		return index < 0 ? 0 : index;
 	}
 }
