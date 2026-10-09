@@ -171,25 +171,37 @@ namespace C7GameData {
 			return overlayTerrainType.impassable;
 		}
 
-		// Whether this tile's terrain stops the given unit type from entering.
+		// Whether this tile's terrain stops the given unit type from entering it
+		// from `from`.
 		//
-		// Terrain that is impassable to every unit blocks everyone. Terrain that
-		// is only impassable to some units is described by the terrain itself,
-		// which also lists the improvements that grant passage - in Civ3 a
-		// wheeled unit may enter mountains, jungle, marsh and volcano once the
-		// tile is roaded or railed.
-		public bool IsImpassableTo(UnitPrototype unitType) {
-			if (overlayTerrainType.impassable)
+		// Terrain that is impassable to every unit blocks everyone, and no
+		// improvement lifts that. Terrain that is only impassable to some units is
+		// described by the terrain itself, which also lists the improvements that
+		// grant passage - in Civ3 a wheeled unit may enter mountains, jungle, marsh
+		// and volcano, but only along a road or railroad.
+		//
+		// Civ3 requires the lifting improvement on the tile being entered *and* on
+		// the tile being left (11_movement.md §4.1), the same both-ends rule the
+		// road movement discount follows: an unroaded approach into a roaded
+		// mountain still blocks a wheeled unit. The test is the road flag, which a
+		// railroad also sets, so rails lift it too.
+		public bool IsImpassableTo(UnitPrototype unitType, Tile from) {
+			if (IsImpassable())
 				return true;
 
 			foreach ((SaveUnitPrototype.Flag flag, string[] improvements) in overlayTerrainType.impassableTo) {
 				if (!unitType.flags.Contains(flag))
 					continue;
 
-				return !improvements.Any(HasImprovementWithKey);
+				return !(HasAnyImprovement(improvements) && from.HasAnyImprovement(improvements));
 			}
 
 			return false;
+		}
+
+		// Whether this tile carries any of the given improvements.
+		private bool HasAnyImprovement(string[] keys) {
+			return keys.Any(HasImprovementWithKey);
 		}
 
 		private bool HasImprovementWithKey(string key) {

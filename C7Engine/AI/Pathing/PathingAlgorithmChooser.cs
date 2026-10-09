@@ -25,8 +25,8 @@ namespace C7Engine.Pathing {
 
 					return from.DistanceTo(to);
 				},
-				(Tile neighbor, Tile destination) => {
-					return neighbor == destination ? unit.CanEnterForcefully(neighbor) : unit.CanEnterPeacefully(neighbor);
+				(Tile from, Tile neighbor, Tile destination) => {
+					return neighbor == destination ? unit.CanEnterForcefully(neighbor, from) : unit.CanEnterPeacefully(neighbor, from);
 				});
 		}
 	}

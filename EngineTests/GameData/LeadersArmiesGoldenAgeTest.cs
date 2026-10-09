@@ -1076,6 +1076,7 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		if (prto.StartsGoldenAge) flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
 		if (prto.Blitz) flags.Add(SaveUnitPrototype.Flag.Blitz);
 		if (prto.Amphibious) flags.Add(SaveUnitPrototype.Flag.Amphibious);
+		if (prto.Wheeled) flags.Add(SaveUnitPrototype.Flag.Wheeled);
 		return flags;
 	}
 

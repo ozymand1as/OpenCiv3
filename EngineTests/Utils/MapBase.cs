@@ -176,13 +176,27 @@ public class MapBase {
 	protected TerrainImprovement railroad = new("railroad", TerrainImprovement.Layer.Roads, movementCost: 0);
 
 	protected Tile MakeMountainTile() {
-		// Civ3 marks mountains as impassable to wheeled units, but passable to
-		// foot and mounted units.
+		return MakeWheeledImpassableTile("mountains");
+	}
+
+	// Civ3 marks mountains, jungle, marsh and volcano as impassable to wheeled
+	// units, but passable to foot and mounted units. The improvement that lifts
+	// the restriction is a game rule rather than BIQ data, so the test terrain
+	// carries the same list ruleset.json ships (11_movement.md §4.1).
+	protected Tile MakeWheeledImpassableTile(string key) {
+		int movementCost = key switch {
+			"mountains" => 3,
+			"jungle" => 3,
+			"marsh" => 2,
+			"volcano" => 3,
+			_ => throw new System.ArgumentException($"not a terrain that is impassable to wheeled units: {key}"),
+		};
+
 		return new(ID.None("")) {
-			baseTerrainType = new() { Key = "mountains" },
+			baseTerrainType = new() { Key = key },
 			overlayTerrainType = new() {
-				Key = "mountains",
-				movementCost = 3,
+				Key = key,
+				movementCost = movementCost,
 				impassableTo = new() { [SaveUnitPrototype.Flag.Wheeled] = ["road", "railroad"] }
 			}
 		};

@@ -155,10 +155,14 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 		Assert.True(tilePath.path.Contains(impassableDesert));
 	}
 
-	[Fact]
-	private void TestWheeledUnitCannotEnterTerrainImpassableToWheeled() {
+	[Theory]
+	[InlineData("mountains")]
+	[InlineData("jungle")]
+	[InlineData("marsh")]
+	[InlineData("volcano")]
+	private void TestWheeledUnitCannotEnterTerrainImpassableToWheeled(string key) {
 		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
-		var mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
+		var terrain = AddNeighborsAndUpdateMap(startTile, MakeWheeledImpassableTile(key), TileDirection.NORTH);
 
 		MapUnit wheeled = MakeWheeledLandUnit();
 		MapUnit foot = MakeLandUnit();
@@ -167,9 +171,9 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 
 		// Mountains, jungle, marsh and volcano are impassable to wheeled units
 		// in Civ3, but remain passable to everyone else.
-		Assert.False(wheeled.CanEnter(mountain));
-		Assert.False(wheeled.CanEnterForcefully(mountain));
-		Assert.True(foot.CanEnter(mountain));
+		Assert.False(wheeled.CanEnter(terrain));
+		Assert.False(wheeled.CanEnterForcefully(terrain));
+		Assert.True(foot.CanEnter(terrain));
 	}
 
 	[Fact]
@@ -200,7 +204,7 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 	}
 
 	[Fact]
-	private void TestWheeledUnitCanEnterRoadedTerrainImpassableToWheeled() {
+	private void TestWheeledUnitCannotEnterRoadedTerrainFromUnroadedTerrain() {
 		InitializeTestGameData();
 		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
 		var mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
@@ -209,29 +213,55 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 		MapUnit wheeled = MakeWheeledLandUnit();
 		wheeled.location = startTile;
 
-		// A road grants a wheeled unit passage through its impassable terrain.
+		// Civ3 requires the road on both ends of the step (11_movement.md §4.1),
+		// so a roaded mountain still refuses a wheeled unit that approaches from
+		// an unroaded tile.
+		Assert.False(wheeled.CanEnter(mountain));
+		Assert.False(wheeled.CanEnterForcefully(mountain));
+
+		AStarAlgorithm aStarAlgorithm = PathingAlgorithmChooser.GetAlgorithm(wheeled) as AStarAlgorithm;
+		TilePath tilePath = aStarAlgorithm.PathFrom(startTile, mountain, wheeled);
+
+		Assert.Empty(tilePath.path);
+	}
+
+	[Fact]
+	private void TestWheeledUnitCanEnterRoadedTerrainFromRoadedTerrain() {
+		InitializeTestGameData();
+		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
+		var mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
+		startTile.overlays.Add(road);
+		mountain.overlays.Add(road);
+
+		MapUnit wheeled = MakeWheeledLandUnit();
+		wheeled.location = startTile;
+
+		// With the road on both ends, the wheeled unit may pass.
 		Assert.True(wheeled.CanEnter(mountain));
 		Assert.True(wheeled.CanEnterForcefully(mountain));
 	}
 
 	[Fact]
-	private void TestWheeledUnitCanEnterRailedTerrainImpassableToWheeled() {
+	private void TestRailroadsOnBothEndsLetAWheeledUnitPass() {
 		InitializeTestGameData();
 		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
-		var mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
-		mountain.overlays.Add(railroad);
+		var volcano = AddNeighborsAndUpdateMap(startTile, MakeWheeledImpassableTile("volcano"), TileDirection.NORTH);
+		startTile.overlays.Add(railroad);
+		volcano.overlays.Add(railroad);
 
 		MapUnit wheeled = MakeWheeledLandUnit();
 		wheeled.location = startTile;
 
-		// A railroad is an improvement that grants passage too.
-		Assert.True(wheeled.CanEnter(mountain));
+		// The test is the road flag, which a railroad also sets, so rails lift
+		// the wheeled restriction as well.
+		Assert.True(wheeled.CanEnter(volcano));
 	}
 
 	[Fact]
 	private void TestWheeledUnitCanPathThroughRoadedTerrainImpassableToWheeled() {
 		InitializeTestGameData();
 		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(road);
 		var mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
 		var beyondMountain = AddNeighborsAndUpdateMap(mountain, MakePlainsTile(), TileDirection.NORTH);
 		mountain.overlays.Add(road);
@@ -249,10 +279,35 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 	}
 
 	[Fact]
+	private void TestWheeledUnitPathsOntoARoadedMountainFromARoadedTileItDoesNotStandOn() {
+		InitializeTestGameData();
+		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
+		var roadedPlains = AddNeighborsAndUpdateMap(startTile, MakePlainsTile(), TileDirection.NORTH);
+		var roadedMountain = AddNeighborsAndUpdateMap(roadedPlains, MakeMountainTile(), TileDirection.NORTH);
+		roadedPlains.overlays.Add(road);
+		roadedMountain.overlays.Add(road);
+
+		MapUnit wheeled = MakeWheeledLandUnit();
+		wheeled.location = startTile;
+
+		// The step onto the mountain starts from the roaded plains, so the road
+		// is on both ends of that step and the step is legal even though the
+		// unit's own tile is unroaded. The pathfinder judges each step by the
+		// tile the step starts from, not by where the unit currently stands.
+		AStarAlgorithm aStarAlgorithm = PathingAlgorithmChooser.GetAlgorithm(wheeled) as AStarAlgorithm;
+		TilePath tilePath = aStarAlgorithm.PathFrom(startTile, roadedMountain, wheeled);
+
+		Assert.NotEmpty(tilePath.path);
+		Assert.Contains(roadedPlains, tilePath.path);
+		Assert.Contains(roadedMountain, tilePath.path);
+	}
+
+	[Fact]
 	private void TestRoadDoesNotMakeFullyImpassableTerrainEnterable() {
 		InitializeTestGameData();
 		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
 		var desert = AddNeighborsAndUpdateMap(startTile, MakeImpassableDesertTile(), TileDirection.NORTH);
+		startTile.overlays.Add(road);
 		desert.overlays.Add(road);
 
 		MapUnit wheeled = MakeWheeledLandUnit();
@@ -264,6 +319,7 @@ public sealed class AStarPathFindingLandUnitTest : MapBase {
 		Assert.False(wheeled.CanEnter(desert));
 		Assert.False(foot.CanEnter(desert));
 	}
+
 }
 
 public sealed class AStarPathFindingWaterUnitTest : MapBase {

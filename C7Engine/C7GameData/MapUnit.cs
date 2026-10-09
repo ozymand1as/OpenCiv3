@@ -492,18 +492,25 @@ namespace C7GameData {
 		/// Returns a unit's intent trying to move in on a tile.
 		/// </summary>
 		/// <param name="tile"></param>
-		/// <returns></returns>
+		/// <param name="from">
+		/// The tile the step starts from. Only the terrain restriction reads it -
+		/// Civ3 lifts that restriction only when the road is on both ends of the
+		/// step - so it defaults to where the unit actually stands, which is the
+		/// source of every move the unit performs. The pathfinder passes the path
+		/// predecessor instead, because it evaluates steps the unit has not walked
+		/// yet.
+		/// </param>
 		// private Intent ResolveIntent(Tile tile, bool tset = false) {
-		private Intent ResolveIntent(Tile tile) {
+		private Intent ResolveIntent(Tile tile, Tile from = null) {
 			if (!Tile.IsTileValid(tile))
 				return Intent.Disabled;
 
 			// Terrain can be impassable to every unit (e.g. some mods'
 			// deserts) or only to some of them (mountains, jungle, marsh and
-			// volcano are impassable to wheeled units, unless the tile is
-			// roaded). A barbarian camp tile stays enterable either way, like a
-			// city, so the camp's garrison can move out and back in.
-			if (tile.IsImpassableTo(this.unitType) && !tile.hasBarbarianCamp)
+			// volcano are impassable to wheeled units, unless both ends of the
+			// step are roaded). A barbarian camp tile stays enterable either
+			// way, like a city, so the camp's garrison can move out and back in.
+			if (tile.IsImpassableTo(this.unitType, from ?? this.location) && !tile.hasBarbarianCamp)
 				return Intent.Disabled;
 
 			var unitOwner = this.owner;
@@ -603,16 +610,28 @@ namespace C7GameData {
 		public bool CanEnterPeacefully(Tile tile) {
 			return CanEnterPeacefully(tile, out _);
 		}
-		public bool CanEnterPeacefully(Tile tile, out Intent intent) {
-			intent = this.ResolveIntent(tile);
+		public bool CanEnterPeacefully(Tile tile, out Intent intent, Tile from = null) {
+			intent = this.ResolveIntent(tile, from);
 			return intent == Intent.MoveFreely || intent == Intent.Load || intent == Intent.Unload;
+		}
+
+		// Step-aware variants for the pathfinder, which evaluates a step from a
+		// tile other than the one the unit currently stands on.
+		public bool CanEnterPeacefully(Tile tile, Tile from) {
+			return CanEnterPeacefully(tile, out _, from);
+		}
+		public bool CanEnter(Tile tile, Tile from) {
+			return CanEnter(tile, out _, from);
+		}
+		public bool CanEnterForcefully(Tile tile, Tile from) {
+			return CanEnterForcefully(tile, out _, from);
 		}
 
 		public bool CanEnter(Tile tile) {
 			return CanEnter(tile, out _);
 		}
-		public bool CanEnter(Tile tile, out Intent intent) {
-			var canEnterPeacefully = CanEnterPeacefully(tile, out var it);
+		public bool CanEnter(Tile tile, out Intent intent, Tile from = null) {
+			var canEnterPeacefully = CanEnterPeacefully(tile, out var it, from);
 			intent = it;
 			return canEnterPeacefully || it == Intent.Fight;
 		}
@@ -620,8 +639,8 @@ namespace C7GameData {
 		public bool CanEnterForcefully(Tile tile) {
 			return CanEnterForcefully(tile, out _);
 		}
-		public bool CanEnterForcefully(Tile tile, out Intent intent) {
-			var canEnter = CanEnter(tile, out var it);
+		public bool CanEnterForcefully(Tile tile, out Intent intent, Tile from = null) {
+			var canEnter = CanEnter(tile, out var it, from);
 			intent = it;
 			return canEnter || it == Intent.WarDeclaration;
 		}

@@ -28,11 +28,13 @@ namespace C7Engine.Pathing {
 		// the destination instead of expanding outwards in all directions.
 		private Func<Tile, Tile, double> costHeuristic;
 
-		// A delegate that determines if a tile is passable during pathfinding.
-		// Receives the tile being evaluated and the final destination tile.
-		private Func<Tile, Tile, bool> isPassable;
+		// A delegate that determines if a step is passable during pathfinding.
+		// Receives the tile the step starts from, the tile being evaluated and the
+		// final destination tile. The source matters because Civ3's terrain
+		// restriction is lifted only when the road is on both ends of the step.
+		private Func<Tile, Tile, Tile, bool> isPassable;
 
-		public AStarAlgorithm(EdgeWalker<Tile> edgeWalker, Func<Tile, Tile, double> costHeuristic, Func<Tile, Tile, bool> isPassable) {
+		public AStarAlgorithm(EdgeWalker<Tile> edgeWalker, Func<Tile, Tile, double> costHeuristic, Func<Tile, Tile, Tile, bool> isPassable) {
 			this.edgeWalker = edgeWalker;
 			this.costHeuristic = costHeuristic;
 			this.isPassable = isPassable;
@@ -40,6 +42,7 @@ namespace C7Engine.Pathing {
 
 		private Tile lastStartTile = null;
 		private Tile lastDestTile = null;
+		private Tile lastFromTile = null;
 		private Tile lastNeighTile = null;
 
 		public override TilePath PathFrom(Tile start, Tile destination, MapUnit unit) {
@@ -90,13 +93,14 @@ namespace C7Engine.Pathing {
 						&& (unit.owner.HasExploredTile(destination) || !unit.owner.isHuman)
 						&& GameMap.IsLandStrip(current, neighbor)) continue;
 
-					if (lastStartTile != start || lastDestTile != destination || lastNeighTile != neighbor) {
-						if (!isPassable(neighbor, destination)) {
+					if (lastStartTile != start || lastDestTile != destination || lastFromTile != current || lastNeighTile != neighbor) {
+						if (!isPassable(current, neighbor, destination)) {
 							continue;
 						}
 					}
 
 					lastNeighTile = neighbor;
+					lastFromTile = current;
 					lastStartTile = start;
 					lastDestTile = destination;
 
