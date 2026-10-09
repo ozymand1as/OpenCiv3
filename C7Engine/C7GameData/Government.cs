@@ -104,6 +104,22 @@ namespace C7GameData {
 			return resistanceModifiers[otherGovernmentIndex];
 		}
 
+		// One entry per government in the game's government list, in list
+		// order: this government's propaganda (bribery) modifier against each
+		// other government (BIQ GOVT_GOVT BriberyModifier - the middle member
+		// of the CanBribe / BriberyModifier / ResistanceModifier triple; the
+		// propaganda roll reads offset +4 of the entry, spec 24 section 6.6).
+		// Missing entries mean no modifier, so a ruleset that predates the
+		// table plays with a zero modifier rather than failing to load.
+		public List<int> briberyModifiers = new();
+
+		public int BriberyModifierAgainst(int otherGovernmentIndex) {
+			if (otherGovernmentIndex < 0 || otherGovernmentIndex >= briberyModifiers.Count) {
+				return 0;
+			}
+			return briberyModifiers[otherGovernmentIndex];
+		}
+
 		private static void TradeBonus(Tile.Yield yield) {
 			if (yield.type == Tile.YieldType.Commerce && yield.baseYield > 0) {
 				yield.bonus += 1;

@@ -83,6 +83,14 @@ namespace C7GameData {
 		// unhappy as well, in addition to the time penalty (spec 15 §4.2).
 		public int turnsOfUnhappinessDueToDrafting = 0;
 
+		// The unhappy faces this city carries because of enemy propaganda: a
+		// campaign that boils or flips the city raises it to max(old,
+		// subverted citizens) (spec 24 §6.6 steps 3-4), and
+		// RecalculateCitizenMoods subtracts it from the happy-face total (spec
+		// 15 §4.5). The shipped engine also decays it by one per turn; that
+		// decay is not implemented yet.
+		public int unhappyFacesDueToPropaganda = 0;
+
 		// Whether this city is currently celebrating We Love The King Day
 		// (spec 15 §5).
 		public bool isWeLoveTheKingDay = false;
@@ -1126,6 +1134,10 @@ namespace C7GameData {
 			if (turnsOfUnhappinessDueToDrafting > 0) {
 				contentToHappyMoves -= (turnsOfUnhappinessDueToDrafting - 1) / gameData.rules.TurnPenaltyForEachDraftedCitizen + 1;
 			}
+			// Enemy propaganda leaves unhappy faces on the city; they are
+			// subtracted from the happy-face total in the same pass (spec 15
+			// §4.5), which is what makes a boiled city actually boil.
+			contentToHappyMoves -= unhappyFacesDueToPropaganda;
 
 			// TODO: add penalty for war weariness
 			// TODO: add penalty for aggression against home country

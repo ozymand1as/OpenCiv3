@@ -2264,6 +2264,7 @@ namespace C7GameData {
 				g.unitCost = govt.UnitCost;
 
 				g.resistanceModifiers = ResistanceModifierRow(theBiq.GovtGovt, governments.Count);
+				g.briberyModifiers = BriberyModifierRow(theBiq.GovtGovt, governments.Count);
 
 				governments.Add(g);
 			}
@@ -2281,6 +2282,25 @@ namespace C7GameData {
 			}
 			for (int column = 0; column < pairs.GetLength(1); column++) {
 				modifiers.Add(pairs[row, column].ResistanceModifier);
+			}
+			return modifiers;
+		}
+
+		// The government-pair propaganda-modifier row of one government: the
+		// BriberyModifier of every GOVT_GOVT triple in that government's row,
+		// in government-list order. This is the middle member of the
+		// CanBribe / BriberyModifier / ResistanceModifier triple (offset +4 in
+		// the file layout), the value the Initiate Propaganda roll reads for
+		// the acting government against the target's government (spec 24
+		// section 6.6). An absent matrix yields an empty row, which reads as
+		// no modifier.
+		internal static List<int> BriberyModifierRow(QueryCiv3.Biq.GOVT_GOVT[,] pairs, int row) {
+			List<int> modifiers = new();
+			if (pairs == null || row < 0 || row >= pairs.GetLength(0)) {
+				return modifiers;
+			}
+			for (int column = 0; column < pairs.GetLength(1); column++) {
+				modifiers.Add(pairs[row, column].BriberyModifier);
 			}
 			return modifiers;
 		}

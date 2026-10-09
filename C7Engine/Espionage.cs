@@ -21,9 +21,8 @@ namespace C7Engine {
 	}
 
 	// The outcome of one mission attempt. `ran` is false when the mission never
-	// started (unknown mission, unavailable, invalid city, not enough gold, or
-	// an effect the engine does not implement yet), in which case no gold was
-	// spent.
+	// started (unknown mission, unavailable, invalid city, or not enough gold),
+	// in which case no gold was spent.
 	public class EspionageMissionResult {
 		public bool ran;
 		public bool succeeded;
@@ -37,14 +36,15 @@ namespace C7Engine {
 
 	// The espionage subsystem, ported from the Civ3 Conquests engine. The rules
 	// follow re/specs/24_espionage.md: the nine-mission table, the cost formula,
-	// the success-probability formula and the per-mission resolutions.
+	// the success-probability formula and the per-mission resolutions,
+	// including Initiate Propaganda's per-citizen subversion roll and city flip
+	// (spec 6.6).
 	//
-	// Not implemented here, and not fakeable without machinery the engine lacks:
-	// Initiate Propaganda's per-citizen subversion roll and city flip (no city
-	// capture path), the AI's per-turn espionage driver and its mood-weighted
-	// mission chooser (no AI espionage hook and no diplomatic-mood field -
-	// 24_espionage.md 8.4), and the human steal-technology pick through the
-	// science advisor (24_espionage.md 6.3, marked [?] in the spec).
+	// Not implemented here: the AI's per-turn espionage driver and its
+	// mood-weighted mission chooser (no AI espionage hook and no
+	// diplomatic-mood field - 24_espionage.md 8.4), and the human
+	// steal-technology pick through the science advisor (24_espionage.md 6.3,
+	// marked [?] in the spec).
 	public static class Espionage {
 		public const int BuildEmbassy = 0;
 		public const int InvestigateCity = 1;
@@ -69,6 +69,10 @@ namespace C7Engine {
 		private const int StealPlansExposureRoll = 10;
 		private const int SabotageExposureRoll = 20;
 		private const int ExposeSpyExposureRoll = 10;
+
+		// Initiate Propaganda flips the city when this share of its population
+		// has been subverted (spec 6.6 steps 3 and 4).
+		private const int PropagandaRevoltThreshold = 75;
 
 		// ---------------------------------------------------------------------
 		// Who may spy (spec 3.1, 3.2)
@@ -272,9 +276,10 @@ namespace C7Engine {
 		// Odds (spec 5.1, 6.6)
 		// ---------------------------------------------------------------------
 
-		// The percentage the mission's first roll is compared against. The
-		// first roll always succeeds for missions 0 and 1 and is impossible for
-		// mission 6, which uses per-citizen rolls instead.
+		// The percentage the mission's first roll is compared against (spec 5.1).
+		// Missions 0 and 1 always pass it; mission 6 has no first roll at all -
+		// it resolves per citizen instead (spec 6.6), so the value it reports is
+		// the agent record's base_chance, not the roll the mission runs.
 		public static int SuccessChance(GameData gameData, Player actor, Player target, int missionId, EspionageAgent agent, EspionageSafetyLevel safety) {
 			int starting;
 			switch (missionId) {
@@ -306,28 +311,44 @@ namespace C7Engine {
 		}
 
 		// The per-citizen propaganda chance, selected from the culture levels by
-		// the actor's culture ratio against the target (spec 6.6).
+		// the actor's culture ratio against the target (spec 6.6): the row whose
+		// CultureRatioPercentage is the largest value not exceeding the ratio,
+		// falling back to the lowest-threshold (default) row when the ratio is
+		// below every threshold. The selection does not depend on the order the
+		// rows are listed in.
 		public static int PropagandaChance(GameData gameData, Player actor, Player target) {
 			List<CultureLevel> levels = gameData?.cultureLevels;
 			if (levels == null || levels.Count == 0) {
 				return 0;
 			}
 
+			long ratio;
+			int ownCulture = PlayerCulture(actor);
 			int targetCulture = PlayerCulture(target);
-			if (targetCulture <= 0) {
-				return levels[0].chanceOfSuccessfulPropaganda;
+			if (ownCulture <= 0) {
+				ratio = 0;
+			} else if (targetCulture <= 0) {
+				ratio = long.MaxValue;
+			} else {
+				ratio = 100L * ownCulture / targetCulture;
 			}
 
-			int ratio = 100 * PlayerCulture(actor) / targetCulture;
-			foreach (CultureLevel level in levels) {
-				if (ratio >= level.cultureRatioPercentage) {
-					return level.chanceOfSuccessfulPropaganda;
+			int chosen = -1;
+			int chosenThreshold = int.MinValue;
+			int lowest = 0;
+			int lowestThreshold = int.MaxValue;
+			for (int i = 0; i < levels.Count; i++) {
+				int threshold = levels[i].cultureRatioPercentage;
+				if (threshold <= ratio && threshold > chosenThreshold) {
+					chosen = i;
+					chosenThreshold = threshold;
+				}
+				if (threshold < lowestThreshold) {
+					lowest = i;
+					lowestThreshold = threshold;
 				}
 			}
-
-			// Below every threshold the original engine falls back to the last
-			// (most disdainful) level.
-			return levels[levels.Count - 1].chanceOfSuccessfulPropaganda;
+			return levels[chosen >= 0 ? chosen : lowest].chanceOfSuccessfulPropaganda;
 		}
 
 		// The civ's total culture, the sum of its cities' cultural value.
@@ -368,12 +389,6 @@ namespace C7Engine {
 				result.message = "The target city does not belong to the target civ.";
 				return result;
 			}
-			if (missionId == InitiatePropaganda) {
-				// The per-citizen subversion roll and the city flip need city
-				// capture and happiness machinery the engine does not have yet.
-				result.message = "Initiate Propaganda has no engine effect yet.";
-				return result;
-			}
 
 			int cost = MissionCost(gameData, actor, target, targetCity, missionId, safety);
 			result.costPaid = cost;
@@ -387,12 +402,116 @@ namespace C7Engine {
 			actor.gold -= cost;
 			result.ran = true;
 
+			if (missionId == InitiatePropaganda) {
+				// Mission 6 has no single success roll: spec 6.6 resolves it
+				// entirely through per-citizen subversion rolls over the
+				// penalty total, so the generic odds roll below is skipped.
+				ResolvePropaganda(gameData, actor, target, targetCity, result);
+				return result;
+			}
+
 			if (GameData.rng.Next(100) >= result.successChance) {
 				return FailMission(gameData, actor, target, agent, missionId, result);
 			}
 
 			ApplyEffect(gameData, actor, target, targetCity, missionId, result);
 			return result;
+		}
+
+		// ---------------------------------------------------------------------
+		// Initiate propaganda (spec 6.6)
+		// ---------------------------------------------------------------------
+
+		// The penalty total D every per-citizen roll adds (spec 6.6 step 1).
+		public static int PropagandaPenalty(GameData gameData, Player actor, Player target, City targetCity) {
+			if (targetCity == null) {
+				return 0;
+			}
+			int penalty = -5 * MilitaryUnitCount(targetCity);
+			if (targetCity.IsCapital()) {
+				penalty -= 40;
+			}
+			if (targetCity.GetBuildings().Any(cb => cb.building.resistantToBribery)) {
+				penalty -= 20;
+			}
+			if (targetCity.isWeLoveTheKingDay) {
+				penalty -= 10;
+			}
+			if (targetCity.isInCivilDisorder) {
+				penalty += 10;
+			}
+			return penalty + PropagandaGovernmentModifier(gameData, actor, target);
+		}
+
+		// Military units at the city. The original's counter asks for attack or
+		// defence strength greater than zero, so civilians on the tile (workers,
+		// settlers) do not stiffen the garrison.
+		private static int MilitaryUnitCount(City targetCity) {
+			if (targetCity.location == null) {
+				return 0;
+			}
+			return targetCity.location.unitsOnTile.Count(u =>
+				u.unitType != null && (u.unitType.attack > 0 || u.unitType.defense > 0));
+		}
+
+		// The M term of the penalty: the acting government's propaganda (or
+		// bribery) modifier against the target's government - the acting
+		// government's row of the GOVT_GOVT BriberyModifier matrix, column =
+		// the target government's position in the government list (spec 6.6
+		// step 1). A government pair the list does not hold reads no modifier.
+		private static int PropagandaGovernmentModifier(GameData gameData, Player actor, Player target) {
+			if (gameData == null || actor?.government == null || target?.government == null) {
+				return 0;
+			}
+			int own = gameData.governments.IndexOf(actor.government);
+			int theirs = gameData.governments.IndexOf(target.government);
+			if (own < 0 || theirs < 0) {
+				return 0;
+			}
+			return gameData.governments[own].BriberyModifierAgainst(theirs);
+		}
+
+		// One citizen's subversion chance (spec 6.6 step 2): the culture
+		// level's base chance plus the penalty total, plus 20 when the citizen
+		// is of the acting civ's nationality, clamped to 0..95.
+		public static int PropagandaCitizenChance(int baseChance, int penaltyTotal, bool citizenIsActorNational) {
+			return Math.Clamp(baseChance + penaltyTotal + (citizenIsActorNational ? 20 : 0), 0, 95);
+		}
+
+		// The per-citizen resolution of mission 6 (spec 6.6): roll every
+		// citizen of the target city against its own chance and count the
+		// passes as S. Below 75% of the population the city merely boils; at or
+		// above it the city revolts and changes hands through the ordinary
+		// city-capture path. Both branches raise the city's propaganda-face
+		// counter to max(old, S) and recompute happiness. The agent is never
+		// exposed (spec 6.6, 7).
+		private static void ResolvePropaganda(GameData gameData, Player actor, Player target, City targetCity, EspionageMissionResult result) {
+			int population = targetCity.residents.Count;
+			int baseChance = PropagandaChance(gameData, actor, target);
+			int penalty = PropagandaPenalty(gameData, actor, target, targetCity);
+			int subverted = 0;
+			foreach (CityResident resident in targetCity.residents) {
+				int citizenChance = PropagandaCitizenChance(baseChance, penalty, resident.nationality == actor.civilization);
+				if (GameData.rng.Next(100) < citizenChance) {
+					subverted++;
+				}
+			}
+
+			bool revolt = population > 0 && subverted * 100 / population >= PropagandaRevoltThreshold;
+			if (revolt) {
+				CityInteractions.CaptureCity(targetCity, actor);
+			}
+
+			// The same happiness/propaganda-face update runs either way (spec
+			// 6.6 steps 3 and 4): the counter holds max(old, S), and the
+			// recompute subtracts those faces from the happy-face total.
+			targetCity.unhappyFacesDueToPropaganda = Math.Max(targetCity.unhappyFacesDueToPropaganda, subverted);
+			targetCity.RecalculateCitizenMoods(gameData);
+
+			result.succeeded = revolt;
+			result.message = revolt
+				? "The city has revolted and joined us."
+				: "The propaganda missed; the city only boils.";
 		}
 
 		private static EspionageMissionResult FailMission(GameData gameData, Player actor, Player target, EspionageAgent agent, int missionId, EspionageMissionResult result) {
