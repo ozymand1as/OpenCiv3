@@ -3,7 +3,8 @@ namespace C7Engine {
 	// `0x60ba80` and `rand_int` @ `0x60bab0`.
 	//
 	// The state is one 32-bit word that lives inside the world object (at
-	// `world+0x16062`, which `FUN_005eeee0` reaches through `0x5ef046`), and
+	// `world+0x16062`, which the start-placement routine @ `0x5eeee0` reaches
+	// through `0x5ef046`), and
 	// every generation pass draws from it. One draw is
 	// `state = state * 0x41c64e6d + 0x3039`, and the value handed out is the
 	// state's bits 16..30 divided by 32768 - the function reads the state's

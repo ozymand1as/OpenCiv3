@@ -4,7 +4,7 @@ namespace C7Engine {
 	/// <summary>
 	/// Dispersing a barbarian camp (spec 22 section 6.3).
 	///
-	/// The original has one handler for this, <c>FUN_00565a00</c>, reached from
+	/// The original has one handler for this, at <c>0x565a00</c>, reached from
 	/// two places: the unit-movement path, when a non-barbarian unit ends its
 	/// move on a camp tile, and the territory owner writer, when a border
 	/// change gives the camp's tile to a civilization. The reward follows the

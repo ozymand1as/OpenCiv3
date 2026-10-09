@@ -37,10 +37,10 @@ public enum DiplomaticMood {
 public class DiplomaticReputation {
 	// Section 3.1 index 0. Incremented on the defending side by every war
 	// declaration (Leader_declare_war @ 0x501f20 step 4). The attitude function
-	// weights it +4 per count with NO cap, unlike its neighbours: the
-	// disassembly at 0x440135 loads `[A+0x1B0+B*0x4C]` and scales it by four
-	// without the `cmp 8` guard that the very next field (`+0x1B4`) has, so
-	// spec section 3.1's "4 x min(rep, 2)" for this row is wrong.
+	// weights it +4 per count with NO cap, unlike its neighbours: the load at
+	// 0x440135 reads the pair's reputation record and scales it by four
+	// without the eight-count clamp that the very next field (`+0x1B4`) carries,
+	// so spec section 3.1's "4 x min(rep, 2)" for this row is wrong.
 	public int warDeclarationsAgainstUs;
 
 	// Section 3.1 index 1, `field_4` in the header. +4 x min(rep, 2).
@@ -93,7 +93,7 @@ public class DiplomaticReputation {
 
 	// Section 3.1 indices 15-18, the header's `field_3C[0..3]`. Weights
 	// -min(rep, 10), +16 x rep, +rep, +rep. Index 18 is incremented by the
-	// trespass/provocation handler FUN_00438370 @ 0x438370 (spec section 9.2).
+	// trespass/provocation handler at 0x438370 (spec section 9.2).
 	public int field3C0;
 	public int field3C1;
 	public int field3C2;
@@ -118,7 +118,7 @@ public class DiplomaticReputation {
 
 	/// <summary>
 	/// We caught a spy of the subject (index 4, `caught_spy`). Incremented by the
-	/// provocation handler FUN_00502cc0 @ 0x502cc0, and by the engine's
+	/// provocation handler at 0x502cc0, and by the engine's
 	/// espionage bookkeeping when a mission's agent is exposed.
 	/// </summary>
 	public void RecordSpyCaught() {
@@ -137,7 +137,7 @@ public class DiplomaticReputation {
 
 	/// <summary>
 	/// A trespass / demand-withdrawal event involving the subject (index 18,
-	/// `field_3C[3]`). The shipped handler FUN_00438370 @ 0x438370 increments it
+	/// `field_3C[3]`). The shipped handler at 0x438370 increments it
 	/// and raises human notification code 8.
 	/// </summary>
 	public void RecordTrespass() {
@@ -260,7 +260,7 @@ public static class DiplomaticAttitude {
 	///
 	/// BOTH populations of callers matter, because the attitude function is a
 	/// Leader vtable slot (slot `0x84` of the vtable at `0x66cb38`) as well as a
-	/// directly called function, so a search for a direct `call 0x440100` finds
+	/// directly called function, so a search for a direct reference to 0x440100 finds
 	/// only the first population (`PROGRESS.md` finding 48). The direct callers
 	/// push 0 - `0x44c95e`, `0x5186d2` and `0x51b518` - as do the indirect ones at
 	/// `0x4384da` and `0x447957`/`0x447972` (the per-turn `Leader_begin_turn`), so
@@ -362,10 +362,10 @@ public static class DiplomaticAttitude {
 		if (HasDeal(self, other, DealSubType.MilitaryAlliance))
 			score -= 5;
 
-		// FUN_00501020: -2 per third civ that A and B are jointly allied against.
+		// The shared-enemy count at 0x501020: -2 per third civ that A and B are jointly allied against.
 		score -= 2 * JointAllianceCount(self, other);
 
-		// FUN_0055e8e0: the subject holds at least one resource at all.
+		// The has-any-resource test at 0x55e8e0: the subject holds at least one resource at all.
 		//
 		// UNVERIFIED PROXY (see spec 20 section 11 item 13). The original walks the
 		// subject's own `Available_Resources` table (leader `+0x1614`, one 0x60-byte
@@ -529,7 +529,7 @@ public static class DiplomaticAttitude {
 		return rel != null && rel.multiTurnDeals.Any(deal => deal != null && deal.dealSubType == subType);
 	}
 
-	// FUN_00501020: how many third civs the pair are jointly allied against.
+	// The shared-enemy count at 0x501020: how many third civs the pair are jointly allied against.
 	private static int JointAllianceCount(Player self, Player other) {
 		PlayerRelationship rel = Relationship(self, other);
 		if (rel == null)

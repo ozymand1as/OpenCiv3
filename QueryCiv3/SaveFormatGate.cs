@@ -69,8 +69,8 @@ namespace QueryCiv3 {
 		/// True when a city record stores its date sub-record. That sub-record (a tagged
 		/// `DATE` chunk of 84 payload bytes) only exists from save format 17.04 on: the
 		/// city reader tests the minor version and, below 4, computes the value instead of
-		/// reading it, so no bytes for it are present in the file (city reader
-		/// `FUN_004bbed0`, the `minor &lt; 4` test at 0x4bc34c in the shipped build).
+		/// reading it, so no bytes for it are present in the file (the city reader's
+		/// `minor &lt; 4` test at 0x4bc34c in the shipped build).
 		/// </summary>
 		public bool CityStoresDateSubRecord { get; }
 
@@ -78,7 +78,7 @@ namespace QueryCiv3 {
 		/// True when a city record stores the 4-byte field added in save format 20. The
 		/// city reader tests the major version and, below 20, zeroes the field and reads
 		/// nothing: the field's chunk - which also carries the city record's own revision,
-		/// `FUN_004bbed0` at 0x4bc39b - is not in the file, and neither are the arrays and
+		/// read at 0x4bc39b - is not in the file, and neither are the arrays and
 		/// objects that revision gates.
 		/// </summary>
 		public bool CityStoresFormat20Field { get; }
@@ -168,7 +168,7 @@ namespace QueryCiv3 {
 		/// <summary>
 		/// The offset of the body - the first tagged chunk - in a save of this version,
 		/// from the header table of spec 28 section 2.1 and the reader that implements it
-		/// (<c>FUN_005920e0 @ 0x5920e0</c>: it consumes the prologue, reads the major
+		/// (the save-header reader, <c>0x5920e0</c>: it consumes the prologue, reads the major
 		/// version, reads the minor version only when the major is at least 17, reads the
 		/// GUID only when the minor is at least 7, and hands the body to <c>move_game_data</c>
 		/// at whatever offset that leaves): the prologue's six bytes, the major version's
@@ -251,15 +251,15 @@ namespace QueryCiv3 {
 		// omits it (the block advances 0x108 rather than 0x100). It is the field those eight
 		// extra bytes carry, which the loader never reads into its model. The size half is
 		// implemented as <see cref="WorldTileBlockLengthBeforeMinor4"/>: move_game_data at
-		// 0x590030 copies the block's 0x100 bytes (0x40 dwords, 00590000.c:541-552) and
-		// then advances the cursor 0x108 instead of 0x100 for minor < 4 (00590000.c:558-560).
+		// 0x590030 copies the block's 0x100 bytes (0x40 dwords) and
+		// then advances the cursor 0x108 instead of 0x100 for minor < 4.
 		//
 		// The omitted sub-field itself is not ported, and cannot be named from the binary
 		// as shipped: spec 28's row names neither the field nor the record it belongs to,
 		// and its only cited evidence is that advance. At that site the 0x100 bytes are
 		// read into the block whatever the minor is, so no field is read conditionally; the
 		// only other minor < 4 test in the binary is the city reader's derived value
-		// (FUN_004bbed0 @ 0x4bbed0, 004b0000.c:9056), which is the separate row already
+		// (the city reader at 0x4bbed0), which is the separate row already
 		// ported as <see cref="SaveFieldLayout.CityDerivesDateSubRecord"/>. The save TILE
 		// reader loop that could carry the field is itself an open item in spec 28 section
 		// 7.1. The blocker is therefore recorded by what the container shows: the
