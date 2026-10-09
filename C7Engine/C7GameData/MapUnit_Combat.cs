@@ -67,8 +67,8 @@ namespace C7GameData {
 		// whole-move rates the gate reads "maximum movement greater than one point"
 		// — slow units never retreat (12_combat.md §6.1). Asking the unit rather
 		// than its prototype is what lets a loaded army retreat: the Army type's
-		// own movement field is 1, but its members' maximum plus the army bonus is
-		// always greater than one point (11_movement.md §2.2).
+		// own movement field is 1, but its slowest member's rate plus the army
+		// bonus is always greater than one point (11_movement.md §2.2).
 		public bool CanRetreat() => MaxMovementPoints > 1;
 
 		// The chance this unit escapes a fight it is losing, as a probability
