@@ -36,6 +36,11 @@ namespace C7Engine {
 			MaybeDoPriorityReevaluation(player);
 			MaybePickTechToResearch(player, gameData);
 
+			// The espionage driver, which the original's leader start-of-turn
+			// routine runs for a leader that is not a local human before that
+			// leader's own AI turn work (24_espionage.md section 8.4).
+			EspionageAi.DoEspionage(gameData, player);
+
 			// Roughly every 4 turns, see if there are trades to be made.
 			if (GameData.rng.Next(100) < 25) {
 				await AttemptTrading(player);

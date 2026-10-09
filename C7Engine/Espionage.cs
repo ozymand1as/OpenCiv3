@@ -40,11 +40,11 @@ namespace C7Engine {
 	// including Initiate Propaganda's per-citizen subversion roll and city flip
 	// (spec 6.6).
 	//
-	// Not implemented here: the AI's per-turn espionage driver and its
-	// mood-weighted mission chooser (no AI espionage hook and no
-	// diplomatic-mood field - 24_espionage.md 8.4), and the human
-	// steal-technology pick through the science advisor (24_espionage.md 6.3,
-	// marked [?] in the spec).
+	// The AI's per-turn driver and its mood-weighted mission chooser live in
+	// EspionageAi.cs (24_espionage.md 8.4).
+	//
+	// Not implemented here: the human steal-technology pick through the science
+	// advisor (24_espionage.md 6.3, marked [?] in the spec).
 	public static class Espionage {
 		public const int BuildEmbassy = 0;
 		public const int InvestigateCity = 1;
@@ -150,7 +150,11 @@ namespace C7Engine {
 			if (!TryGetRelationship(actor, target, out PlayerRelationship relationship)) {
 				return false;
 			}
-			if (IsImmune(target, missionId)) {
+			// The menu predicate consults the target's immunity field for
+			// missions 0 through 6 only (spec 2.4); the AI's chooser reads the
+			// same field for every mission it can pick, which is why the raw test
+			// and this clamp are separate.
+			if (missionId >= BuildEmbassy && missionId <= InitiatePropaganda && IsImmune(target, missionId)) {
 				return false;
 			}
 
@@ -172,13 +176,10 @@ namespace C7Engine {
 			}
 		}
 
-		// The target's government is immune to one mission id (spec 2.4). The
-		// original engine only consults the field for missions 0 through 6.
-		private static bool IsImmune(Player target, int missionId) {
-			if (missionId < BuildEmbassy || missionId > InitiatePropaganda) {
-				return false;
-			}
-			return target.government != null && target.government.immuneTo == missionId;
+		// The target's government is immune to one mission id: the field is a
+		// mission id and -1 means no immunity (spec 2.4).
+		public static bool IsImmune(Player target, int missionId) {
+			return target?.government != null && target.government.immuneTo == missionId;
 		}
 
 		// ---------------------------------------------------------------------
@@ -364,25 +365,39 @@ namespace C7Engine {
 		// Running a mission (spec 4.4, 5.2, 6, 7)
 		// ---------------------------------------------------------------------
 
-		// Runs one mission attempt: checks the preconditions, pays the cost and
-		// resolves the mission. The cost is paid before the roll, so a failed
-		// mission still costs the full price.
+		// Runs one mission attempt through the mission menu: checks the
+		// preconditions, then resolves the mission. The cost is paid before the
+		// roll, so a failed mission still costs the full price.
 		public static EspionageMissionResult RunMission(GameData gameData, Player actor, Player target, City targetCity, int missionId, EspionageAgent agent, EspionageSafetyLevel safety = EspionageSafetyLevel.Carefully) {
+			if (gameData?.GetEspionageMission(missionId) == null) {
+				return new EspionageMissionResult { message = $"Unknown espionage mission id {missionId}." };
+			}
+			if (!MissionIsAvailable(gameData, actor, target, missionId, agent)) {
+				return new EspionageMissionResult { message = "The mission is not available." };
+			}
+			return RunChosenMission(gameData, actor, target, targetCity, missionId, agent, safety);
+		}
+
+		// Resolves a mission whose target has already been chosen. The original
+		// engine's run entry (0x528ca0) is separate from its mission-menu
+		// predicate (0x528be0) and does not consult it, which is how the AI runs
+		// a mission after its own precondition checks (24_espionage.md 8.4).
+		//
+		// It still refuses an unknown mission id, an agent the acting civ does
+		// not have, a target city that does not belong to the target civ, and an
+		// unaffordable price.
+		public static EspionageMissionResult RunChosenMission(GameData gameData, Player actor, Player target, City targetCity, int missionId, EspionageAgent agent, EspionageSafetyLevel safety = EspionageSafetyLevel.Carefully) {
 			EspionageMissionResult result = new();
 
 			if (gameData?.GetEspionageMission(missionId) == null) {
 				result.message = $"Unknown espionage mission id {missionId}.";
 				return result;
 			}
-			// The run path composes the agent predicate again, so a caller that
+			// The run path composes the agent predicate, so a caller that
 			// bypasses the mission menu still cannot run a mission through an
 			// agent its civ does not have.
 			if (!AgentIsAvailable(gameData, actor, agent)) {
 				result.message = "The acting civ cannot use that agent.";
-				return result;
-			}
-			if (!MissionIsAvailable(gameData, actor, target, missionId, agent)) {
-				result.message = "The mission is not available.";
 				return result;
 			}
 			if (targetCity == null || targetCity.owner != target) {

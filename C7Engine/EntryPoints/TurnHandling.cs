@@ -125,6 +125,10 @@ namespace C7Engine {
 				// (the original returns immediately for player index 0).
 				PlayerRelationship.DecayReputationMemories(player, gameData);
 
+				// The leader start-of-turn espionage state that expires
+				// (24_espionage.md section 8.4).
+				EspionageAi.BeginTurn(gameData, player);
+
 				if (player.isBarbarians) {
 					await BarbarianAI.PlayTurn(player, gameData);
 				} else if (!player.isHuman) {

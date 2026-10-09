@@ -9877,7 +9877,10 @@
       "contentFacesInCity": 0,
       "combatDefenseBonus": 0,
       "maintenanceCost": 0,
-      "iconRowIndex": 59
+      "iconRowIndex": 59,
+      "flags": [
+        "treasuryEarnsInterest"
+      ]
     },
     {
       "name": "Apollo Program",

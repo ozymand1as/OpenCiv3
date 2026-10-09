@@ -197,6 +197,11 @@ public class EspionageImportTest {
 		// Intelligence Agency allows spy missions; Courthouse resists bribery.
 		Assert.Equal("Intelligence Agency", biq.Bldg.Single(b => b.AllowsSpyMissions).Name);
 		Assert.Equal("Courthouse", biq.Bldg.Single(b => b.ResistantToBribery).Name);
+
+		// Wall Street alone carries the flag the AI's espionage reserve counts
+		// (24_espionage.md 8.4), and it is a small wonder.
+		Assert.Equal("Wall Street", biq.Bldg.Single(b => b.TreasuryEarnsInterest).Name);
+		Assert.True(biq.Bldg.Single(b => b.TreasuryEarnsInterest).SmallWonder);
 	}
 }
 
@@ -241,6 +246,9 @@ public class EspionageRulesetTest {
 		Assert.Contains(SaveTech.Flag.EnablesDiplomats, save.Techs.Single(t => t.Name == "Writing").flags);
 		Assert.Contains(SaveBuilding.Flag.AllowsSpyMissions, save.Buildings.Single(b => b.name == "Intelligence Agency").flags);
 		Assert.Contains(SaveBuilding.Flag.ResistantToBribery, save.Buildings.Single(b => b.name == "Courthouse").flags);
+		// The AI's espionage reserve reads this flag, so the Lua ruleset needs it
+		// as much as the BIQ import does.
+		Assert.Contains(SaveBuilding.Flag.TreasuryEarnsInterest, save.Buildings.Single(b => b.name == "Wall Street").flags);
 
 		Assert.Equal(6, save.CultureLevels.Count);
 		Assert.Equal(30, save.CultureLevels[0].chanceOfSuccessfulPropaganda);
