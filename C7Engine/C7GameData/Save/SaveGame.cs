@@ -137,6 +137,16 @@ namespace C7GameData.Save {
 			EngineStorage.gameData = data;
 
 			ConvertMapAndPlayers(data);
+
+			// The reveal-all default of a scenario too old to carry per-tile
+			// reveal data (28_formats.md section 2.3). It has to run after the
+			// tile knowledge is built from the save, and before anything derives
+			// state from it - the trade network is reveal-gated for a human
+			// player (27_resources_trade_network.md section 4.4) and is dropped
+			// at the bottom of this method anyway.
+			if (revealAllTilesOnLoad) {
+				data.RevealAllTiles();
+			}
 			ConvertBuildings(data);
 			ConvertUnits(data);
 			ConvertCities(data);
@@ -538,6 +548,22 @@ namespace C7GameData.Save {
 		public Difficulty GameDifficulty = new();
 
 		public GameMode.Config GameModeConfig = new("civ3");
+
+		/// <summary>
+		/// The scenario loader's reveal-all mode, the Civ3 flag at BIC +0xba0 of
+		/// 28_formats.md section 2.3: a file whose VER# is below 12.03, or whose
+		/// TERR table has the twelve pre-Conquests records, carries no per-tile
+		/// reveal data, so every tile counts as revealed when the TILE section is
+		/// read. The read sets this; the game start reads it and calls
+		/// GameData.RevealAllTiles, the way Map_process_after_placing reads
+		/// +0xba0 after the sections are in.
+		///
+		/// It is deliberately not serialized: a C7 save carries each player's
+		/// known-tile list, and the save path trusts that list rather than
+		/// re-deriving it.
+		/// </summary>
+		[JsonIgnore]
+		public bool revealAllTilesOnLoad = false;
 
 		public void Save(string path) {
 			byte[] json = JsonSerializer.SerializeToUtf8Bytes(this, JsonOptions);

@@ -286,11 +286,43 @@ namespace C7GameData {
 			return importer.importBiq(biqPath, defaultBiqPath, getPediaIconsPath);
 		}
 
+		/// <summary>
+		/// The record count of a pre-Conquests terrain table: the twelve terrains
+		/// with no Marsh and no Volcano (28_formats.md section 2.3's TERR row).
+		/// </summary>
+		public const int PreConquestsTerrainCount = 12;
+
+		/// <summary>
+		/// Whether the scenario loader treats every tile as revealed while it reads
+		/// the file (28_formats.md section 2.3). Either of two triggers sets the
+		/// loader's single reveal-all flag:
+		///
+		/// * VER# below 12.03, the version that introduced per-tile reveal
+		///   tracking; or
+		/// * a TERR section with <see cref="PreConquestsTerrainCount"/> records, a
+		///   pre-Conquests ruleset, which the loader resizes to fourteen records
+		///   (section 5.2).
+		///
+		/// The original compares major + minor / 100 against 12.03 as a float; the
+		/// integer comparison is the same test for the minors a file can carry.
+		/// </summary>
+		public static bool RevealAllTilesOnLoad(BiqData biq) {
+			Civ3Version version = biq.FileData.Civ3Version;
+			bool beforeRevealTracking = version.MajorVersion < 12
+				|| (version.MajorVersion == 12 && version.MinorVersion < 3);
+			return beforeRevealTracking || biq.Terr?.Length == PreConquestsTerrainCount;
+		}
+
 		private SaveGame importBiq(string biqPath, string defaultBiqPath, Func<string, string> getPediaIconsPath) {
 			biq = BiqData.LoadFile(biqPath);
 			defaultBiq = BiqData.LoadFile(defaultBiqPath);
 			pediaIcons = new(getPediaIconsPath(biq.Game[0].ScenarioSearchFolders));
 			save.Seed = biq.Wmap[0].MapSeed;
+
+			// A file too old to carry per-tile reveal data is loaded fully
+			// revealed. The flag is read at the game start, the way the loader's
+			// +0xba0 is read by Map_process_after_placing.
+			save.revealAllTilesOnLoad = RevealAllTilesOnLoad(biq);
 
 			ImportSharedBiqData();
 			ImportBicLeaders();

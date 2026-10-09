@@ -58,7 +58,8 @@ namespace C7Engine.Pathing {
 			ComputeWaterNetwork(player);
 		}
 
-		// Pass 0: the road network.
+		// Pass 0: the road network. A human player's network also requires every
+		// step to run through revealed tiles (section 4.4).
 		private void ComputeLandNetwork(Player player) {
 			HashSet<Tile> seen = new();
 
@@ -86,12 +87,31 @@ namespace C7Engine.Pathing {
 					}
 
 					foreach (Tile n in x.neighbors.Values) {
-						if (n.IsRoaded() && seen.Add(n)) {
-							toCheck.Enqueue(n);
+						if (n == null || n == Tile.NONE || !n.IsRoaded() || seen.Contains(n)) {
+							continue;
 						}
+						if (!LandStepAllowed(player, x, n)) {
+							continue;
+						}
+						seen.Add(n);
+						toCheck.Enqueue(n);
 					}
 				}
 			}
+		}
+
+		// Every road step must run through tiles the acting player has revealed
+		// when that player is human; an AI's land network ignores the requirement
+		// (27_resources_trade_network.md section 4.4, and the asymmetry left open
+		// in section 8.1). The starting tile is exempt, exactly as in the
+		// original: Trade_Net_set_unit_path tests only trade-capability on the
+		// tile it starts from, and the reveal test lives in the per-edge cost
+		// function.
+		private static bool LandStepAllowed(Player player, Tile from, Tile to) {
+			if (!player.isHuman) {
+				return true;
+			}
+			return player.HasExploredTile(from) && player.HasExploredTile(to);
 		}
 
 		// Pass 1: air trade. An airport joins a city to every city of a civ it

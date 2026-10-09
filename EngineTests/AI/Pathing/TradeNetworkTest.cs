@@ -13,6 +13,11 @@ namespace EngineTests.AI.Pathing;
 // Tests for the three passes of the trade network: land (roads), air
 // (airports) and water (harbours plus the Astronomy/Navigation/Magnetism and
 // Great Lighthouse gates).
+//
+// The land pass's revealed-tile requirement is asymmetric on purpose: a human
+// player's network may only use tiles that player has revealed, while an AI's
+// ignores the requirement (27_resources_trade_network.md section 4.4, and the
+// open question of section 8.1).
 public class TradeNetworkTest {
 	private static int cityCounter = 0;
 
@@ -154,6 +159,72 @@ public class TradeNetworkTest {
 		TradeNetwork network = new(gameData);
 
 		Assert.False(network.ConnectedToCapital(player, second));
+	}
+
+	// A road the human has not seen is not part of the human's network. The
+	// unseen tile here is the middle of a chain, so both the step into it and
+	// the step out of it fail; the same test applies to a city tile at either
+	// end, which is why the two city tiles are revealed and the road tile is
+	// not. The capital is the flood fill's start and is therefore never gated,
+	// exactly as the original tests only trade-capability on the tile it starts
+	// from.
+	[Fact]
+	public void AHumansLandNetworkNeedsTheConnectingTileRevealed() {
+		C7GameData.GameData gameData = new();
+		EngineStorage.InitializeGameDataForTests(gameData);
+		Player player = MakePlayer(gameData, "player-1");
+		player.isHuman = true;
+
+		Tile capitalTile = MakeTile(Land());
+		Tile middleTile = MakeTile(Land());
+		Tile secondTile = MakeTile(Land());
+		Connect(capitalTile, middleTile, TileDirection.EAST);
+		Connect(middleTile, secondTile, TileDirection.EAST);
+
+		City capital = MakeCity(gameData, player, capitalTile, "Capital");
+		City second = MakeCity(gameData, player, secondTile, "Second");
+
+		middleTile.overlays.Add(new TerrainImprovement(Tile.TileOverlays.ROAD, TerrainImprovement.Layer.Roads, 1f / 3));
+		secondTile.overlays.Add(new TerrainImprovement(Tile.TileOverlays.ROAD, TerrainImprovement.Layer.Roads, 1f / 3));
+
+		// Both city tiles are known, the road tile between them is not.
+		RevealTo(player, capitalTile);
+		RevealTo(player, secondTile);
+
+		TradeNetwork network = new(gameData);
+		Assert.False(network.ConnectedToCapital(player, second));
+
+		// Revealing the connecting tile is what makes the road usable.
+		RevealTo(player, middleTile);
+		TradeNetwork revealed = new(gameData);
+		Assert.True(revealed.ConnectedToCapital(player, second));
+	}
+
+	// The other half of the asymmetry: an AI's land network is not gated, even
+	// though it is looking at the same roads.
+	[Fact]
+	public void AnAisLandNetworkIgnoresTheRevealRequirement() {
+		C7GameData.GameData gameData = new();
+		EngineStorage.InitializeGameDataForTests(gameData);
+		Player player = MakePlayer(gameData, "player-1");
+
+		Tile capitalTile = MakeTile(Land());
+		Tile middleTile = MakeTile(Land());
+		Tile secondTile = MakeTile(Land());
+		Connect(capitalTile, middleTile, TileDirection.EAST);
+		Connect(middleTile, secondTile, TileDirection.EAST);
+
+		City capital = MakeCity(gameData, player, capitalTile, "Capital");
+		City second = MakeCity(gameData, player, secondTile, "Second");
+
+		middleTile.overlays.Add(new TerrainImprovement(Tile.TileOverlays.ROAD, TerrainImprovement.Layer.Roads, 1f / 3));
+		secondTile.overlays.Add(new TerrainImprovement(Tile.TileOverlays.ROAD, TerrainImprovement.Layer.Roads, 1f / 3));
+
+		// Nothing is revealed to the AI at all.
+		Assert.Empty(player.tileKnowledge.knownTiles);
+
+		TradeNetwork network = new(gameData);
+		Assert.True(network.ConnectedToCapital(player, second));
 	}
 
 	private class Islands {

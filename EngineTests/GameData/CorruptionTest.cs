@@ -172,7 +172,13 @@ public class CorruptionTest : IClassFixture<SaveGameFixture> {
 	}
 
 	// Runs a road between the capital and the test city, roading every tile on
-	// the path, so the trade network flood fill connects them.
+	// the path, so the trade network flood fill connects them. The tiles are
+	// marked known to the player as well: a human's land trade network may only
+	// use tiles that player has revealed (27_resources_trade_network.md
+	// section 4.4), and a real empire's own city and road tiles are always
+	// revealed - a city's tile is where its founding unit stood, and a worker
+	// reveals each tile it roads. Without this the fixture would be testing an
+	// empire that no game can produce.
 	private void AddRoadPath(TestEmpire empire) {
 		Tile previous = empire.capitalTile;
 		for (int x = empire.capitalTile.XCoordinate + 2; x <= empire.cityTile.XCoordinate; x += 2) {
@@ -188,6 +194,7 @@ public class CorruptionTest : IClassFixture<SaveGameFixture> {
 
 		foreach (Tile t in empire.roadTiles) {
 			t.overlays.Add(empire.road);
+			empire.player.tileKnowledge.knownTiles.Add(t);
 		}
 	}
 
