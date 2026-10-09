@@ -65,6 +65,36 @@ public class PlayerRelationship {
 	// has been reached.
 	public int refuseContactUntilTurn = -1;
 
+	// The "grievance" half of the imported `Contacts` word
+	// (spec 20_diplomacy_trade.md section 3.3). `Leader_get_attitude_toward`
+	// reads two bits of `A.Contacts[B]` at 0x44032c-0x44033b: bit 0x10 adds +5
+	// (through the same branch as "A is at war with B") and bit 0x8 adds +1 only
+	// when that branch did not fire. Nothing in the shipped executable ever sets
+	// either bit - a scan of every write to the Contacts slot turns up only 1, 2,
+	// 0x20 and mask-clears - so the bits can only come from an imported contact
+	// word (the save's LEAD section carries the whole word). ImportCiv3 keeps just
+	// those two bits here; a scenario/scenario-derived game leaves them zero.
+	public int contactGrievances;
+
+	public const int ContactGrievanceBit8 = 0x8;
+	public const int ContactGrievanceBit16 = 0x10;
+
+	/// <summary>
+	/// True when bit <paramref name="bit"/> of this pair's imported contact word
+	/// is set. The bit names are unknown (spec 20 section 2 tags them **[?]**);
+	/// only their attitude weights are measured.
+	/// </summary>
+	public bool HasContactGrievance(int bit) => (contactGrievances & bit) != 0;
+
+	/// <summary>
+	/// The part of an imported `Contacts` word that the attitude function reads:
+	/// bits 0x8 and 0x10 only. The other bits (1 = met, 2 = mutual, 0x20 = plotting
+	/// war, ...) have their own engine-side state.
+	/// </summary>
+	public static int GrievanceBitsOfContactWord(int contactWord) {
+		return contactWord & (ContactGrievanceBit8 | ContactGrievanceBit16);
+	}
+
 	public List<MultiTurnDeal> multiTurnDeals = new List<MultiTurnDeal>();
 
 	public bool declaredWarWithActiveRightOfPassage = false;
