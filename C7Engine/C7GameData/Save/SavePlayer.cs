@@ -97,6 +97,11 @@ namespace C7GameData.Save {
 		// saves that predate the field loadable.
 		public int? victoryPoints;
 
+		// How many cities this player has lost (spec 25 section 4: the
+		// CityElimination rule compares it against CityEliminationCount).
+		// Nullable for the same save-compatibility reason as victoryPoints.
+		public int? citiesLost;
+
 		// Used when importing from .biq, to make it easier to distinguish barbarians from other players.
 		// It's not meant to be saved in the json.
 		[JsonIgnore]
@@ -131,6 +136,7 @@ namespace C7GameData.Save {
 				rules = rules,
 				spaceshipPartsBuilt = spaceshipPartsBuilt is not null ? new List<int>(spaceshipPartsBuilt) : new(),
 				victoryPoints = victoryPoints ?? 0,
+				citiesLost = citiesLost ?? 0,
 			};
 			foreach (TileLocation tile in tileKnowledge) {
 				player.tileKnowledge.AddTileToKnown(map.tileAt(tile.X, tile.Y));

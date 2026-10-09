@@ -33,6 +33,13 @@ public class VictoryConditions {
 	public int AdvancementCost { get; set; } = 5;
 	public int CityConquestPopulation { get; set; } = 100;
 	public int VictoryPointScoring { get; set; } = 25;
+
+	// How many cities a player may lose before instant elimination ends the
+	// game for it when the CityElimination rule is on (spec 25 section 4:
+	// the value is compared against a player's lost-city count inside the
+	// city-capture path). Civ3 stores 0 when the BIQ leaves it unset and
+	// installs 1 as the default.
+	public int CityEliminationCount { get; set; } = 1;
 	public int CapturingSpecialUnit { get; set; } = 1000;
 
 	// Civ3 gates every victory-point award and the type-8 condition on one

@@ -6,6 +6,10 @@ namespace C7GameData.Save {
 		public string nationality;
 		public ID city;
 		public TileLocation tileWorked;
+
+		// Civ3's per-citizen resistance flag (spec 17 section 7). Absent
+		// (false) in saves that predate the field.
+		public bool isResisting;
 	}
 
 	public class SaveCityBuilding {
@@ -53,6 +57,11 @@ namespace C7GameData.Save {
 		public List<SaveCityResident> residents = new List<SaveCityResident>();
 		public List<SaveCityBuilding> buildings = [];
 
+		// The player this city was captured from, whose civ the resistance
+		// rolls compare against (spec 17 section 7). Null when the city has
+		// never been captured.
+		public ID resistanceFrom;
+
 		public SaveCity() { }
 
 		public SaveCity(City city) {
@@ -77,9 +86,11 @@ namespace C7GameData.Save {
 					city = resident.city.id,
 					tileWorked = new TileLocation(resident.tileWorked),
 					citizenType = resident.citizenType.Id,
+					isResisting = resident.isResisting,
 				};
 			});
 			buildings = city.constructed_buildings.ConvertAll(building => new SaveCityBuilding(building));
+			resistanceFrom = city.resistanceFrom?.id;
 
 			foreach (KeyValuePair<Player, int> keyValuePair in city.perPlayerCulture) {
 				perPlayerCulture.Add(keyValuePair.Key.id.ToString(), keyValuePair.Value);
@@ -122,8 +133,10 @@ namespace C7GameData.Save {
 					nationality = civilizations.Find(civ => civ.name == resident.nationality),
 					tileWorked = gameMap.tileAt(resident.tileWorked.X, resident.tileWorked.Y),
 					city = city,
+					isResisting = resident.isResisting,
 				};
 			});
+			city.resistanceFrom = players.Find(p => p.id == resistanceFrom);
 
 			// Fill in the back pointers.
 			foreach (CityResident cr in city.residents) {

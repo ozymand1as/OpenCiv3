@@ -13338,7 +13338,8 @@
       "freeUnitsPerTown": 0,
       "freeUnitsPerCity": 0,
       "freeUnitsPerMetropolis": 0,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [0, 5, 5, 5, 5, 5, 0, 0]
     },
     {
       "hasTilePenalty": true,
@@ -13360,7 +13361,8 @@
       "freeUnitsPerTown": 4,
       "freeUnitsPerCity": 4,
       "freeUnitsPerMetropolis": 4,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [-5, 0, 5, 5, 5, 5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13383,7 +13385,8 @@
       "freeUnitsPerTown": 2,
       "freeUnitsPerCity": 4,
       "freeUnitsPerMetropolis": 8,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [-5, -5, 0, 5, 5, 5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13406,7 +13409,8 @@
       "freeUnitsPerTown": 6,
       "freeUnitsPerCity": 6,
       "freeUnitsPerMetropolis": 6,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [-5, -5, -5, 0, -5, 5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13429,7 +13433,8 @@
       "freeUnitsPerTown": 1,
       "freeUnitsPerCity": 3,
       "freeUnitsPerMetropolis": 4,
-      "unitCost": 2
+      "unitCost": 2,
+      "resistanceModifiers": [-5, -5, 5, 5, 0, 5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13452,7 +13457,8 @@
       "freeUnitsPerTown": 0,
       "freeUnitsPerCity": 0,
       "freeUnitsPerMetropolis": 0,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [-5, -5, -5, 5, -5, 0, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13475,7 +13481,8 @@
       "freeUnitsPerTown": 4,
       "freeUnitsPerCity": 7,
       "freeUnitsPerMetropolis": 10,
-      "unitCost": 1
+      "unitCost": 1,
+      "resistanceModifiers": [-5, -5, 0, -10, -5, -5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13498,7 +13505,8 @@
       "freeUnitsPerTown": 5,
       "freeUnitsPerCity": 2,
       "freeUnitsPerMetropolis": 1,
-      "unitCost": 3
+      "unitCost": 3,
+      "resistanceModifiers": [-5, -5, 5, 5, 0, 0, 5, 0]
     }
   ],
   "difficulties": [
@@ -13730,6 +13738,7 @@
     "defeatingOpposingUnitCost": 5,
     "advancementCost": 5,
     "cityConquestPopulation": 100,
+    "cityEliminationCount": 1,
     "victoryPointScoring": 25,
     "capturingSpecialUnit": 1000,
     "spaceshipPartsNeeded": [
@@ -13807,32 +13816,44 @@
     {
       "name": "in awe of",
       "chanceOfSuccessfulPropaganda": 30,
-      "cultureRatioPercentage": 300
+      "cultureRatioPercentage": 300,
+      "initialResistanceChance": 40,
+      "continuedResistanceChance": 30
     },
     {
       "name": "admirers of",
       "chanceOfSuccessfulPropaganda": 25,
-      "cultureRatioPercentage": 200
+      "cultureRatioPercentage": 200,
+      "initialResistanceChance": 50,
+      "continuedResistanceChance": 40
     },
     {
       "name": "impressed with",
       "chanceOfSuccessfulPropaganda": 20,
-      "cultureRatioPercentage": 100
+      "cultureRatioPercentage": 100,
+      "initialResistanceChance": 60,
+      "continuedResistanceChance": 50
     },
     {
       "name": "unimpressed by",
       "chanceOfSuccessfulPropaganda": 10,
-      "cultureRatioPercentage": 75
+      "cultureRatioPercentage": 75,
+      "initialResistanceChance": 70,
+      "continuedResistanceChance": 60
     },
     {
       "name": "dismissive of",
       "chanceOfSuccessfulPropaganda": 5,
-      "cultureRatioPercentage": 50
+      "cultureRatioPercentage": 50,
+      "initialResistanceChance": 80,
+      "continuedResistanceChance": 70
     },
     {
       "name": "disdainful of",
       "chanceOfSuccessfulPropaganda": 3,
-      "cultureRatioPercentage": 33
+      "cultureRatioPercentage": 33,
+      "initialResistanceChance": 90,
+      "continuedResistanceChance": 80
     }
   ]
 }

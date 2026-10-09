@@ -6,25 +6,22 @@ namespace C7Engine;
 /// award only while the rules have the victory-point group turned on, so the
 /// callers gate on GameData.VictoryPointsEnabled before adding anything.
 ///
-/// The three categories implemented here are the ones the engine can already
+/// The four categories implemented here are the ones the engine can already
 /// observe. The formulas are the original's, including its integer division:
 ///
 ///   advance     = TECH.Cost x AdvancementCost
 ///   unit kill   = (PRTO.Cost / 10) x DefeatingOpposingUnitCost
 ///   great wonder = BLDG.Cost x WonderCost
+///   city capture = city_population x CityConquestPopulation
 ///
 /// Civ3 stores a building's cost in the BIQ at one tenth of its shield cost,
 /// which is why a building's shield cost is divided by ten first - both for an
 /// imported BIQ (where the importer has already multiplied by ten) and for a
 /// ruleset building (where the json holds real shields).
 ///
-/// Three of the six categories are deliberately not implemented, because the
+/// Two of the six categories are deliberately not implemented, because the
 /// engine has no path that can observe them:
 ///
-/// * **Points by Conquest** (capturing a city, `city_population x
-///   CityConquestPopulation`). Civ3 awards this in `Leader_capture_city`, and
-///   OpenCiv3 has no city-capture path at all - a captured city is not even a
-///   concept yet. Do not fake the hook; it belongs with that feature.
 /// * **Points by Unit Capture** (capturing or recapturing the special
 ///   "Princess" unit, `CapturingSpecialUnit`). Needs the flag-unit rules
 ///   (`TR_CAPTURE_THE_PRINCESS` / `TR_REVERSE_CAPTURE_THE_FLAG`), which the
@@ -46,5 +43,9 @@ public static class VictoryPoints {
 
 	public static int ForGreatWonder(Building wonder, VictoryConditions rules) {
 		return (wonder.shieldCost / 10) * rules.WonderCost;
+	}
+
+	public static int ForCityCapture(int cityPopulation, VictoryConditions rules) {
+		return cityPopulation * rules.CityConquestPopulation;
 	}
 }
