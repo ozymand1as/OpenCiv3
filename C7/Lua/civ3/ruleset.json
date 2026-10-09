@@ -9380,7 +9380,8 @@
       "renderedObsoleteBy": "tech-42",
       "flags": [
         "mustBeCoastal",
-        "safeSeaTravel"
+        "safeSeaTravel",
+        "plusOneShipMovement"
       ],
       "traits": [
         "commercial",
@@ -9497,7 +9498,8 @@
       "maintenanceCost": 0,
       "iconRowIndex": 39,
       "flags": [
-        "mustBeCoastal"
+        "mustBeCoastal",
+        "plusOneShipMovement"
       ],
       "traits": [
         "commercial",

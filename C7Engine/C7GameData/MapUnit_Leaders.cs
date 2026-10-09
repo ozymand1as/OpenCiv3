@@ -70,10 +70,8 @@ public partial class MapUnit {
 	// and the empty-army shortfall of one internal unit exact at any scale. [C]
 	public float MaxMovementPoints {
 		get {
+			int scale = MovementScale;
 			if (IsArmy) {
-				int scale = Math.Max(1, owner?.rules?.MovementAlongRoads
-					?? EngineStorage.gameData?.rules?.MovementAlongRoads
-					?? Rules.DefaultMovementAlongRoads);
 				float running = -1f;  // internal units, as in the binary
 				foreach (MapUnit member in Members()) {
 					float memberMax = member.MaxMovementPoints * scale;
@@ -83,8 +81,86 @@ public partial class MapUnit {
 				}
 				return (running + scale) / scale;
 			}
-			return unitType.movement;
+
+			// get_max_move_points (0x5cddf0) runs entirely in internal units:
+			// base = UnitType.Movement * MovementAlongRoads, then each sea-only
+			// bonus is added as a multiple of the SAME scale, and only the C7
+			// boundary turns internal units back into movement points. Doing the
+			// arithmetic here in internal units is what makes each bonus a WHOLE
+			// movement point at any scale, rather than one internal unit (which
+			// would be a third of a point at the shipped scale of 3)
+			// (11_movement.md §2.2).
+			int internalUnits = (unitType.movement + SeaMovementBonusPoints) * scale;
+			return internalUnits / (float)scale;
 		}
+	}
+
+	// Civ3's movement scale, RULE.MovementAlongRoads: the number of internal
+	// movement units in one whole movement point.
+	private int MovementScale => Math.Max(1, owner?.rules?.MovementAlongRoads
+		?? EngineStorage.gameData?.rules?.MovementAlongRoads
+		?? Rules.DefaultMovementAlongRoads);
+
+	// The three sea-only movement bonuses of Civ3's get_max_move_points
+	// (0x5cddf0), each expressed in whole movement points:
+	//
+	//   +1   the civ owns a wonder with wonder-feature flag 0x8
+	//        (ITW_Plus_One_Ship_Movement)
+	//   +2   the civ owns a wonder with wonder-feature flag 0x4000
+	//        (ITW_Plus_Two_Ship_Movement)
+	//   +1   the civ's race has trait bit 7 (Seafaring)
+	//
+	// Each wonder flag is a BOOLEAN, not a per-wonder total: the test is
+	// "count > 0" (0x5cde39-0x5cde3d for 0x8, 0x5cde51-0x5cde5b for 0x4000),
+	// so a second carrier of the same flag adds nothing, while the two
+	// different flags each apply their own amount.
+	//
+	// All three sit behind the same two guards, both read at 0x5cde03-0x5cde12
+	// before the first bonus: the unit type's class field at unit-type +0x9C
+	// must be 1 (sea and nothing else), and the civ id must be greater than 0,
+	// which excludes the barbarian player. The wonder flags are counted with
+	// Leader_count_wonders_with_flag (0x55a8d0), which counts only wonder-class
+	// buildings whose flag is set and that are not obsolete for the leader, so
+	// the flags do nothing on an ordinary building (11_movement.md §2.2).
+	private int SeaMovementBonusPoints {
+		get {
+			// Unit_Class == 1: sea units only.
+			if (!IsWaterUnit()) {
+				return 0;
+			}
+			// civId > 0: the barbarian player is civ 0 and gets nothing. A unit
+			// with no owning civilization has no civ to award a bonus to either.
+			if (owner?.civilization == null || owner.isBarbarians) {
+				return 0;
+			}
+
+			int bonus = 0;
+			if (owner.OwnsBuildingWhere(b => b.plusOneShipMovement && CountsForWonderFlag(b))) {
+				bonus += 1;
+			}
+			if (owner.OwnsBuildingWhere(b => b.plusTwoShipMovement && CountsForWonderFlag(b))) {
+				bonus += 2;
+			}
+			if (owner.civilization.traits.Contains(Civilization.Trait.Seafaring)) {
+				bonus += 1;
+			}
+			return bonus;
+		}
+	}
+
+	// Leader_count_wonders_with_flag accepts a building only when its
+	// characteristic word at building +0xF0 carries ITC_Wonder (0x4) or
+	// ITC_Small_Wonder (0x8) (0x55a930-0x55a93f), and it skips a wonder whose
+	// obsoleting advance the leader already knows (0x55a952-0x55a97e).
+	//
+	// The trade network's safe-sea-travel helper gets the same two properties
+	// for free from Player.GetActiveWonders, except that that list only ever
+	// contains GREAT wonders, while the binary accepts a small wonder carrying
+	// the flag as well - which is the case the Mesoamerican Caracol Observatory
+	// exercises.
+	private bool CountsForWonderFlag(Building building) {
+		return (building.IsGreatWonder() || building.isSmallWonder)
+			&& !building.isGreatWonderObsolete(owner);
 	}
 
 	// The container this unit is loaded into, if any.

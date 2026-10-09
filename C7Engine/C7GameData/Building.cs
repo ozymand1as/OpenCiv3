@@ -101,6 +101,19 @@ namespace C7GameData {
 		// enter Sea tiles without the relevant advance (the Great Lighthouse).
 		public bool safeSeaTravel;
 
+		// The two sea-movement wonder features (11_movement.md §2.2). A civ that
+		// owns a wonder with plusOneShipMovement moves its SEA units one movement
+		// point further, and plusTwoShipMovement is worth two. The two FLAGS each
+		// apply their own amount, but each flag is a boolean per civ - the
+		// original compares the count of carriers against zero - so a second
+		// plusOneShipMovement wonder adds nothing on top of the first. In the
+		// shipped conquests.biq both flags' carriers are the Great Lighthouse and
+		// Magellan's Voyage for 0x8 only; plusTwoShipMovement is used by the
+		// shipped Conquests (the Norse Saga, the Navigation School and the Caracol
+		// Observatory, the last of which carries both bits).
+		public bool plusOneShipMovement;
+		public bool plusTwoShipMovement;
+
 		// Whether the owner's units fight barbarians with a doubled strength:
 		// in the binary, a non-barbarian side adds a flat +100% on top of the
 		// difficulty's AttackBonusAgainstBarbarians while it owns a wonder
@@ -231,6 +244,8 @@ namespace C7GameData {
 			allowsWaterTrade = building.flags.Contains(SaveBuilding.Flag.AllowsWaterTrade);
 			allowsAirTrade = building.flags.Contains(SaveBuilding.Flag.AllowsAirTrade);
 			safeSeaTravel = building.flags.Contains(SaveBuilding.Flag.SafeSeaTravel);
+			plusOneShipMovement = building.flags.Contains(SaveBuilding.Flag.PlusOneShipMovement);
+			plusTwoShipMovement = building.flags.Contains(SaveBuilding.Flag.PlusTwoShipMovement);
 			doublesCombatVsBarbarians = building.flags.Contains(SaveBuilding.Flag.DoubleCombatVsBarbarians);
 			traits = new HashSet<Civilization.Trait>(building.traits);
 

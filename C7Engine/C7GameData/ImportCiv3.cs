@@ -2019,6 +2019,8 @@ namespace C7GameData {
 				(bldg.AllowsWaterTrade, SaveBuilding.Flag.AllowsWaterTrade),
 				(bldg.AllowsAirTrade, SaveBuilding.Flag.AllowsAirTrade),
 				(bldg.SafeSeaTravel, SaveBuilding.Flag.SafeSeaTravel),
+				(bldg.IncreasedShipMovement, SaveBuilding.Flag.PlusOneShipMovement),
+				(bldg.PlusTwoShipMovement, SaveBuilding.Flag.PlusTwoShipMovement),
 				(bldg.DoubleCombatVsBarbarians, SaveBuilding.Flag.DoubleCombatVsBarbarians),
 			}
 			.Where(t => t.Item1)
