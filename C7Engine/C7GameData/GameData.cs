@@ -266,29 +266,61 @@ namespace C7GameData {
 			return AreInSameAlliance(one.alliance, other.alliance) && one != other;
 		}
 
-		public void UpdateTileOwners() {
+		/// <summary>
+		/// Recomputes the owner of every tile, and runs the side effects of an
+		/// ownership assignment (spec 17 sections 5 and 5.1): a tile that is
+		/// GIVEN a non-zero owner disperses a barbarian camp on it and forces a
+		/// goody hut on it to become a city of that owner. A tile whose owner is
+		/// cleared runs neither handler, which is why the clearing half stays a
+		/// plain store (see <see cref="UpdateTileOwnersOnCityDestruction"/>).
+		/// </summary>
+		/// <param name="previousOwners">
+		/// The owner a city's tiles held before the city changed hands, for a
+		/// city whose owner changed since those tiles were last assigned. Civ3
+		/// compares the tile's stored owner against the owner it is about to
+		/// write (entry 0x5d3ab0; the equality test is at 0x5d3add), and the one
+		/// way a live city changes hands - a capture - rewrites the owner of
+		/// every tile the city already holds. OpenCiv3 derives a tile's owner
+		/// from its own city, so without this the sweep cannot see that a
+		/// capture changed those tiles' owner at all.
+		///
+		/// <para>A raze is the one case this cannot express exactly: the
+		/// destruction path clears its tiles to no owner before sweeping
+		/// (spec 17 section 5.1's clearing writes, which run no handler), so a
+		/// tile a surviving city of the *same* civ then takes over reads as a
+		/// fresh assignment here, where Civ3 compares the tile's unchanged owner
+		/// byte and writes nothing. The difference needs a feature to have
+		/// survived inside the razed city's borders, which the assigning path
+		/// itself consumes at the first owner change.</para>
+		/// </param>
+		public void UpdateTileOwners(IReadOnlyDictionary<City, Player> previousOwners = null) {
 			// We do this at the end of the method - we don't need to do this
 			// for each tile we add in the loop below.
 			bool recomputeActiveTiles = false;
+
+			// The tiles this pass gives a new owner to. The handlers themselves
+			// run once the pass is over: converting a hut founds a city, which
+			// runs this method again, and running that nested pass in the middle
+			// of the loops below would rewrite the ownership they are still
+			// working through and mutate the city list they are walking.
+			Dictionary<Tile, Player> ownershipChanges = new();
 
 			foreach (City city in cities) {
 				if (city.residents.Count == 0) {
 					continue; // skip destroyed cities
 				}
 
-				city.location.owningCity = city;
+				AssignTileOwner(city.location, city, recomputeActiveTiles, previousOwners, ownershipChanges);
 
 				foreach (Tile t in city.GetTilesWithinBorders()) {
 					// If another city has claim to this tile, we need to resolve
 					// that conflict.
 					if (t.owningCity != null && ResolveTileOwnershipConflict(t.owningCity, city, t, out City winnerCity)) {
-						t.owningCity = winnerCity;
-						t.owningCity.owner.tileKnowledge.AddTilesToKnown(t, recomputeActiveTiles);
+						AssignTileOwner(t, winnerCity, recomputeActiveTiles, previousOwners, ownershipChanges);
 						continue;
 					}
 
-					t.owningCity = city;
-					t.owningCity.owner.tileKnowledge.AddTilesToKnown(t, recomputeActiveTiles);
+					AssignTileOwner(t, city, recomputeActiveTiles, previousOwners, ownershipChanges);
 				}
 			}
 
@@ -298,15 +330,71 @@ namespace C7GameData {
 
 				foreach (Tile t in player.tileKnowledge.knownTiles.Where(t => t.owningCity == null && t.GetEdgeNeighbors().Any(e => e.owningCity != null)).ToList()) {
 					// Law VII
-					TryResolveOpposingNeighbors(t, TileDirection.NORTHWEST, TileDirection.SOUTHEAST);
+					TryResolveOpposingNeighbors(t, TileDirection.NORTHWEST, TileDirection.SOUTHEAST, previousOwners, ownershipChanges);
 					if (t.owningCity != null) continue;
 					// Law VIII
-					TryResolveOpposingNeighbors(t, TileDirection.NORTHEAST, TileDirection.SOUTHWEST);
+					TryResolveOpposingNeighbors(t, TileDirection.NORTHEAST, TileDirection.SOUTHWEST, previousOwners, ownershipChanges);
 				}
+			}
+
+			foreach ((Tile tile, Player receiver) in ownershipChanges) {
+				// A handler can found a city whose own sweep takes this tile away
+				// again, so the owner is re-read: only the owner the tile actually
+				// ended up with runs its handlers. Each handler clears the feature
+				// it consumes before it acts, so no tile converts twice.
+				if (tile.owningCity?.owner != receiver) {
+					continue;
+				}
+
+				RunOwnershipAssignmentSideEffects(tile, receiver);
 			}
 		}
 
-		private void TryResolveOpposingNeighbors(Tile t, TileDirection dirA, TileDirection dirB) {
+		/// <summary>
+		/// Gives a tile to a city. Civ3 routes every ownership assignment through
+		/// one writer (spec 17 sections 5 and 5.1), so all of the sweep's
+		/// assignments go through here, and each records the change for the side
+		/// effects to run once the pass is over. An assignment that leaves the
+		/// owner as it was records nothing.
+		/// </summary>
+		private void AssignTileOwner(Tile tile, City city, bool recomputeActiveTiles,
+				IReadOnlyDictionary<City, Player> previousOwners, Dictionary<Tile, Player> ownershipChanges) {
+			// The owner the tile holds going in. For a city that changed hands
+			// since its tiles were last assigned, that is the owner it had then,
+			// not the one its city carries now.
+			Player storedOwner = tile.owningCity?.owner;
+			if (tile.owningCity != null && previousOwners != null && previousOwners.TryGetValue(tile.owningCity, out Player formerOwner)) {
+				storedOwner = formerOwner;
+			}
+
+			tile.owningCity = city;
+			city.owner.tileKnowledge.AddTilesToKnown(tile, recomputeActiveTiles);
+
+			if (storedOwner != city.owner) {
+				ownershipChanges[tile] = city.owner;
+			}
+		}
+
+		/// <summary>
+		/// The two side effects Civ3's owner writer runs when a tile is given a
+		/// non-zero owner (spec 17 sections 5 and 5.1; 22 sections 4.6 and 6.3):
+		/// a barbarian camp on the tile is dispersed, and a goody hut on it
+		/// forces the City outcome, so the hut becomes a city of the civ that
+		/// took the tile. The camp runs first, which is the writer's own order
+		/// (the camp call is at 0x5d3ded and the hut call at 0x5d3e2b), and the
+		/// receiver of both is the new owner, never a unit.
+		/// </summary>
+		private void RunOwnershipAssignmentSideEffects(Tile tile, Player receiver) {
+			if (tile.hasBarbarianCamp) {
+				BarbarianCampInteractions.DisperseCamp(this, tile, receiver);
+			}
+			if (tile.hasGoodyHut) {
+				GoodyHutInteractions.ConsumeFromTerritoryChange(this, receiver, tile);
+			}
+		}
+
+		private void TryResolveOpposingNeighbors(Tile t, TileDirection dirA, TileDirection dirB,
+				IReadOnlyDictionary<City, Player> previousOwners, Dictionary<Tile, Player> ownershipChanges) {
 			if (!t.neighbors.TryGetValue(dirA, out Tile a) || !t.neighbors.TryGetValue(dirB, out Tile b)) return;
 			if (a.owningCity == null || b.owningCity == null) return;
 			if (a.owningCity.owner != b.owningCity.owner) return;
@@ -314,11 +402,14 @@ namespace C7GameData {
 
 			// Law II
 			if (t.baseTerrainType.Key == "ocean" && t.RankDistanceTo(winnerCity.location) > 2) {
+				// An owner clear, so no side effect runs here.
 				t.owningCity = null;
 				return;
 			}
-			t.owningCity = winnerCity;
-			winnerCity.owner.tileKnowledge.AddTilesToKnown(t);
+			// This neighbour resolution is a phase of the same sweep, so its
+			// assignment follows the assigning path too. It keeps the default
+			// recomputeActiveTiles of its old direct call.
+			AssignTileOwner(t, winnerCity, true, previousOwners, ownershipChanges);
 		}
 
 		public void UpdateTileOwnersOnCityDestruction(City city) {

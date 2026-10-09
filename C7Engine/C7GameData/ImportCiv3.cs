@@ -2506,10 +2506,15 @@ namespace C7GameData {
 			save.Rules.CitiesNeededToSupportAnArmy = rule.CitiesNeededToSupportAnArmy;
 
 			// The "Allow Scientific Leaders" game toggle (bit 0x40000) gates the
-			// scientific leader roll.
+			// scientific leader roll, and the goody-hut City outcome is gated on
+			// bit 0x400 (spec 22 sections 4.5 and 8.1: the resolver re-rolls a
+			// drawn or forced City outcome while that bit is set). Bit 0x400 is
+			// the bit the editor calls "elimination" - the original reads the
+			// one bit for both meanings - and the shipped rules leave it clear.
 			QueryCiv3.Biq.GAME[] game = biq.Game ?? defaultBiq.Game;
 			if (game is { Length: > 0 }) {
 				save.Rules.AllowScientificLeaders = game[0].AllowScientificLeaders;
+				save.Rules.AllowCitiesFromGoodyHuts = !game[0].CityElimination;
 			}
 		}
 
