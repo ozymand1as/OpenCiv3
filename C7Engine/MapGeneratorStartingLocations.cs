@@ -79,7 +79,8 @@ namespace C7Engine {
 		// `0x1337` did not.
 		internal const int START_SEED_OFFSET = 0x16062;
 
-		// The driver's second argument reaches `FUN_005eeee0` twice: the call
+		// The driver's second argument reaches the start-placement routine
+		// (`0x5eeee0`) twice: the call
 		// site turns it into the reshuffle's deterministic-step sentinel `2 * (g == 0) - 1`
 		// (`0x5eb7a5`-`0x5eb7a9`, so +1 only when `g` is 0), and into the
 		// same-body permutation's gate `(g == 0)` (`0x5eb79f`, tested at
@@ -919,13 +920,13 @@ namespace C7Engine {
 		// `(2n - 2) / 3 + 1`, which is what keeps the first start off the single
 		// best site; the drawn steps continue the same stream the candidate
 		// shuffle used. That first step is conditional: `0x5ef682` takes it when
-		// the loop counter equals `FUN_005eeee0`'s THIRD argument `[esp+0x68]`,
-		// which the call site computes as `2g - 1` from the driver's second
+		// the loop counter equals the routine's THIRD argument, which the
+		// call site computes as `2 * (g == 0) - 1` from the driver's second
 		// argument `g`. With `g` = 0 that is slot 1, so the step fires on the
 		// first iteration; with `g` non-zero it is -1 and never fires. An
-		// earlier reading called `[esp+0x68]` the driver's first argument, which
-		// is the constant 1 at `[esp+0x60]` (`0x5eb7ac`) and gates the block
-		// itself; that was wrong.
+		// earlier reading called that argument the driver's first, which is the
+		// constant 1 pushed at `0x5eb7ac` and gates the block itself; that was
+		// wrong.
 		//
 		// `startingLocations` is zero-based, so slot `s` is `startingLocations[s - 1]`
 		// and the loop variable `i` is the binary's slot number. The old port used
@@ -944,7 +945,8 @@ namespace C7Engine {
 			}
 		}
 
-		// `FUN_005eeee0`'s second deterministic ordering block (`0x5ef6e6`-
+		// The start-placement routine's second deterministic ordering block
+		// (`0x5ef6e6`-
 		// `0x5ef839`), which the port used to leave out. It walks the one-based
 		// start slots from slot 2 and, when a start's body differs from the one
 		// before it, swaps that start with the first later slot whose body
