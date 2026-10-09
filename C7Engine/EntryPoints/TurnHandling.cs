@@ -119,6 +119,12 @@ namespace C7Engine {
 					continue;
 				}
 
+				// The per-turn diplomatic-memory drift, which Leader_begin_turn
+				// @ 0x446840 runs for every real civ before its own turn is played
+				// (10_turn_sequence.md section 3 step 4). Barbarians have no memory
+				// (the original returns immediately for player index 0).
+				PlayerRelationship.DecayReputationMemories(player, gameData);
+
 				if (player.isBarbarians) {
 					await BarbarianAI.PlayTurn(player, gameData);
 				} else if (!player.isHuman) {

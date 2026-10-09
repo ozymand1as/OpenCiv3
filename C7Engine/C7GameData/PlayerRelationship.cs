@@ -20,6 +20,12 @@ namespace C7GameData;
 public class PlayerRelationship {
 	private static ILogger log = Log.ForContext<PlayerRelationship>();
 
+	// The per-pair diplomatic memory the hostility score sums (spec
+	// 20_diplomacy_trade.md section 3.1). It exists only once the pair has met,
+	// and it is the one part of the attitude that drifts on its own: the
+	// per-turn decay in DecayReputationMemories relaxes it toward zero.
+	public DiplomaticReputation reputation = new DiplomaticReputation();
+
 	// p1.playerRelationships[p2].warDeclarationCount is the number of times
 	// p2 declared war on p1.
 	// TODO: contribute towards reputation
@@ -130,6 +136,16 @@ public class PlayerRelationship {
 		// increment the times the aggressor has declared war on the defender
 		defenderRelationshipToAggressor.warDeclarationCount++;
 
+		// The diplomatic memory of the defender: one war declaration (reputation
+		// index 0, `field_0`) and, for a war declared from inside the defender's
+		// territory or while allied, one observation of aggression (index 3,
+		// `field_C`). Leader_declare_war @ 0x501f20 steps 3-4 and spec section
+		// 9.2.
+		defenderRelationshipToAggressor.reputation.RecordWarDeclaration();
+		if (sneakAttack) {
+			defenderRelationshipToAggressor.reputation.RecordAggressionObserved();
+		}
+
 		// increment the times the aggressor has declared war on the defender while there is an active RoP
 		if (HaveActiveRightOfPassage(aggressor, defender)) {
 			defenderRelationshipToAggressor.warDeclarationWithRoPActiveCount++;
@@ -169,10 +185,45 @@ public class PlayerRelationship {
 
 		RegisterMultiTurnDeal(left, right, mtd);
 
+		// Leader_make_peace @ 0x5025b0 step 2: on peace the war-damage memory is
+		// halved on both sides and this turn's war damage is forgotten entirely.
+		left.playerRelationships[right.id].reputation.HalveWarDamageOnPeace();
+		right.playerRelationships[left.id].reputation.HalveWarDamageOnPeace();
+
 		left.playerRelationships[right.id].refuseContactUntilTurn = -1;
 		right.playerRelationships[left.id].refuseContactUntilTurn = -1;
 
 		log.Information($"{left} signed a peace treaty with {right}");
+	}
+
+	/// <summary>
+	/// The per-turn diplomatic-memory drift of `Leader_begin_turn` @ 0x446840
+	/// step 4 (10_turn_sequence.md section 3): the *observing* civ's reputation
+	/// counters toward every other living civ tick down, each at its own
+	/// probability. The original does nothing when the observing civ is the
+	/// barbarian player (index 0), and skips civs that have been eliminated, so
+	/// this does too. The caller is the civ's own turn start, i.e. the engine's
+	/// per-civ turn hook in TurnHandling.PlayPlayerTurns.
+	/// </summary>
+	/// <param name="randInt">
+	/// `randInt(n)` in `[0, n)`; defaults to the game RNG. Tests pass a
+	/// deterministic function.
+	/// </param>
+	public static void DecayReputationMemories(Player observer, GameData gameData, Func<int, int> randInt = null) {
+		if (observer == null || observer.isBarbarians || gameData == null)
+			return;
+		if (randInt == null) {
+			if (GameData.rng == null)
+				return;
+			randInt = GameData.rng.Next;
+		}
+
+		foreach (var entry in observer.playerRelationships) {
+			Player other = gameData.players.FirstOrDefault(p => p.id == entry.Key);
+			if (other != null && other.defeated)
+				continue;
+			entry.Value.reputation?.DecayOneTurn(randInt);
+		}
 	}
 
 	public static void RegisterMultiTurnDeal(Player left, Player right, MultiTurnDeal mtd) {
