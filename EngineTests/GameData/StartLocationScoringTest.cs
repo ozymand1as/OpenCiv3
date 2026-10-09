@@ -121,6 +121,12 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		return t;
 	}
 
+	// The tile at a given position of Civ3's spiral around `centre`.
+	private static Tile SpiralAt(GameMap m, Tile centre, int index) {
+		(int dx, int dy) = MapGenerator.Civ3SpiralOffset(index);
+		return At(m, centre.XCoordinate + dx, centre.YCoordinate + dy);
+	}
+
 	// The shipped rules' irrigation, mining and road bonuses, keyed by terrain
 	// key, as ImportCiv3 fills them from TERR.IrrigationBonus/MiningBonus/
 	// RoadBonus and as C7/Lua/civ3/ruleset.json carries them. The score reads
@@ -542,9 +548,9 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 	}
 
 	// More than nine tiles of the cross inside a city's working radius rejects
-	// the site outright (`0x442640` for the cross, `0x44259c` for the
-	// twenty-five-position screen). A city standing ON the candidate covers the
-	// candidate's own cross, which is twenty-one tiles.
+	// the site outright (`0x442640` for the cross, `0x44258c`/`0x44259c` for the
+	// twenty-five-position city screen). A city standing ON the candidate covers
+	// the candidate's own cross, which is twenty-one tiles.
 	[Fact]
 	public void ASiteWithMoreThanNineTilesInsideACitysRadiusScoresZero() {
 		WorldCharacteristics wc = MakeWc(60, 8, 2, 0);
@@ -569,6 +575,72 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.True(MapGenerator.StartPrePassRejected(boundary, ten, candidate));
 	}
 
+	// The pre-pass's `i < 25` screen (`0x44258c`, compared at `0x442599`) tests
+	// the plot's CITY id, not its owner byte: it calls `Tile_has_city` @
+	// `0x5ea6c0`, which forwards to the plot's city-id getter `plot+0xb4` @
+	// `0x5eaae0` - the short at `+0x1a` (`01_data_model.md` section 2; the SAV
+	// tile record calls the same field `CityID`, and `City_raze` clears it at
+	// `0x4aef18`). The old code keyed the screen on `owningCity`, which got both
+	// directions wrong: it rejected an owned tile that carries no city, and it
+	// did not reject a city tile whose `owningCity` had not been assigned. This
+	// test is written to fail against that keying.
+	[Fact]
+	public void ThePrePassScreensACityTileNotAnOwnedOne() {
+		GameMap m = MakeMap(60, 8, (x, y) => Grassland());
+		Tile candidate = At(m, 30, 4);
+		HashSet<Tile> noCityRadius = new();
+
+		// An owned tile with no city on it, in the cross (spiral index 7). The
+		// screen does not read the owner byte, so this candidate is legal.
+		Tile owned = SpiralAt(m, candidate, 7);
+		owned.owningCity = new City(Tile.NONE, new Player(), "Owner", ID.None("city"));
+		Assert.NotNull(owned.owningCity);
+		Assert.False(owned.HasCity());
+		Assert.False(MapGenerator.StartPrePassRejected(m, noCityRadius, candidate));
+
+		// A city at spiral index 24 - the north axis tile of the second ring,
+		// inside the first twenty-five positions but outside the cross, so the
+		// city-radius rule cannot be what rejects it.
+		GameMap withCity = MakeMap(60, 8, (x, y) => Grassland());
+		Tile withCityCandidate = At(withCity, 30, 4);
+		Tile cityTile = SpiralAt(withCity, withCityCandidate, 24);
+		PlaceCity(cityTile);
+		Assert.True(cityTile.HasCity());
+		Assert.True(MapGenerator.StartPrePassRejected(withCity, noCityRadius, withCityCandidate));
+	}
+
+	// The outer-ring owned-tile rule (`0x4425a7` counts positions nine to twenty
+	// by the owner byte, `0x44262d` rejects at four) was dead code while the
+	// `i < 25` screen was keyed on ownership, because every owned tile tripped
+	// that screen first. It is reachable now, and it counts the outer ring only:
+	// `0x4425a7` skips `i < 9`, so owned tiles of the inner three-by-three are
+	// not counted at all.
+	[Fact]
+	public void FourOwnedTilesInTheOuterRingRejectButThreeDoNot() {
+		GameMap m = MakeMap(60, 8, (x, y) => Grassland());
+		Tile candidate = At(m, 30, 4);
+		City owner = new City(Tile.NONE, new Player(), "Owner", ID.None("city"));
+		HashSet<Tile> noCityRadius = new();
+
+		foreach (int i in new int[] { 9, 10, 11 }) {
+			SpiralAt(m, candidate, i).owningCity = owner;
+		}
+		Assert.False(MapGenerator.StartPrePassRejected(m, noCityRadius, candidate));
+
+		// The fourth owned outer-ring tile is one over the limit.
+		SpiralAt(m, candidate, 12).owningCity = owner;
+		Assert.True(MapGenerator.StartPrePassRejected(m, noCityRadius, candidate));
+
+		// Nine owned tiles of the inner three-by-three still pass: the rule never
+		// looks at positions below nine.
+		GameMap inner = MakeMap(60, 8, (x, y) => Grassland());
+		Tile innerCandidate = At(inner, 30, 4);
+		for (int i = 0; i < 9; ++i) {
+			SpiralAt(inner, innerCandidate, i).owningCity = owner;
+		}
+		Assert.False(MapGenerator.StartPrePassRejected(inner, noCityRadius, innerCandidate));
+	}
+
 	// No pass of the generator sets the city-radius mark, so on a freshly
 	// generated map the set is empty and the term is genuinely zero there.
 	[Fact]
@@ -584,9 +656,14 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 	// --------------------------------------------------- the acceptance screens
 
 	// The seven screens `FUN_005eeee0` runs on a candidate (`0x5ef2ee`-
-	// `0x5ef3b1`): not already a start, land, no goody hut or barbarian camp,
-	// no barbarian tribe, no city, no unit. Each has to be able to fire on its
-	// own, or the screen is not modelled at all.
+	// `0x5ef3b1`), in the binary's order: not already a start, land, no goody
+	// hut (kind-0 bit 5), no city, no colony (C7 has no colony model), no unit,
+	// no barbarian camp (kind-0 bit 7). Each has to be able to fire on its own,
+	// or the screen is not modelled at all. There is NO barbarian-tribe screen:
+	// the field the earlier reading put at `+0x1a` is the plot's city id, and a
+	// camp's tribe id is the short at `+0x18`, which the start placer never
+	// tests. The expectation for a bare tribe id therefore changed from True to
+	// False, for that reason.
 	[Fact]
 	public void TheAcceptanceScreensRejectStartsOnFeaturesAndOccupants() {
 		GameMap m = MakeMap(60, 8, (x, y) => Grassland());
@@ -607,7 +684,7 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 
 		Tile tribe = At(m, 24, 4);
 		tribe.barbarianTribeId = 3;
-		Assert.True(MapGenerator.StartScreenRejects(tribe, starts));
+		Assert.False(MapGenerator.StartScreenRejects(tribe, starts));
 
 		Tile water = At(m, 22, 4);
 		water.overlayTerrainType = Coast();
@@ -626,7 +703,9 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.True(MapGenerator.StartScreenRejects(t, new List<Tile>()));
 	}
 
-	// A city on the tile is screened out by the plot's city id (`plot+0x1c`).
+	// A city on the tile is screened out by the plot's city id: the short at
+	// `+0x1a`, read through `plot+0xb4` @ `0x5eaae0` (the `Tile_has_city` helper
+	// `0x5ea6c0`).
 	[Fact]
 	public void AStartIsNeverPlacedOnATileWithACity() {
 		GameMap m = MakeMap(60, 8, (x, y) => Grassland());
@@ -638,31 +717,45 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 
 	// ----------------------------------------------------- the final reshuffle
 
-	// The original's final reshuffle (`0x5ef655`-`0x5ef6de`) walks positions 1
-	// to n-2, so the LAST start never moves, and it forces the first drawn step
-	// to swap position 0 with the fixed slot `(2n - 2) / 3` rather than drawing
-	// a random one. Both are visible without knowing anything about the random
-	// numbers, so a plain Fisher-Yates over the whole list fails this test.
+	// The original's final reshuffle (`0x5ef655`-`0x5ef6de`). Its start array is
+	// one-based: the generator never writes slot 0 (its next-free-slot scan
+	// starts at slot 1), so its count `n` is the number of starts plus one
+	// (`0x5ef05c` seeds it to 1, `0x5ef607` bumps it per accepted start) and its
+	// loop walks slots 1 to `n-1` - every start - swapping each with itself or
+	// with a later slot. Only the unused slot 0 is fixed. The very first step
+	// draws nothing and swaps slot 1 with the fixed slot `(2n - 2) / 3 + 1`,
+	// which in the port's zero-based list is index `(2 * count) / 3`; the drawn
+	// steps continue the same random stream the candidate shuffle used. This
+	// test pins the whole order for one seed, and fails against the earlier port
+	// that used `n = count`, stopped at `i < n` (so the last start could never
+	// move) and swapped with the off-by-one fixed slot `(2 * count - 2) / 3`.
 	[Fact]
-	public void TheFinalReshufflePinsTheFirstStartAndLeavesTheLastOneAlone() {
-		const int n = 8;
+	public void TheFinalReshuffleCoversEveryStartAndLeavesOnlyTheBinariesUnusedSlotAlone() {
+		const int count = 8;
 		List<Tile> starts = new();
 		ID.Factory factory = new();
-		for (int i = 0; i < n; ++i) {
+		for (int i = 0; i < count; ++i) {
 			Tile t = new(factory.CreateID("tile"));
 			t.XCoordinate = i;
 			starts.Add(t);
 		}
-		Tile firstOfAll = starts[0];
-		Tile atTheFixedSlot = starts[(2 * n - 2) / 3];
-		Tile last = starts[n - 1];
+		List<Tile> original = starts.ToList();
 
 		MapGenerator.ReshuffleStartOrder(new Civ3StartRandom(1234), starts);
 
-		Assert.Equal(n, starts.Distinct().Count());
-		Assert.Equal(atTheFixedSlot, starts[0]);
-		Assert.Equal(last, starts[n - 1]);
-		Assert.NotEqual(firstOfAll, starts[0]);
+		Assert.Equal(count, starts.Distinct().Count());
+
+		// The deterministic first step moves the old start at index
+		// (2 * count) / 3 = 5 to the front. An off-by-one port would put the old
+		// start at index 4 there instead.
+		Assert.Equal(original[(2 * count) / 3], starts[0]);
+
+		// Every start is in the walk, the last one included: with this seed the
+		// old last start ends up at index 5 and a different start closes the
+		// list, which a port whose loop stops at `count - 1` cannot produce.
+		Assert.Equal(new int[] { 5, 1, 2, 3, 0, 7, 4, 6 },
+			starts.Select(t => t.XCoordinate).ToArray());
+		Assert.NotEqual(original[count - 1], starts[count - 1]);
 	}
 
 	// The reshuffle is a pure function of the seed, and two seeds part.
