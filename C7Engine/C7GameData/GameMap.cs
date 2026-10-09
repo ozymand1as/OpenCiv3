@@ -162,7 +162,16 @@ namespace C7GameData {
 			return rawDelta;
 		}
 
+		// Rebuilds the list of bodies (continents/oceans/lakes) from scratch. It is
+		// safe to call this more than once: the map generator does, because a later
+		// stage (the fresh-water lake pass) turns land into water and the bodies and
+		// the fresh-water flag have to be worked out again afterwards.
 		public void recomputeContinents() {
+			continents.Clear();
+			foreach (Tile t in tiles) {
+				t.isFreshWater = false;
+			}
+
 			int nextContinent = 0;
 			HashSet<Tile> currentContinent = new();
 			HashSet<Tile> seen = new();

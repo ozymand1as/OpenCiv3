@@ -50,6 +50,14 @@ namespace C7Engine {
 		public WorldSize worldSize;
 		public List<TerrainType> terrainTypes;
 		public List<Resource> resources = new();
+
+		// The rules' terrain improvements. The fresh-water lake pass reads the
+		// irrigation improvement's food bonus to tell which terrains the rules
+		// can irrigate, which is how the original keys "lake goes on irrigable
+		// ground" (re/notes/civ3_map_generator_spec.md section 2.8). An empty
+		// list means the rules cannot say, and the pass degrades rather than
+		// refusing everything.
+		public List<SaveTerrainImprovement> terrainImprovements = new();
 		public Government defaultGovernment = new();
 
 		public int maxRankOfWorkableTiles;
@@ -60,6 +68,7 @@ namespace C7Engine {
 		public WorldCharacteristics(SaveGame save) {
 			terrainTypes = save.TerrainTypes;
 			resources = save.Resources;
+			terrainImprovements = save.TerrainImprovements;
 			defaultGovernment = save.Governments.Find(g => g.defaultType);
 
 			maxRankOfWorkableTiles = save.Rules.MaxRankOfWorkableTiles;
@@ -106,6 +115,12 @@ namespace C7Engine {
 
 			// Step 6: add vegetation where appropriate.
 			AddVegetation(wc, gameMap);
+
+			// Step 6.5: seed one fresh-water lake into every landmass that is big
+			// enough and has none, so that a large landmass is never left without
+			// fresh water. Civ3 does this before the rivers, so that the river
+			// pass and the flood-plain conversion see the finished lakes.
+			AddFreshWaterLakes(wc, gameMap);
 
 			// Step 7: Add rivers that start from high points and flow to low
 			// points.
@@ -746,6 +761,218 @@ namespace C7Engine {
 					t.overlayTerrainType = marsh;
 				}
 			}
+		}
+
+		// The original generator seeds one fresh-water lake into every landmass
+		// that is bigger than 74 tiles and has no fresh water of its own, so that
+		// no large landmass is left without a fresh-water source. The rules, the
+		// addresses they were read from and what was verified against the binary
+		// are written up in re/notes/civ3_map_generator_spec.md section 2.8.
+
+		// A body is only considered when its tile count is *greater* than this;
+		// the original compares the body's area against 0x4b = 75 at 0x5ed6b7,
+		// so 74 is the largest body left alone.
+		internal const int LAKE_BODY_MIN_AREA = 74;
+
+		// A water body this size or smaller counts as fresh water. The original
+		// tests a body's area against 0x14 = 20 at 0x5f39a4, both in the lake
+		// pass's "does this landmass already have fresh water" scan and in the
+		// game's fresh-water query that the city growth rules call.
+		internal const int FRESH_WATER_MAX_AREA = 20;
+
+		// The pass draws on its own stream, seeded from the world seed plus this
+		// offset (0x5ed5fb adds 0x7c0 to the seed field at world+0x1ec). It is
+		// not the river pass's stream, which uses a different offset, so a seed
+		// still reproduces a map exactly but the two passes do not share draws.
+		private const int LAKE_SEED_OFFSET = 0x7c0;
+
+		/// <summary>
+		/// Seeds one fresh-water lake into every landmass that is big enough and
+		/// has none, and returns how many lakes it dug.
+		/// </summary>
+		internal static int AddFreshWaterLakes(WorldCharacteristics wc, GameMap m) {
+			int tileCount = m.tiles.Count;
+			if (tileCount == 0) {
+				return 0;
+			}
+
+			TerrainType coast = wc.terrainTypes.Find(x => x.Key == "coast");
+			if (coast == null) {
+				log.Warning("Rules have no 'coast' terrain; skipping fresh-water lake generation.");
+				return 0;
+			}
+
+			// The bodies are the connected components the generator has already
+			// labelled; every tile of a body carries the same id, land and water
+			// alike.
+			int bodyCount = m.continents.Count;
+			int[] bodyArea = new int[bodyCount];
+			foreach (Tile t in m.tiles) {
+				++bodyArea[t.continent];
+			}
+
+			// The shuffle is seeded, so a seed reproduces the same lakes.
+			Random rand = new(wc.mapSeed + LAKE_SEED_OFFSET);
+			List<int> tileIndices = Enumerable.Range(0, tileCount).ToList();
+			rand.Shuffle<int>(CollectionsMarshal.AsSpan(tileIndices));
+
+			SaveTerrainImprovement irrigation = wc.terrainImprovements?.Find(x => x.key == Tile.TileOverlays.IRRIGATION);
+
+			int lakes = 0;
+			for (int body = 0; body < bodyCount; ++body) {
+				// Small bodies are left alone.
+				if (bodyArea[body] <= LAKE_BODY_MIN_AREA) {
+					continue;
+				}
+
+				// A landmass that already has fresh water is left alone too.
+				if (BodyHasFreshWater(m, body, bodyArea, irrigation)) {
+					continue;
+				}
+
+				// First the strict search: the tile and all eight of its neighbours
+				// have to be land the rules can irrigate. If the landmass has no
+				// such spot - an all-mountain island, say - a second walk of the
+				// same shuffled order only asks for no water next door.
+				if (SeedLake(m, coast, tileIndices, body, irrigation, strict: true)
+					|| SeedLake(m, coast, tileIndices, body, irrigation, strict: false)) {
+					++lakes;
+				}
+			}
+
+			// Carving the lakes changes the bodies, and the fresh-water flag the
+			// city rules read is worked out from a water body's size, so the
+			// bodies are worked out again now that they are final. The original
+			// does the same thing at 0x5edb51, where it calls the map's
+			// continent-identifying method before it returns.
+			m.recomputeContinents();
+
+			return lakes;
+		}
+
+		// Whether a body already has fresh water: a tile of the body that borders
+		// a lake or carries a river, on terrain the rules can irrigate. Read at
+		// 0x5ed6c1-0x5ed78c. Note the irrigation test is on the tile itself, so a
+		// landmass whose only small water body sits in the mountains is still
+		// given its own lake.
+		private static bool BodyHasFreshWater(GameMap m, int body, int[] bodyArea, SaveTerrainImprovement irrigation) {
+			foreach (Tile t in m.tiles) {
+				if (t.continent == body && HasFreshWater(t, bodyArea) && IsIrrigable(t, irrigation)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		// The game's own fresh-water query (world vtable slot 0x60, 0x5f39e0):
+		// the tile touches fresh water, or it carries a river. The river half is
+		// only ever true when the pass runs after the river pass; in the driver's
+		// order it is not, and the query is the neighbourhood one.
+		private static bool HasFreshWater(Tile t, int[] bodyArea) {
+			return BordersFreshWater(t, bodyArea) || t.BordersRiver();
+		}
+
+		// Whether the tile or one of its eight neighbours is a water tile of a
+		// body small enough to be fresh water. This is the original's
+		// "is near lake" test (0x5f38c0): it walks the tile and its eight
+		// neighbours, and a position only counts when it is inside the map, is
+		// water, and its body's area is 20 or less.
+		private static bool BordersFreshWater(Tile t, int[] bodyArea) {
+			foreach (Tile n in Neighbourhood(t)) {
+				if (n.IsLand() || n.continent >= bodyArea.Length) {
+					continue;
+				}
+
+				if (bodyArea[n.continent] <= FRESH_WATER_MAX_AREA) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		// The tile itself, then its eight neighbours. A position that falls off
+		// the map is not in the neighbourhood at all, which is what the original
+		// does with its out-of-bounds test.
+		private static IEnumerable<Tile> Neighbourhood(Tile t) {
+			yield return t;
+
+			foreach (Tile n in t.neighbors.Values) {
+				if (n != Tile.NONE) {
+					yield return n;
+				}
+			}
+		}
+
+		// Walks the shuffled tile order once looking for a tile of this body to
+		// turn into fresh water (0x5ed7c2-0x5ed9b2 and 0x5ed9ce-0x5edb12). With
+		// `strict` the tile and its eight neighbours all have to be irrigable
+		// land; without it only water is refused.
+		private static bool SeedLake(GameMap m, TerrainType coast, List<int> tileIndices, int body,
+			SaveTerrainImprovement irrigation, bool strict) {
+			foreach (int index in tileIndices) {
+				Tile t = m.tiles[index];
+				if (t.continent != body) {
+					continue;
+				}
+
+				// A tile that already carries a river is never chosen. In the
+				// driver's order the rivers are laid after this pass, so no tile
+				// carries one yet; the test is kept because it is the original's
+				// (0x5ed823).
+				if (t.BordersRiver()) {
+					continue;
+				}
+
+				if (NeighbourhoodIsDryLand(t, irrigation, strict)) {
+					// The lake is one tile, and it is written as coast. Setting the
+					// real terrain as well as the underlying one is what the
+					// original's terrain setter does at 0x5e99c8, so a lake that
+					// lands on forest or hills is water, not watered-over land.
+					t.baseTerrainType = coast;
+					t.overlayTerrainType = coast;
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		// Whether the whole neighbourhood passes the seed test: land, and - on the
+		// strict walk - land the rules can irrigate.
+		private static bool NeighbourhoodIsDryLand(Tile t, SaveTerrainImprovement irrigation, bool strict) {
+			foreach (Tile n in Neighbourhood(t)) {
+				if (!n.IsLand()) {
+					return false;
+				}
+
+				if (strict && !IsIrrigable(n, irrigation)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		// Whether the rules can irrigate a tile's terrain. The original tests the
+		// terrain's irrigation bonus (0x5dbe70, the terrain record field at
+		// +0x4c, or +0x94 when the tile is a landmark) and the pass is really
+		// asking "is this irrigable ground". Both rule paths carry that value:
+		// the BIQ import turns each terrain's IrrigationBonus into the irrigation
+		// improvement's food bonus for it (ImportCiv3's terrain improvement
+		// bonuses), and ruleset.json lists the same four terrains under
+		// terrainImprovements.irrigation.bonusYields.
+		private static bool IsIrrigable(Tile t, SaveTerrainImprovement irrigation) {
+			if (irrigation == null) {
+				// A ruleset with no irrigation improvement cannot say which
+				// terrains are irrigable; the strict search then degenerates into
+				// the relaxed one rather than refusing every tile.
+				return true;
+			}
+
+			return irrigation.bonusYields.TryGetValue(t.overlayTerrainType?.Key, out var yields)
+				&& yields.TryGetValue(Tile.YieldType.Food, out int food) && food > 0;
 		}
 
 		// The original river pass marks river *edges*, not river tiles: a tile
