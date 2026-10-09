@@ -528,7 +528,13 @@ namespace C7Engine {
 
 			foreach (Tile t in tiles) {
 				foreach (Tile neighbor in t.neighbors.Values) {
-					if (neighbor.biomeRegion != -1 || !neighbor.IsLand() || neighbor.overlayTerrainType.isHilly() || t == Tile.NONE) {
+					// The bounds check has to name the NEIGHBOUR, not the tile being
+					// walked: an edge tile's neighbour map holds `Tile.NONE` for the
+					// off-map directions, and `t` is always a real tile. Testing `t`
+					// let the sentinel through this gate, so the fill wrote the biome
+					// id onto the process-global `Tile.NONE`, and the draw below then
+					// ran a different number of times on the next generation.
+					if (neighbor == Tile.NONE || neighbor.biomeRegion != -1 || !neighbor.IsLand() || neighbor.overlayTerrainType.isHilly()) {
 						continue;
 					}
 

@@ -9,8 +9,8 @@ using Xunit;
 
 namespace EngineTests.GameData;
 
-// Civ3's starting-location scoring and placement, as read out of
-// `FUN_005eeee0` @ `0x5eeee0` and the city-site value function
+// Civ3's starting-location scoring and placement, as read out of the
+// starting-location routine at `0x5eeee0` and the city-site value function
 // `Match_ai_eval_city_location` @ `0x442480` it sorts its candidates by. The
 // rules, the addresses they were read from and what was verified against the
 // binary are written up in re/notes/civ3_map_generator_spec.md section 2.14.
@@ -655,7 +655,7 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 
 	// --------------------------------------------------- the acceptance screens
 
-	// The seven screens `FUN_005eeee0` runs on a candidate (`0x5ef2ee`-
+	// The seven screens the starting-location routine runs on a candidate (`0x5ef2ee`-
 	// `0x5ef3b1`), in the binary's order: not already a start, land, no goody
 	// hut (kind-0 bit 5), no city, no colony (C7 has no colony model), no unit,
 	// no barbarian camp (kind-0 bit 7). Each has to be able to fire on its own,
@@ -789,9 +789,9 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.NotEqual(string.Join(",", Order(7)), string.Join(",", Order(8)));
 	}
 
-	// The reshuffle's deterministic first step is keyed on `FUN_005eeee0`'s
-	// THIRD argument, `2g - 1` from the driver's second argument `g`
-	// (`0x5ef682` compares the loop counter against `[esp+0x68]`): g = 0 gives
+	// The reshuffle's deterministic first step is keyed on the starting-location
+	// routine's THIRD argument, `2g - 1` from the driver's second argument `g`
+	// (`0x5ef682` compares the loop counter against the driver's stacked limit): g = 0 gives
 	// slot 1 and the step fires, otherwise it is -1 and the step is an ordinary
 	// draw. This pins that half of the shared gate.
 	[Fact]
@@ -882,7 +882,7 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		return starts.Select(t => t.continent).ToArray();
 	}
 
-	// `FUN_005eeee0`'s second deterministic block (`0x5ef6e6`-`0x5ef839`) walks
+	// The starting-location routine's second deterministic block (`0x5ef6e6`-`0x5ef839`) walks
 	// the one-based slot array from slot 2 and, whenever a start's body differs
 	// from the one before it, swaps it with the first LATER slot whose body
 	// matches the previous start's (`0x5ef7e1` swaps slots `i` and `j`). The
@@ -1098,6 +1098,39 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 
 		GameMap other = MapGenerator.GenerateMap(GeneratedWorldCharacteristics(seed: 987654));
 		Assert.NotEqual(StartCoordinates(first), StartCoordinates(other));
+	}
+
+	// `Tile.NONE` is the process-global sentinel handed out for off-map
+	// coordinates. Generation used to write to it - the biome-region fill tested
+	// the tile being walked instead of its neighbour, so the sentinel slipped
+	// through that gate and the flood fill adopted it, and the body flood fill
+	// adopted it too. The consequence is that the FIRST generation in a process
+	// produced a different map from every later one, because the sentinel's own
+	// fields were the difference. The same-seed tests above therefore only
+	// passed once some other test had already generated a map in the process.
+	//
+	// This test restores the sentinel's declared initial state before generating,
+	// so it reproduces the defect no matter what ran earlier in the process, and
+	// then pins both halves: two same-seed generations agree, and generation does
+	// not touch the shared sentinel at all.
+	[Fact]
+	public void TwoGenerationsInOneProcessAgreeAndLeaveTheOffMapSentinelAlone() {
+		if (Civ3TestData.ShouldSkipCiv3DependentTests()) {
+			Skip.If(true, "Civ3 assets are not available");
+		}
+
+		// `Tile.NONE`'s declared state: continent 0 and no biome region.
+		Tile.NONE.biomeRegion = -1;
+		Tile.NONE.continent = 0;
+
+		GameMap first = MapGenerator.GenerateMap(GeneratedWorldCharacteristics(seed: 4242));
+		GameMap again = MapGenerator.GenerateMap(GeneratedWorldCharacteristics(seed: 4242));
+
+		Assert.Equal(TerrainSignature(first), TerrainSignature(again));
+		Assert.Equal(StartCoordinates(first), StartCoordinates(again));
+
+		Assert.Equal(-1, Tile.NONE.biomeRegion);
+		Assert.Equal(0, Tile.NONE.continent);
 	}
 
 	// The starts a generated map hands out: one per civ, distinct, on land, and
