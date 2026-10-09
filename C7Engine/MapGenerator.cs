@@ -776,11 +776,38 @@ namespace C7Engine {
 
 		private const int RIVER_RANK_SPIRAL_SIZE = 121;
 
+		// The score of a continuation is the average of two samples, one on each
+		// side of the direction the step would take, and each sample is the 49
+		// positions of a three-ring spiral (rule 2.9.17).
+		private const int RIVER_SAMPLE_SPIRAL_SIZE = 49;
+
+		// How far along the candidate direction the two sampling centres sit from
+		// the tile the river is on.
+		private const int RIVER_SAMPLE_LEAD = 4;
+
+		// A sampled position that is off the map or under water is worth this
+		// much to the score.
+		private const int RIVER_SAMPLE_OFF_MAP = -10;
+
 		// The four positions the pass probes around a candidate source, as raw
 		// (x, y) offsets from the tile: the tile itself, the two tiles one row
 		// below it, and the tile two rows below it.
 		private static readonly (int dx, int dy)[] riverProbeOffsets = {
 			(0, 0), (-1, 1), (1, 1), (0, 2),
+		};
+
+		// The 49 positions the score's sampler walks around a centre, in the
+		// order the pass numbers them: the centre itself, the eight positions of
+		// the first ring, the sixteen of the second and the twenty-four of the
+		// third.
+		private static readonly (int dx, int dy)[] riverSampleOffsets = {
+			(0, 0),
+			(1, -1), (2, 0), (1, 1), (0, 2), (-1, 1), (-2, 0), (-1, -1), (0, -2),
+			(1, -3), (2, -2), (3, -1), (3, 1), (2, 2), (1, 3), (-1, 3), (-2, 2),
+			(-3, 1), (-3, -1), (-2, -2), (-1, -3), (0, -4), (4, 0), (0, 4), (-4, 0),
+			(1, -5), (2, -4), (3, -3), (4, -2), (5, -1), (5, 1), (4, 2), (3, 3),
+			(2, 4), (1, 5), (-1, 5), (-2, 4), (-3, 3), (-4, 2), (-5, 1), (-5, -1),
+			(-4, -2), (-3, -3), (-2, -4), (-1, -5), (0, -6), (6, 0), (0, 6), (-6, 0),
 		};
 
 		// One river per 750 tiles, capped at 256.
@@ -922,9 +949,14 @@ namespace C7Engine {
 					continue;
 				}
 
+				Tile start = RiverSourceStart(m, source, dir);
+				if (start == Tile.NONE) {
+					continue;
+				}
+
 				List<(Tile tile, TileDirection dir)> path = new();
-				HashSet<Tile> visited = new() { source };
-				if (GrowRiver(source, dir, 0, rand, visited, path)) {
+				HashSet<Tile> visited = new() { start };
+				if (GrowRiver(m, start, dir, 0, 0, 0, rand, visited, path)) {
 					++riversStarted;
 					foreach ((Tile tile, TileDirection step) in path) {
 						MarkRiverStep(tile, step);
@@ -1041,7 +1073,7 @@ namespace C7Engine {
 		// The direction a river leaves its source in, read off the water pattern
 		// at the first two probes. The four directions are the four diagonals:
 		// north-east, south-east, south-west and north-west.
-		private static TileDirection RiverSourceDirection(GameMap m, Tile t) {
+		internal static TileDirection RiverSourceDirection(GameMap m, Tile t) {
 			if (!IsRiverSourceCandidate(m, t, out bool[] water)) {
 				return TileDirection.INVALID;
 			}
@@ -1054,6 +1086,41 @@ namespace C7Engine {
 			};
 		}
 
+		// The start point the tracer is handed, read at `0x5f107d`. The probes
+		// are read a second time; the water at the first two picks the diagonal
+		// (rule 2.9.14), and the point handed to the tracer is the sum of the
+		// positions of the probes that were *not* water. A probe that falls off
+		// the map is not water - it still counts as land when the diagonal is
+		// picked - but its position is not added to the sum, so a source with
+		// only one probe on the map is handed a point at half its own
+		// coordinates. The tracer's own coordinates are doubled relative to the
+		// tile grid, and the pass turns one of them back into a tile with the
+		// perpendicular of the step, halving with the usual truncation toward
+		// zero. Its tile lookup then folds the result onto the storage grid
+		// rather than refusing it, and this grid holds the same tiles in the
+		// same order, so the fold is the same index arithmetic.
+		internal static Tile RiverSourceStart(GameMap m, Tile t, TileDirection dir) {
+			int sumX = 0;
+			int sumY = 0;
+
+			for (int i = 0; i < riverProbeOffsets.Length; ++i) {
+				Tile probe = m.tileAt(t.XCoordinate + riverProbeOffsets[i].dx, t.YCoordinate + riverProbeOffsets[i].dy);
+				if (probe == Tile.NONE || !probe.IsLand()) {
+					continue;
+				}
+				sumX += probe.XCoordinate;
+				sumY += probe.YCoordinate;
+			}
+
+			(int px, int py) = RiverDirectionOffset(RiverPerpendicular(dir));
+			int x = (sumX - px) / 2;
+			int y = (sumY - py) / 2;
+			if (x < 0 || y < 0 || x >= m.numTilesWide || y >= m.numTilesTall) {
+				return Tile.NONE;
+			}
+			return m.tiles[m.tileCoordsToIndex(x, y)];
+		}
+
 		// Walks a river on from `t` in `dir`. The walk looks at three
 		// continuations - straight on and a quarter turn either way - refuses
 		// any that is water, that already carries a river, or that would run
@@ -1062,20 +1129,24 @@ namespace C7Engine {
 		// continuation, which is how rivers branch. A run is capped at 21
 		// steps, and a step whose whole continuation fails is rolled back so
 		// that a river never ends in a stub.
-		private static bool GrowRiver(Tile t, TileDirection dir, int steps, Random rand,
-			HashSet<Tile> visited, List<(Tile tile, TileDirection dir)> path) {
+		private static bool GrowRiver(GameMap m, Tile t, TileDirection dir, int steps, int straight, int lateral,
+			Random rand, HashSet<Tile> visited, List<(Tile tile, TileDirection dir)> path) {
 			if (steps >= RIVER_MAX_STEPS) {
 				return true;
 			}
 
-			TileDirection[] options = {
-				dir,
-				dir.RotatedCounterClockwise90Degrees(),
-				RiverTurnClockwise(dir),
+			// The three continuations the pass offers, each tagged with which of
+			// the three it is: 0 a quarter turn counter-clockwise, 1 straight on,
+			// 2 a quarter turn clockwise. `straight` and `lateral` are the run
+			// counters the score's divisor reads.
+			(TileDirection dir, int turn)[] options = {
+				(dir, 1),
+				(dir.RotatedCounterClockwise90Degrees(), 0),
+				(RiverTurnClockwise(dir), 2),
 			};
 
-			List<(TileDirection dir, Tile tile, int score)> usable = new();
-			foreach (TileDirection d in options) {
+			List<(TileDirection dir, Tile tile, int score, int turn)> usable = new();
+			foreach ((TileDirection d, int turn) in options) {
 				if (d == TileDirection.INVALID || !t.neighbors.TryGetValue(d, out Tile n)) {
 					continue;
 				}
@@ -1092,7 +1163,7 @@ namespace C7Engine {
 				if (runsAlongside) {
 					continue;
 				}
-				usable.Add((d, n, RiverSteppingScore(n)));
+				usable.Add((d, n, RiverSteppingScore(m, t, d, steps, RiverScoreDivisor(turn, straight, lateral), rand), turn));
 			}
 
 			if (usable.Count == 0) {
@@ -1101,7 +1172,7 @@ namespace C7Engine {
 
 			// OrderByDescending is stable, so ties keep the order of `options`
 			// and the river prefers to run straight on.
-			List<(TileDirection dir, Tile tile, int score)> ordered = usable.OrderByDescending(x => x.score).ToList();
+			List<(TileDirection dir, Tile tile, int score, int turn)> ordered = usable.OrderByDescending(x => x.score).ToList();
 
 			int branches = 1;
 			if (steps > 1 && ordered.Count > 1) {
@@ -1117,10 +1188,12 @@ namespace C7Engine {
 
 			bool grew = false;
 			for (int i = 0; i < branches; ++i) {
-				(TileDirection d, Tile n, int _) = ordered[i];
+				(TileDirection d, Tile n, int _, int turn) = ordered[i];
+				int nextStraight = turn == 1 ? straight + 1 : 0;
+				int nextLateral = turn == 0 ? lateral - 1 : (turn == 2 ? lateral + 1 : lateral);
 				visited.Add(n);
 				path.Add((t, d));
-				if (GrowRiver(n, d, steps + 1, rand, visited, path)) {
+				if (GrowRiver(m, n, d, steps + 1, nextStraight, nextLateral, rand, visited, path)) {
 					grew = true;
 				} else {
 					path.RemoveAt(path.Count - 1);
@@ -1142,16 +1215,123 @@ namespace C7Engine {
 			};
 		}
 
-		// How roomy a tile is: the more of its neighbours are land and free of
-		// rivers, the better a continuation it makes.
-		private static int RiverSteppingScore(Tile t) {
-			int score = 0;
-			foreach (Tile n in t.neighbors.Values) {
-				if (n != Tile.NONE && n.IsLand() && !n.BordersRiver()) {
-					++score;
+		// The score of taking the step in `dir` from `t`, read at `0x5efa90`
+		// sampling through `0x5ef880`: two samples along the direction, one on
+		// each side of it, averaged. The two centres sit four steps along the
+		// direction from the tile the river is on, the second one a step to the
+		// side of it; each contributes the 49 positions of the spiral, and a
+		// position off the map or under water is worth -10. The sum is divided by
+		// the pass's own scaling before the three continuations are compared.
+		private static int RiverSteppingScore(GameMap m, Tile t, TileDirection dir, int steps, int divisor, Random rand) {
+			(int dx, int dy) = RiverDirectionOffset(dir);
+			(int px, int py) = RiverDirectionOffset(RiverPerpendicular(dir));
+
+			int sum = 0;
+			foreach ((int cx, int cy) in new[] {
+				(t.XCoordinate + RIVER_SAMPLE_LEAD * dx, t.YCoordinate + RIVER_SAMPLE_LEAD * dy),
+				(t.XCoordinate + RIVER_SAMPLE_LEAD * dx + px, t.YCoordinate + RIVER_SAMPLE_LEAD * dy + py),
+			}) {
+				for (int i = 0; i < RIVER_SAMPLE_SPIRAL_SIZE; ++i) {
+					(int ox, int oy) = riverSampleOffsets[i];
+					sum += RiverSampleValue(m, cx + ox, cy + oy, steps, i + 1, rand);
 				}
 			}
-			return score;
+
+			if (divisor < 1) {
+				return sum;
+			}
+			return sum / divisor;
+		}
+
+		// The divisor the score is scaled by before the three continuations are
+		// compared. A sideways step is halved; a step that goes straight on is
+		// not divided at all for its first two steps and then halved more and
+		// more as the run gets longer, which is what turns a river rather than
+		// letting it run straight across the map.
+		private static int RiverScoreDivisor(int turn, int straight, int lateral) {
+			switch (turn) {
+				case 1:
+					return straight < 2 ? 0 : 1 << (straight - 1);
+				case 0:
+					return lateral >= 0 ? 2 : 0;
+				default:
+					return lateral <= 0 ? 0 : 2;
+			}
+		}
+
+		// The value the sampler reads at one position, read at `0x5ef880`:
+		// off the map or under water is -10, and anything else is the terrain's
+		// base value for the step the river has reached, doubled for the second
+		// position of the spiral and doubled again for the centre, plus two
+		// five-point random terms.
+		private static int RiverSampleValue(GameMap m, int x, int y, int steps, int spiralIndex, Random rand) {
+			Tile t = m.tileAt(x, y);
+			if (t == Tile.NONE || !t.IsLand()) {
+				return RIVER_SAMPLE_OFF_MAP;
+			}
+
+			int value = RiverSampleBase(t, steps) - 5 + rand.Next(11);
+			if (spiralIndex <= 2) {
+				value *= 2;
+			}
+			if (spiralIndex <= 1) {
+				value *= 2;
+			}
+			return value - 5 + rand.Next(11);
+		}
+
+		// The terrain's base value for the step the river has reached. Hills
+		// and mountains are poor ground while the river is young and good
+		// ground once it is long; jungle and marsh are always good, and flood
+		// plains are worth nothing because a river has already been there.
+		private static int RiverSampleBase(Tile t, int steps) {
+			switch (TerrainType.Civ3TerrainIdForKey(t.overlayTerrainType.Key)) {
+				case 0:
+					return steps < 4 ? 2 : (steps < 8 ? 0 : -1);
+				case 1:
+					return steps < 4 ? 4 : (steps < 8 ? 2 : -1);
+				case 2:
+					return steps < 4 ? 5 : (steps < 8 ? 2 : -1);
+				case 5:
+					return steps < 4 ? -3 : 5;
+				case 6:
+					return steps < 4 ? -3 : (steps < 8 ? 10 : 15);
+				case 7:
+					return steps < 4 ? 4 : (steps < 8 ? 2 : -1);
+				case 8:
+					return steps < 4 ? 4 : (steps < 8 ? 2 : -1);
+				case 9:
+					return steps < 4 ? 4 : (steps < 8 ? 2 : -1);
+				case 10:
+					return -5;
+				default:
+					return steps < 4 ? 0 : (steps < 8 ? 0 : -1);
+			}
+		}
+
+		// The (x, y) step of a diagonal direction, in the pass's own numbering:
+		// north-east, south-east, south-west and north-west.
+		private static (int dx, int dy) RiverDirectionOffset(TileDirection dir) {
+			return dir switch {
+				TileDirection.NORTHEAST => (1, -1),
+				TileDirection.SOUTHEAST => (1, 1),
+				TileDirection.SOUTHWEST => (-1, 1),
+				TileDirection.NORTHWEST => (-1, -1),
+				_ => (0, 0),
+			};
+		}
+
+		// The direction the pass pairs with a diagonal: the same step with its
+		// row component flipped. The pass uses it to turn a doubled position
+		// back into the tile the position stands on.
+		private static TileDirection RiverPerpendicular(TileDirection dir) {
+			return dir switch {
+				TileDirection.NORTHEAST => TileDirection.SOUTHEAST,
+				TileDirection.SOUTHEAST => TileDirection.NORTHEAST,
+				TileDirection.SOUTHWEST => TileDirection.NORTHWEST,
+				TileDirection.NORTHWEST => TileDirection.SOUTHWEST,
+				_ => TileDirection.INVALID,
+			};
 		}
 
 		// Records the river step that runs from `tile` to its neighbour in

@@ -192,15 +192,17 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 		}
 	}
 
-	// A 60x60 map that is land above row 30 and ocean below it has exactly one
-	// tile with the water pattern the pass looks for, at (0,30). From there
-	// only one continuation of each step keeps clear of the river already
-	// laid, so the river is forced: a 21-step staircase north-east to (21,9),
-	// each tile marked on its north-east and south-west edges.
+	// A 60x70 map that is land above row 50 and ocean below it has a single
+	// land source at (0,50). Its first probe is the only one of the four that is
+	// on the map and not water, so the point handed to the tracer is half its
+	// own coordinates (rule 2.9.14), the tile at (0,24). From there only one
+	// continuation of each step keeps clear of the river already laid, so the
+	// river is forced: a 21-step staircase north-east to (21,3), each tile
+	// marked on its north-east and south-west edges.
 	[Fact]
 	public void ASyntheticCoastlineCarriesTheRiverThePassDerives() {
 		List<TerrainType> terrains = RuleTerrains();
-		GameMap m = MakeSyntheticMap(60, 60, terrains, (x, y) => y <= 30);
+		GameMap m = MakeSyntheticMap(60, 70, terrains, (x, y) => y <= 50);
 
 		WorldCharacteristics wc = new() {
 			landform = WorldCharacteristics.Landform.Pangaea,
@@ -208,7 +210,7 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 			age = WorldCharacteristics.Age.Billion_4,
 			climate = WorldCharacteristics.Climate.Normal,
 			temperature = WorldCharacteristics.Temperature.Temperate,
-			worldSize = new WorldSize() { width = 60, height = 60 },
+			worldSize = new WorldSize() { width = 60, height = 70 },
 			terrainTypes = terrains,
 			mapSeed = 7,
 		};
@@ -219,7 +221,7 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 			.Select(t => (t.XCoordinate, t.YCoordinate))
 			.OrderBy(p => p.YCoordinate).ToList();
 
-		List<(int x, int y)> expected = Enumerable.Range(0, 22).Select(i => (21 - i, 9 + i)).ToList();
+		List<(int x, int y)> expected = Enumerable.Range(0, 22).Select(i => (21 - i, 3 + i)).ToList();
 		Assert.Equal(expected, marked);
 
 		foreach (Tile t in m.tiles.Where(t => t.BordersRiver())) {
@@ -232,6 +234,45 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 			Assert.False(t.riverWest);
 			Assert.False(t.riverNorthwest);
 		}
+	}
+
+	// The probes are read a second time and the tracer is handed the sum of the
+	// positions of the probes that are not water (rule 2.9.14), so the tile a
+	// trace starts from is not always the source tile.
+	[Fact]
+	public void TheTracerStartsAtTheSumOfTheProbesThatAreNotWater() {
+		List<TerrainType> terrains = RuleTerrains();
+
+		// Source (10,10) with its first two probes land and its last two water:
+		// the land probes are the source itself and its south-west neighbour, so
+		// the sum halves back to the source, and the pattern picks the
+		// north-west diagonal.
+		GameMap twoLandFirst = MakeSyntheticMap(60, 60, terrains,
+			(x, y) => !((x == 11 && y == 11) || (x == 10 && y == 12)));
+		Tile source = twoLandFirst.tileAt(10, 10);
+		Assert.Equal(TileDirection.NORTHWEST, MapGenerator.RiverSourceDirection(twoLandFirst, source));
+		Assert.Equal(source, MapGenerator.RiverSourceStart(twoLandFirst, source, TileDirection.NORTHWEST));
+
+		// Source (10,10) with only the source and its south-east neighbour under
+		// water: the land probes are its south-west and south neighbours, and the
+		// sum halves to the south one, two rows below the source, so the trace
+		// starts there instead. The pattern picks the south-west diagonal.
+		GameMap twoWaterFirst = MakeSyntheticMap(60, 60, terrains,
+			(x, y) => !((x == 10 && y == 10) || (x == 11 && y == 11)));
+		source = twoWaterFirst.tileAt(10, 10);
+		Tile below = twoWaterFirst.tileAt(10, 12);
+		Assert.NotEqual(source, below);
+		Assert.Equal(TileDirection.SOUTHWEST, MapGenerator.RiverSourceDirection(twoWaterFirst, source));
+		Assert.Equal(below, MapGenerator.RiverSourceStart(twoWaterFirst, source, TileDirection.SOUTHWEST));
+
+		// A source whose other land probe falls off the map is handed a point at
+		// half its own coordinates, because a probe that is not on the map is
+		// not water but is not added to the sum either.
+		GameMap coast = MakeSyntheticMap(60, 70, terrains, (x, y) => y <= 50);
+		source = coast.tileAt(0, 50);
+		Tile half = MapGenerator.RiverSourceStart(coast, source, TileDirection.NORTHWEST);
+		Assert.Equal(0, half.XCoordinate);
+		Assert.Equal(24, half.YCoordinate);
 	}
 
 	// Builds a map with the tile ordering the generator uses, so that
