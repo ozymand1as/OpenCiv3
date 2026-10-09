@@ -17,11 +17,12 @@ namespace C7GameData {
 	public partial class City {
 		/// <summary>
 		/// The pollution this city generates from its population, exactly as
-		/// Civ3's City_get_pollution_from_pop does (section 6.1): no pollution
-		/// at or below RULE.MaximumLevel2CitySize, then one point per citizen
-		/// above it, but never more than 1 while the city has a non-obsolete
-		/// building that removes population pollution (Mass Transit System's
-		/// ITF_Removes_Population_Pollution flag).
+		/// Civ3's City_get_pollution_from_pop @ 0x4b1a50 does (section 6.1): no
+		/// pollution at or below RULE.MaximumLevel2CitySize, then one point per
+		/// citizen above it, but never more than 1 while the city has a
+		/// non-obsolete building that removes population pollution (Mass Transit
+		/// System's ITF_Removes_Population_Pollution flag, bit 5 of BLDG.Flags[0]
+		/// at BLDG + 0xEC). **[C]**
 		/// </summary>
 		public int PollutionFromPopulation() {
 			int threshold = owner.rules.MaximumLevel2CitySize;
@@ -38,10 +39,11 @@ namespace C7GameData {
 
 		/// <summary>
 		/// The pollution this city generates from its buildings, exactly as
-		/// Civ3's City_get_pollution_from_buildings does (section 6.2): the sum
-		/// of the buildings' BLDG.Pollution values, capped at 1 while the city
-		/// has a non-obsolete building that reduces building pollution
-		/// (Recycling Center's ITF_Reduces_Buildings_Pollution flag).
+		/// Civ3's City_get_pollution_from_buildings @ 0x4b1b40 does (section
+		/// 6.2): the sum of the buildings' BLDG.Pollution values (BLDG + 0xCC),
+		/// capped at 1 while the city has a non-obsolete building that reduces
+		/// building pollution (Recycling Center's ITF_Reduces_Buildings_Pollution
+		/// flag, bit 6 of BLDG.Flags[0]). **[C]**
 		/// </summary>
 		public int PollutionFromBuildings() {
 			int raw = GetBuildings().Sum(cb => cb.building.pollution);
@@ -57,9 +59,10 @@ namespace C7GameData {
 		}
 
 		/// <summary>
-		/// The value Civ3's City_get_total_pollution returns: the sum of the
-		/// population and building terms (section 6.3). It is also the
-		/// percentage chance that this city pollutes a tile on a given turn.
+		/// The value Civ3's City_get_total_pollution @ 0x4b1c10 returns: the sum
+		/// of the population and building terms, each clamped at zero (section
+		/// 6.3). It is also the percentage chance that this city pollutes a tile
+		/// on a given turn. **[C]**
 		/// </summary>
 		public int TotalPollution() {
 			return PollutionFromPopulation() + PollutionFromBuildings();
@@ -70,7 +73,9 @@ namespace C7GameData {
 		}
 
 		// Civ3 checks the building's RenderedObsoleteBy field (BLDG + 0xE0)
-		// against the owner's known technologies.
+		// against the owner's known technologies, and an obsolete building is
+		// skipped before its pollution flag is ever examined (0x4b1a50 /
+		// 0x4b1b40). **[C]**
 		private bool IsBuildingObsolete(Building building) {
 			return building.renderedObsoleteBy != null
 				&& owner.knownTechs.Contains(building.renderedObsoleteBy.id);
@@ -96,10 +101,20 @@ namespace C7GameData {
 		/// twenty non-centre tiles of the city's radius as polluted. Returns
 		/// true when a tile was polluted.
 		///
-		/// Follows Civ3's City_update_spawn_pollution (section 6.3): the target
-		/// must be on the same landmass as the city, must not be water, and must
-		/// not already be polluted; at most twenty candidates are examined, so a
-		/// crowded neighbourhood can fail to find a spot.
+		/// Follows Civ3's City_update_spawn_pollution @ 0x4b2f80 (section 6.3):
+		/// nothing happens when the city's total pollution is zero, otherwise a
+		/// roll of rand() % 100 must come in below that total, and then the
+		/// first candidate that is inside the map, shares the city's area id and
+		/// is not water is marked. At most twenty candidates are examined, so a
+		/// crowded neighbourhood can fail to find a spot. **[C]**
+		///
+		/// NOTE (measured, and a deviation from the spec's section 6.3 step 3):
+		/// the spec lists "is not already polluted" as a fourth candidate test,
+		/// but the binary's candidate loop at 0x4b2f80 tests only the area id
+		/// (the tile's word at +0x6C against the city's dword at +0x20) and the
+		/// water bit (m35_Check_Is_Water @ 0x5eaa30), then sets overlay bit 0x40
+		/// unconditionally. An already-polluted candidate is therefore re-marked
+		/// rather than skipped, and this implementation does the same.
 		/// </summary>
 		public static bool SpawnPollution(City city) {
 			int total = city.TotalPollution();
@@ -127,16 +142,18 @@ namespace C7GameData {
 		/// The tile this city's pollution lands on, or null when none is
 		/// eligible.
 		///
-		/// OPEN ITEM: the candidate set is OpenCiv3's
-		/// GetTilesWithinRankDistance(MaxRankOfWorkableTiles), which yields the
-		/// city's own tile first followed by the rest of its radius - twenty
-		/// tiles in total for the shipped rank of 2, matching the spec's "at
-		/// most twenty candidates". That identity as Civ3's candidate set is
-		/// unproven: the spec's step 3 does not say how Civ3 orders the twenty
-		/// tiles, and OpenCiv3's spiral order and RNG stream differ, so the
-		/// specific tile chosen is not the same as Civ3's. The count and the
-		/// eligibility rules (same landmass, not water, not already polluted)
-		/// are what is modelled here.
+		/// Civ3's loop at 0x4b2f80 draws rand() % 20 and then walks radius
+		/// indices (draw + k) % 20 + 1 for k = 1..20, i.e. the twenty non-centre
+		/// tiles of the twenty-one tile city radius, in order from a random
+		/// start. This method walks OpenCiv3's equivalent set the same way. **[C]
+		/// for the shape; [L] for the set, since OpenCiv3's rank-distance spiral
+		/// orders the twenty tiles differently from Civ3's neighbour-index
+		/// spiral (Tile.GetTileAtNeighborIndex's own comment records that
+		/// difference), so the specific tile chosen is not Civ3's.
+		///
+		/// OPEN ITEM: the candidate set's identity as Civ3's is therefore
+		/// unproven. What matches is the count (twenty), the random cyclic start
+		/// and the eligibility rules (same area id, not water).
 		/// </summary>
 		private static Tile ChoosePollutionTile(City city) {
 			List<Tile> radius = city.location.GetTilesWithinRankDistance(city.owner.rules.MaxRankOfWorkableTiles);
@@ -158,7 +175,7 @@ namespace C7GameData {
 				if (candidate.continent != city.location.continent) {
 					continue;
 				}
-				if (candidate.IsWater() || candidate.HasPollution()) {
+				if (candidate.IsWater()) {
 					continue;
 				}
 				return candidate;
@@ -170,11 +187,12 @@ namespace C7GameData {
 		/// <summary>
 		/// The accumulated pollution P that drives global warming (section 7 step
 		/// 1): the total pollution of every city in the game plus the square of
-		/// the number of nuclear weapons used. Civ3 keeps this in a global and
-		/// resets it on scenario load; here it is recomputed from the game state
-		/// each turn, which is equivalent while the nuke counter is never
-		/// incremented (no code launches a nuclear weapon yet, so that term is
-		/// always zero - see GameData.nukesUsed).
+		/// the number of nuclear weapons used (the global at 0xa52698). Civ3
+		/// keeps this in a global and resets it on scenario load; here it is
+		/// recomputed from the game state each turn, which is equivalent while
+		/// the nuke counter is never incremented (no code launches a nuclear
+		/// weapon yet, so that term is always zero - see GameData.nukesUsed).
+		/// **[C]** for the sum and the nuke term (0x4f4380).
 		/// </summary>
 		public static int AccumulatedPollution(GameData gameData) {
 			return gameData.cities.Sum(c => c.TotalPollution())
@@ -188,7 +206,7 @@ namespace C7GameData {
 		/// pollution at all, and 0 for a clean world. It has no gameplay effect;
 		/// the per-turn warming pass records it in
 		/// GameData.globalWarmingSeverity so the figure the engine computed is
-		/// available to the UI.
+		/// available to the UI. **[C]** (0x4f4380 writes 0xa5269c).
 		///
 		/// The comparisons are against integer halves and quarters of the tile
 		/// count. Integer and real division agree here because P is an integer:
@@ -216,7 +234,8 @@ namespace C7GameData {
 		/// weapons used, make floor(sum / 10) + 1 attempts, and on each attempt
 		/// that beats the sum, draw a tile and convert it to the terrain its
 		/// current terrain's TERR.PollutionEffect names, clearing mine and
-		/// irrigation as it does so.
+		/// irrigation as it does so. **[C]** (FUN_004f4380 @ 0x4f4380, called
+		/// from perform_interturn @ 0x4f5ef0).
 		/// </summary>
 		public static void DoPerTurnGlobalWarming(GameData gameData) {
 			int accumulated = AccumulatedPollution(gameData);
@@ -270,9 +289,11 @@ namespace C7GameData {
 				return;
 			}
 
-			// Civ3 picks the message by the resulting terrain id: the four
-			// basic terrains get the plain global-warming message, anything
-			// else (a stripped forest or jungle in practice) its own.
+			// Civ3 picks the message by the value m72_Get_Pollution_Effect
+			// returned at 0x4f4380, not by the terrain the tile ends up with: the
+			// four basic terrains get the plain global-warming message, anything
+			// else (a forest or jungle stripped to a terrain past them) its own.
+			// **[C]**
 			string message = targetId < 4
 				? "Global warming has damaged the land!"
 				: "Global warming has destroyed the forest!";
@@ -282,8 +303,11 @@ namespace C7GameData {
 		/// <summary>
 		/// Resolves the terrain a tile becomes under global warming from its
 		/// terrain's TERR.PollutionEffect column, returning null when the tile
-		/// is immune. The resulting Civ3 terrain id is reported through
-		/// targetId so callers can tell the two warming messages apart.
+		/// is immune. The value the engine's m72_Get_Pollution_Effect returned is
+		/// reported through targetId so callers can tell the two warming messages
+		/// apart: it is the stored column value, or the tile's underlying terrain
+		/// id when that value is the 0xE sentinel. **[C]** (0x4f4380 +
+		/// Tile_Get_Pollution_Effect @ 0x5e9a60).
 		/// </summary>
 		private static TerrainType ResolveWarmingTarget(Tile tile, GameData gameData, out int targetId) {
 			targetId = -1;
