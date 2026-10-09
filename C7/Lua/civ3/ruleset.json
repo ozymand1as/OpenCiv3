@@ -357,7 +357,7 @@
       "key": "road",
       "layer": "roads",
       "zIndex": 1,
-      "movementCost": 0.33333334,
+      "movementCost": 1,
       "bonusYields": {
         "desert": {
           "commerce": 1
@@ -11999,6 +11999,7 @@
     "city": 2
   },
   "rules": {
+    "movementAlongRoads": 3,
     "maximumResearchTime": 50,
     "minimumResearchTime": 4,
     "futureTechCost": 400,

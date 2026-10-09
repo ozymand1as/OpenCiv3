@@ -113,7 +113,8 @@ public class CorruptionTest : IClassFixture<SaveGameFixture> {
 		public Tile capitalTile;
 		public Tile cityTile;
 		public List<Tile> roadTiles = new();
-		public TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, 1.0f / 3);
+		// In Civ3 internal movement units, like the shipped ruleset's road.
+		public TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, 1);
 	}
 
 	private TestEmpire MakeEmpire(string governmentName, int cityX) {

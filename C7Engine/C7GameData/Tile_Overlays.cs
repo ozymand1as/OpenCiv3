@@ -184,9 +184,11 @@ public partial class Tile {
 			return canBeReplaced;
 		}
 
-		// The movement cost of this tile's road or railroad improvement, or null
-		// when the tile carries neither. Roads and railroads share the Roads
-		// layer, so this returns the cost of whichever is present.
+		// The movement cost of this tile's road or railroad improvement, in
+		// Civ3's internal movement units (one whole movement point is
+		// RULE.MovementAlongRoads of them), or null when the tile carries
+		// neither. Roads and railroads share the Roads layer, so this returns the
+		// cost of whichever is present.
 		//
 		// Returning null for "no improvement" (rather than a sentinel cost such
 		// as -1) keeps callers from mistaking a tile without an improvement for

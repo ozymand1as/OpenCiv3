@@ -26,7 +26,10 @@ namespace C7GameData {
 		// On the game map, overlapping terrain improvement with a higher zIndex cover those with a smaller one
 		public readonly int zIndex = 0;
 
-		// A terrain improvement with negative movement cost shouldn't affect the tile movement cost
+		// A terrain improvement's movement cost, in Civ3's internal movement
+		// units: one whole movement point is RULE.MovementAlongRoads of them, so
+		// a road is 1 and the movement code divides by the rule's scale. A
+		// negative cost means the improvement does not affect movement at all.
 		public readonly float movementCost = -1;
 
 		// In the default ruleset, Road upgrades to Railroad and Fortress upgrades to Barricade.

@@ -172,7 +172,10 @@ public class MapBase {
 		return neighbor;
 	}
 
-	protected TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, movementCost: 1.0f / 3);
+	// The movement cost is in Civ3's internal movement units: one whole point is
+	// RULE.MovementAlongRoads of them, so a road is 1 and a railroad is 0.
+	// TilePath.GetMovementCost divides by the rule's scale.
+	protected TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, movementCost: 1);
 	protected TerrainImprovement railroad = new("railroad", TerrainImprovement.Layer.Roads, movementCost: 0);
 
 	protected Tile MakeMountainTile() {

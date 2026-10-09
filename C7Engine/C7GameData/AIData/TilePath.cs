@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using C7Engine;
 
 namespace C7GameData {
 	public class TilePath {
@@ -120,7 +121,12 @@ namespace C7GameData {
 					// Railroads are free and also count as roads, so the slower end
 					// determines the step: rail-to-rail is free, while rail-to-road
 					// and road-to-road cost the road improvement's movement cost.
-					return Math.Max(fromRoadCost.Value, toRoadCost.Value);
+					// The improvement's cost is in Civ3's internal movement units, so
+					// the movement scale converts it into movement points: a road
+					// step costs 1 / MovementAlongRoads, which is 1/3 of a point with
+					// the shipped scale of 3, and a scenario that changes the scale
+					// changes the road step with it (11_movement.md §2.1, §3.2).
+					return Math.Max(fromRoadCost.Value, toRoadCost.Value) / MovementPointsScale;
 				}
 			}
 
@@ -161,6 +167,20 @@ namespace C7GameData {
 			}
 
 			return !PlayerRelationship.HaveActiveRightOfPassage(player, owner);
+		}
+
+		// Civ3's movement scale: RULE.MovementAlongRoads, the number of internal
+		// movement units in one movement point, which the original reads at
+		// runtime. The terrain costs above are already in movement points, but a
+		// terrain improvement's cost is in internal units, so this converts it.
+		//
+		// A game with no rules loaded (a unit test that never set up game data)
+		// falls back to the shipped default rather than dividing by zero.
+		private static int MovementPointsScale {
+			get {
+				int scale = EngineStorage.gameData?.rules?.MovementAlongRoads ?? Rules.DefaultMovementAlongRoads;
+				return Math.Max(1, scale);
+			}
 		}
 	}
 }

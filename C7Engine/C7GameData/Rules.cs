@@ -1,5 +1,17 @@
 namespace C7GameData {
 	public class Rules {
+		// The number of internal movement units in one whole movement point,
+		// Civ3's RULE.MovementAlongRoads. The original reads it at runtime and
+		// scales both every unit's maximum movement and every cost by it, so a
+		// scenario can change the movement scale; the shipped conquests.biq uses
+		// 3, and the shipped scenarios range from 2 (Intro2 The Three Sisters) to
+		// 4 (Scenarios/2 MP Rise of Rome) (11_movement.md §2.1).
+		//
+		// This is the default for a rules object that predates the field, so an
+		// older save or ruleset still moves at the shipped rate.
+		public const int DefaultMovementAlongRoads = 3;
+		public int MovementAlongRoads = DefaultMovementAlongRoads;
+
 		public int MaximumResearchTime;
 		public int MinimumResearchTime;
 

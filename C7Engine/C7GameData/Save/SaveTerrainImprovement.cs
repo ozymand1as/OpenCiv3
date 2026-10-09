@@ -21,7 +21,10 @@ public class SaveTerrainImprovement {
 		yield return new(
 			ROAD,
 			Layer.Roads,
-			movementCost: 1.0f / 3,
+			// Civ3's internal movement unit: one whole movement point is
+			// RULE.MovementAlongRoads of these, so a road step costs 1/3 of a
+			// point with the shipped scale of 3 (11_movement.md §3.2).
+			movementCost: 1,
 			zIndex: 1);
 
 		yield return new(
@@ -72,6 +75,8 @@ public class SaveTerrainImprovement {
 
 	public readonly int zIndex;
 
+	// In Civ3's internal movement units (see TerrainImprovement.movementCost);
+	// negative means the improvement does not affect movement.
 	public readonly float movementCost = -1;
 
 	public readonly string upgradesFrom; // a key for another Terrain Improvement

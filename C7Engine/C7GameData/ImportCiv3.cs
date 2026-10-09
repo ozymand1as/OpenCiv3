@@ -2489,6 +2489,12 @@ namespace C7GameData {
 
 			save.Rules.MaximumResearchTime = rule.MaximumResearchTime;
 			save.Rules.MinimumResearchTime = rule.MinimumResearchTime;
+
+			// The movement scale: one movement point is RULE.MovementAlongRoads
+			// internal units, so the road movement cost is 1 / this
+			// (11_movement.md §2.1). The shipped conquests.biq is 3, but the
+			// shipped scenarios range from 2 to 4, so it has to be data.
+			save.Rules.MovementAlongRoads = rule.MovementAlongRoads;
 			save.Rules.FutureTechCost = rule.FutureTechCost;
 			save.Rules.MaximumLevel1CitySize = rule.MaximumLevel1CitySize;
 			save.Rules.MaximumLevel2CitySize = rule.MaximumLevel2CitySize;
