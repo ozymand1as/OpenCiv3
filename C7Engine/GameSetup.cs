@@ -86,8 +86,8 @@ public class GameSetup {
 			secondaryColorIndex = civ.secondaryColorIndex,
 			civilization = civ.name,
 			knownTechs = civ.startingTechs,
-			// TODO: stop hardcoding this
-			eraCivilopediaName = "ERAS_Ancient_Times",
+			// The first era of the rules' era list is where a new game starts.
+			eraCivilopediaName = save.Eras[0].civilopediaName,
 			// TODO: load this from the rules
 			gold = 10,
 			governmentId = worldCharacteristics.defaultGovernment.id,

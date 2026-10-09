@@ -51,6 +51,10 @@ namespace C7GameData {
 		internal Dictionary<Alliance, Alliance> allianceWars = new Dictionary<Alliance, Alliance>();
 
 		public List<ExperienceLevel> experienceLevels = new List<ExperienceLevel>();
+		// The rules' era list, in order. A BIQ game reads it from the ERAS
+		// section; a game with no BIQ reads it from ruleset.json. Everything
+		// that used to assume Civ3's four eras goes through this list.
+		public List<Era> eras = new();
 		public List<Tech> techs = new();
 		public List<CitizenType> citizenTypes = new();
 		public List<Terraform> Terraforms = new();

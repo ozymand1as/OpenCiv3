@@ -33,6 +33,9 @@ public class ResearchTest : IClassFixture<SaveGameFixture> {
 			MaximumLevel1CitySize = 6,
 			MaximumLevel2CitySize = 12,
 		};
+		// The eras a real game gets from its rules; era advancement and the
+		// "tech beyond the player's era" filter read this list.
+		gameData.eras = ShippedEras.Load();
 		gameData.techs.AddRange(techs);
 		return gameData;
 	}

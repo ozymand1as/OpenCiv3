@@ -94,6 +94,7 @@ namespace C7GameData {
 			ImportBarbarianInfo();
 			ImportCitizenTypes();
 			ImportGovernments();
+			ImportEras();
 			ImportEspionageMissions();
 			ImportCultureLevels();
 			ImportDifficulties();
@@ -2222,6 +2223,26 @@ namespace C7GameData {
 				"Build Barricade" or "Build Barricades" => TerraformKey.BuildBarricade,
 				_ => throw new NotSupportedException($"Unknown order: {order}"),
 			};
+		}
+
+		private void ImportEras() {
+			BiqData theBiq = biq.Eras is null ? defaultBiq : biq;
+			save.Eras.AddRange(BuildEras(theBiq));
+		}
+
+		// Builds the era list from the BIQ's ERAS section, in file order. The
+		// BIQ carries no art name for an era, so each one gets the shipped art
+		// name for its position; a ruleset.json game overrides these explicitly.
+		internal static List<Era> BuildEras(BiqData theBiq) {
+			List<Era> eras = new();
+			foreach (QueryCiv3.Biq.ERAS era in theBiq.Eras) {
+				eras.Add(new Era {
+					civilopediaName = era.CivilopediaEntry,
+					name = era.Name,
+					artName = EraUtils.ShippedEraArtNameForIndex(eras.Count),
+				});
+			}
+			return eras;
 		}
 
 		private void ImportGovernments() {

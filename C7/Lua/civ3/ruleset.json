@@ -11913,6 +11913,28 @@
     ],
     "turnLimit": 540
   },
+  "eras": [
+    {
+      "civilopediaName": "ERAS_Ancient_Times",
+      "name": "Ancient Times",
+      "artName": "ancient"
+    },
+    {
+      "civilopediaName": "ERAS_Middle_Ages",
+      "name": "Middle Ages",
+      "artName": "middle"
+    },
+    {
+      "civilopediaName": "ERAS_Industrial_Age",
+      "name": "Industrial Ages",
+      "artName": "industrial"
+    },
+    {
+      "civilopediaName": "ERAS_Modern_Era",
+      "name": "Modern Times",
+      "artName": "modern"
+    }
+  ],
   "techs": [
     {
       "name": "Bronze Working",

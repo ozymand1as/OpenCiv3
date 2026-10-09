@@ -5,7 +5,6 @@ using C7Engine.AI.StrategicAI;
 using C7Engine;
 using MoonSharp.Interpreter;
 using Serilog;
-using static C7GameData.EraUtils;
 using static C7GameData.MultiTurnDeal;
 using static C7GameData.PlayerRelationship;
 using static C7GameData.Tile;
@@ -225,32 +224,7 @@ namespace C7GameData {
 		public int citiesLost = 0;
 
 		public int EraIndex() {
-			return GetEraIndex(eraCivilopediaName);
-		}
-
-		public static int EraIndex(string era) {
-			if (era == "ERAS_Ancient_Times") {
-				return 0;
-			} else if (era == "ERAS_Middle_Ages") {
-				return 1;
-			} else if (era == "ERAS_Industrial_Age") {
-				return 2;
-			} else if (era == "ERAS_Modern_Era") {
-				return 3;
-			}
-			return -1;
-		}
-
-		public static string EraIndexToEra(int index) {
-			if (index <= 0) {
-				return "ERAS_Ancient_Times";
-			} else if (index == 1) {
-				return "ERAS_Middle_Ages";
-			} else if (index == 2) {
-				return "ERAS_Industrial_Age";
-			} else {
-				return "ERAS_Modern_Era";
-			}
+			return EraUtils.GetEraIndex(EngineStorage.gameData?.eras, eraCivilopediaName);
 		}
 
 		public void AddUnit(MapUnit unit) {
@@ -762,17 +736,17 @@ namespace C7GameData {
 		}
 
 		/// <summary>
-		/// Takes all the techs in the game and keeps only what could be researched next at a particular point in the game.
+		/// Takes the game's data and keeps only the techs that could be
+		/// researched next at this point in the game.
 		/// </summary>
-		/// <param name="allTechs"></param>
-		/// <returns></returns>
-		public HashSet<Tech> GetAvailableTechsToResearch(List<Tech> allTechs) {
+		public HashSet<Tech> GetAvailableTechsToResearch(GameData gameData) {
 			HashSet<Tech> result = new();
-			foreach (Tech tech in allTechs) {
+			int playerEraIndex = EraUtils.GetEraIndex(gameData.eras, eraCivilopediaName);
+			foreach (Tech tech in gameData.techs) {
 				if (knownTechs.Contains(tech.id)) {
 					continue;
 				}
-				if (GetEraIndex(tech.EraCivilopediaName) > EraIndex()) {
+				if (EraUtils.GetEraIndex(gameData.eras, tech.EraCivilopediaName) > playerEraIndex) {
 					continue;
 				}
 
@@ -1098,7 +1072,7 @@ namespace C7GameData {
 			}
 
 			if (CanAdvanceToNextEra(gameData)) {
-				eraCivilopediaName = GetNextEraNameByIndex(EraIndex());
+				AdvanceToNextEra(gameData);
 			}
 
 			return overflow;
@@ -1119,7 +1093,19 @@ namespace C7GameData {
 			AwardVictoryPointsForAdvance(gameData, tech);
 
 			if (CanAdvanceToNextEra(gameData)) {
-				eraCivilopediaName = GetNextEraNameByIndex(EraIndex());
+				AdvanceToNextEra(gameData);
+			}
+		}
+
+		// Moves the player to the next era of the rules' era list. The list is
+		// the only source of the order: a ruleset with six eras advances through
+		// all six, and the clamp keeps the last era from advancing past itself.
+		// A rules list with no next era (an empty list, or the last one) leaves
+		// the player where they are.
+		private void AdvanceToNextEra(GameData gameData) {
+			string nextEra = EraUtils.GetNextEraNameByIndex(gameData.eras, EraUtils.GetEraIndex(gameData.eras, eraCivilopediaName));
+			if (nextEra != null) {
+				eraCivilopediaName = nextEra;
 			}
 		}
 
