@@ -359,14 +359,32 @@ namespace C7Engine {
 		// constant 1000000 (`0x442bc4`). The flag-selected branch then divides this
 		// down; see `ScoreStartCandidate`.
 		//
-		// The term assignment, read off the sum at `0x442ba2`-`0x442c0e`, is
+		// The term assignment, read off the sum at `0x442ba2`-`0x442c16`, is
 		//   food1/3 + 2 * (great - insideACityRadius) + 1000000 + food2/2
-		//   - dead + food3NoShield + luxuryCount + resourcePoints + riverTiles
-		//   + freshWater
+		//   - dead + food3NoShield + luxuryCount + resourcePoints - ownedByAnotherCiv
+		//   + freshWater + riverTiles + (the AI-evaluation terms)
 		// where `insideACityRadius` counts the cross tiles carrying kind-2 bit 17
 		// and `food2/2` is a signed division. A tile carrying that bit is skipped
 		// outright (`0x4427c6` jumps to the next spiral position), so it also
 		// contributes no resource points, no river and no bucket.
+		//
+		// Three of those terms need their live conditions stated, because the
+		// function's frame keeps one slot each and the record previously
+		// conflated them (`re/notes/civ3_map_generator_spec.md` section 2.14 has
+		// the slot table):
+		//  * the `+4` fresh-water term is the one `Map_has_fresh_water` @
+		//    `0x5f39e0` sets at `0x4426fc` with no flag test at all, and it is the
+		//    only fresh-water term the sum accumulates during generation (the
+		//    divisor chain is a separate, later stage);
+		//  * `ownedByAnotherCiv` - the cross tiles owned by a civ other than the
+		//    evaluating player (`0x442792` counts, `0x442be2` subtracts) - is
+		//    counted only when the third argument, the evaluating player, is not
+		//    -1; the wrapper passes -1 (`0x5d383c`), so it is zero at generation
+		//    time;
+		//  * the `+8` and `+4` terms the AI-evaluation path sets (`0x4426e4`,
+		//    `0x4426c0`) are live only when the fourth argument, the "AI
+		//    evaluation" flag, is 0; the wrapper passes 1 (`0x5d383a`), so both
+		//    are zero at generation time.
 		internal static int StartScoreBucketSum(WorldCharacteristics wc, GameMap m,
 				Dictionary<int, int> bodyAreas, HashSet<Tile> cityRadiusTiles, Tile t) {
 			int food1 = 0;            // food == 1, with a shield or a commerce
@@ -443,18 +461,32 @@ namespace C7Engine {
 		// The pre-pass `Match_ai_eval_city_location` runs over the first
 		// forty-nine spiral positions before it sums anything (`0x4424f7`-
 		// `0x442653`). It rejects:
-		//  * a tile inside an existing city's working radius within the first
-		//    twenty-five spiral positions (`0x442597`, `0x44259c`); that is the
-		//    same kind-2 bit 17 the sum reads;
+		//  * a tile that already carries a CITY within the first twenty-five
+		//    spiral positions (`0x44258c` calls `Tile_has_city` @ `0x5ea6c0`,
+		//    which forwards to the plot's city-id getter `plot+0xb4` @ `0x5eaae0`,
+		//    the short at `+0x1a`; `0x442599` compares the spiral index against
+		//    twenty-five). It is NOT the owner byte: the owner byte is the
+		//    separate field at `+0x05` that the outer-ring rule below reads;
 		//  * more than three tiles owned by a civ among positions nine to twenty,
-		//    the outer ring of the cross less its axis tiles (`0x4425a7`-
-		//    `0x4425df` counts, `0x44262d` compares against four);
+		//    the outer ring of the cross less its axis tiles (`0x4425a7` skips
+		//    `i < 9`, `0x4425cc` reads the owner byte through `plot+0x98` @
+		//    `0x5eaa80`, `0x4425df` counts and `0x44262d` compares against four);
 		//  * more than nine tiles inside a city's working radius anywhere in the
 		//    cross (`0x442603`-`0x442610` counts, `0x442640` compares against
 		//    ten).
-		// During generation no tile is owned and no city exists, so no candidate
-		// trips any of the three; they are modelled because the same function
-		// serves the AI's own site evaluation.
+		// The first of the three is what makes the second reachable at all: while
+		// the `i < 25` screen was keyed on ownership, every owned tile tripped it
+		// first and the outer-ring count could never be the reason a candidate was
+		// rejected.
+		//
+		// The function also rejects, before the loop, a candidate whose own tile is
+		// owned by a different civ (`0x4424b2`-`0x4424f4`); that test is skipped
+		// whenever the third argument, the evaluating player, is -1, which is what
+		// the map generator passes (`0x5d383c`), so it is not modelled here.
+		//
+		// During generation no tile carries a city, an owner or the city-radius
+		// mark, so no candidate trips any of the three; they are modelled because
+		// the same function serves the AI's own site evaluation.
 		internal static bool StartPrePassRejected(GameMap m, HashSet<Tile> cityRadiusTiles, Tile t) {
 			int ownedInTheOuterRing = 0;
 			int insideACityRadius = 0;
@@ -463,13 +495,11 @@ namespace C7Engine {
 				if (!InBounds(n)) {
 					continue;
 				}
-				if (IsOwned(n)) {
-					if (i < 25) {
-						return true;
-					}
-					if (i < 21) {
-						ownedInTheOuterRing++;
-					}
+				if (n.HasCity() && i < 25) {
+					return true;
+				}
+				if (i >= 9 && i < 21 && IsOwned(n)) {
+					ownedInTheOuterRing++;
 				}
 				if (i < 21 && cityRadiusTiles.Contains(n)) {
 					insideACityRadius++;
@@ -791,27 +821,30 @@ namespace C7Engine {
 
 		// The seven acceptance screens `FUN_005eeee0` runs on a candidate before
 		// its body-size, per-body counter, score and spacing gates
-		// (`0x5ef2ee`-`0x5ef3b1`). Each tests something on the plot that has to
-		// come back empty:
+		// (`0x5ef2ee`-`0x5ef3b1`), in the binary's order. Each tests something on
+		// the plot that has to come back empty:
 		//  * `plot+0x80` (`0x5ea9c0`), kind-2 bit 19: this tile is already a
 		//    starting location;
 		//  * `plot+0x8c` (`0x5eaa30`): the tile's terrain is water, so the site
 		//    must be land;
-		//  * `plot+0x3c(0)` (`0x5ea7a0`), kind-0 bit 5: the sparse-feature mark,
-		//    which the sparse pass `FUN_005f21b0` @ `0x5f21b0` sets. Civ3 runs
-		//    that pass *before* the starts (driver `0x5eb773` against `0x5eb7b0`),
-		//    so a Civ3 start is never on a goody hut or a barbarian camp. The
-		//    fork's generator places its starts before both of those, so the
-		//    screen cannot fire on a generated map here - which is a pipeline
-		//    difference the spec records;
-		//  * `plot+0x1a` (`0x5ea6c0`): the barbarian tribe id, which must be -1;
-		//  * `plot+0x1c` (`0x5ea6e0`): the city id, which must be -1 unless one
-		//    of kind-0 bits 29/30/31 is set;
+		//  * `plot+0x3c(0)` (`0x5ea7a0`), kind-0 bit 5: the GOODY HUT. The sparse
+		//    pass `FUN_005f21b0` @ `0x5f21b0` sets that bit, and Civ3 runs the pass
+		//    *before* the starts (driver `0x5eb773` against `0x5eb7b0`), so a Civ3
+		//    start is never on a hut. The fork's generator places its starts
+		//    before that pass, so the screen cannot fire on a generated map here -
+		//    a pipeline difference the spec records;
+		//  * `plot+0xb4` (`0x5ea6c0`, `Tile_has_city`): the plot's CITY id - the
+		//    short at `+0x1a` - which must be -1;
+		//  * `plot+0xbc` (`0x5ea6e0`): the plot's COLONY id - the short at `+0x1c` -
+		//    which must be -1 unless one of kind-0 bits 29/30/31 is set. C7 has no
+		//    colony model, so this screen is modelled as always clear and that is
+		//    recorded as an open item;
 		//  * `plot+0x0c` (`0x5ea9f0`): the unit id, which must be -1;
-		//  * `plot+0x1c(0)` (`0x5ea630`), kind-0 bit 7: whose only writer in the
-		//    binary is the by-id tile-flag setter `Tile_vf73` @ `0x5e9c90`, which
-		//    the generator never calls. C7 has no counterpart for it, so it is
-		//    modelled as always clear and that is recorded as an open item.
+		//  * `plot+0x1c(0)` (`0x5ea630`), kind-0 bit 7: the BARBARIAN CAMP. The
+		//    camp placement `FUN_0055f9f0` sets that bit (`0x55fbe4`, kind 0, bit
+		//    `0x80`) and the sparse pass sets it too; C7 models it as
+		//    `hasBarbarianCamp`. Like the hut screen it cannot fire on a generated
+		//    map here, because the fork places its camps after the starts.
 		internal static bool StartScreenRejects(Tile t, List<Tile> startingLocations) {
 			if (startingLocations.Contains(t)) {
 				return true;
@@ -819,10 +852,7 @@ namespace C7Engine {
 			if (IsWaterTerrain(t)) {
 				return true;
 			}
-			if (t.hasGoodyHut || t.hasBarbarianCamp) {
-				return true;
-			}
-			if (t.barbarianTribeId != BarbarianTribes.None) {
+			if (t.hasGoodyHut) {
 				return true;
 			}
 			if (t.HasCity()) {
@@ -831,18 +861,31 @@ namespace C7Engine {
 			if (t.unitsOnTile.Count > 0) {
 				return true;
 			}
+			if (t.hasBarbarianCamp) {
+				return true;
+			}
 			return false;
 		}
 
-		// The original's final reshuffle (`0x5ef655`-`0x5ef6de`). It walks the
-		// start list from position 1 to the second-to-last, swapping each
-		// position with itself or with a later one - so the last start is never
-		// touched - and at the very first step it does not draw at all but swaps
-		// position 0 with the fixed slot `(2n - 2) / 3`. That is what keeps the
-		// human player's start out of the single best site; the drawn steps
-		// continue the same stream the candidate shuffle used.
+		// The original's final reshuffle (`0x5ef655`-`0x5ef6de`). Its start array
+		// is one-based: the generator never writes slot 0 (its next-free-slot scan
+		// starts at slot 1), so the count `n` is initialised to 1 (`0x5ef05c`) and
+		// bumped once per accepted start (`0x5ef607`), and the first accepted tile
+		// is written to slot 1 (`0x5ef5c4`, into the slot the scan at
+		// `0x5ef1f4`-`0x5ef217` seeds to 1). The loop therefore walks slots 1 to
+		// `n-1` - i.e. every start - swapping each with itself or with a later
+		// slot, and only the unused slot 0 is fixed. At the very first step it
+		// does not draw at all but swaps slot 1 with the fixed slot
+		// `(2n - 2) / 3 + 1`, which is what keeps the first start off the single
+		// best site; the drawn steps continue the same stream the candidate
+		// shuffle used.
+		//
+		// `startingLocations` is zero-based, so slot `s` is `startingLocations[s - 1]`
+		// and the loop variable `i` is the binary's slot number. The old port used
+		// `n = Count` and stopped at `i < n`, which dropped the last start from the
+		// walk and used the off-by-one fixed slot `(2 * Count - 2) / 3`.
 		internal static void ReshuffleStartOrder(Civ3StartRandom rand, List<Tile> startingLocations) {
-			int n = startingLocations.Count;
+			int n = startingLocations.Count + 1;
 			for (int i = 1; i < n; ++i) {
 				int j = i == 1 ? (2 * n - 2) / 3 + 1 : i + rand.Next(n - i);
 				if (j != i) {
