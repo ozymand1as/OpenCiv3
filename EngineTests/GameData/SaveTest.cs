@@ -583,6 +583,10 @@ public class SaveTests : IClassFixture<SaveGameFixture> {
 				// there is a horseman barb + barb camp unit in this location
 				if (gameUnit.currentLocation is { X: 7, Y: 103 }) {
 					Assert.Contains("barbarianCamp", game.Map.tiles.Find(t => t.X == 7 && t.Y == 103).features);
+					// The camp's tribe, measured out of the shipped BIQ's TILE
+					// record: this scenario has seven camps carrying tribe ids 0,
+					// 1 and 2, and this one is 1 (spec 22 section 2).
+					Assert.Equal(1, game.Map.tiles.Find(t => t.X == 7 && t.Y == 103).barbarianTribeId);
 					Assert.True(game.Players.Find(p => p.id == gameUnit.owner).civilization == "A Barbarian Chiefdom");
 				}
 			}

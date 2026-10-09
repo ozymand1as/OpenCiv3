@@ -59,6 +59,16 @@ namespace C7GameData {
 		// 12_combat.md §6.2).
 		public bool hasUsedAttack { get; set; }
 
+		/// <summary>
+		/// The barbarian tribe this unit belongs to: a slot in the global tribe
+		/// table (spec 22 sections 3.2.6 and 6.1, unit field +0x3c). -1 for every
+		/// unit that is not a barbarian. Civ3's own unit constructor gives a
+		/// barbarian unit spawned without a tribe the fallback slot, so a
+		/// barbarian unit always carries one; a BIQ-imported barbarian unit is the
+		/// exception, because the BIQ's UNIT record has no tribe field.
+		/// </summary>
+		public int barbarianTribeId = BarbarianTribes.None;
+
 		public bool isAutomated { get; set; }
 
 		//sentry, etc. will come later.  For now, let's just have a couple things so we can cycle through units that aren't fortified.

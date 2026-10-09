@@ -623,6 +623,10 @@ public class GoodyHutTest {
 
 			C7GameData.GameData.rng = new Random(seed);
 			Random probe = new(seed);
+
+			// The tribe slot is drawn before the walk (spec 22 section 5.1);
+			// the 3/4 chance is the draw after it.
+			probe.Next(BarbarianTribes.SlotsPerCultureGroup);
 			bool expected = probe.Next(4) < 3;
 
 			Assert.Equal(GoodyHutOutcome.Barbarians, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Barbarians));
@@ -647,6 +651,11 @@ public class GoodyHutTest {
 			C7GameData.GameData gd = SetupBarbarianHut(out Player player, out Tile tile, out Player barbarians);
 			C7GameData.GameData.rng = new Random(seed);
 			Random probe = new(seed);
+
+			// The barbarian branch draws its tribe slot before the neighbour walk
+			// starts (spec 22 section 5.1), so the replay consumes that draw
+			// first. It does not change the per-tile chances this test pins.
+			probe.Next(BarbarianTribes.SlotsPerCultureGroup);
 
 			List<Tile> expected = new();
 			int expectedCount = 0;

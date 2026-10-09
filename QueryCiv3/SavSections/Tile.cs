@@ -44,6 +44,11 @@ namespace QueryCiv3.Sav {
 		public bool GoodyHut { get => Util.GetFlag(Flags2[0], 5); }
 		public bool Pollution { get => Util.GetFlag(Flags2[0], 6); }
 
+		// Bit 7 of the same flag word as the goody hut, the SAV mirror of the
+		// BIQ's BarbarianCamp bit (spec 22 section 2). BarbarianCamp below is
+		// the 16-bit tribe id, not this flag.
+		public bool BarbarianCampFlag { get => Util.GetFlag(Flags2[0], 7); }
+
 		public bool Craters { get => Util.GetFlag(Flags2[1], 0); }
 
 		public bool Barricade { get => Util.GetFlag(Flags2[3], 4); }

@@ -17,6 +17,10 @@ namespace C7GameData.Save {
 		public string action; // "fortified"
 		public TileDirection facingDirection = TileDirection.SOUTHEAST;
 		public string experience;
+
+		// The unit's barbarian tribe slot (spec 22 section 3.2.6), absent for
+		// every unit that is not a barbarian.
+		public int? barbarianTribeId;
 		public float WorkerProgressTowardsJob;
 		public ID WorkerJob;
 		public ID loadedOnUnitId;
@@ -51,6 +55,9 @@ namespace C7GameData.Save {
 			leaderKind = unit.leaderKind;
 			hasProducedLeader = unit.hasProducedLeader;
 			hasUsedAttack = unit.hasUsedAttack;
+			if (BarbarianTribes.IsValidSlot(unit.barbarianTribeId)) {
+				barbarianTribeId = unit.barbarianTribeId;
+			}
 			if (unit.path?.PathLength() > 0) {
 				path = unit.path.path.ToList().ConvertAll(tile => new TileLocation(tile));
 			}
@@ -77,6 +84,7 @@ namespace C7GameData.Save {
 				leaderKind = leaderKind,
 				hasProducedLeader = hasProducedLeader,
 				hasUsedAttack = hasUsedAttack,
+				barbarianTribeId = barbarianTribeId ?? BarbarianTribes.None,
 				previousLocation = currentLocation.X == - 1 ? Tile.NONE : map.tileAt(previousLocation.X, previousLocation.Y),
 				hitPointsRemaining = hitPointsRemaining,
 				movementPoints = new MovementPoints(),

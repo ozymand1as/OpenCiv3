@@ -83,6 +83,30 @@ namespace C7GameData {
 
 		public BarbarianInfo barbarianInfo = new BarbarianInfo();
 
+		/// <summary>
+		/// The civilization whose city-name list is the barbarian tribe table
+		/// (spec 22 section 2): RACE 0, "A Barbarian Chiefdom". Its 76 city
+		/// names are the tribe names in culture-group bands of 15 plus the
+		/// slot-75 fallback.
+		/// </summary>
+		public Civilization BarbarianCivilization => civilizations.Find(c => c.isBarbarian);
+
+		/// <summary>
+		/// The next free tribe slot of a culture group's band, held slots being
+		/// the tribes the camps on the map currently hold.
+		/// </summary>
+		public int PickBarbarianTribeSlot(int cultureGroupIndex) {
+			return BarbarianTribes.PickTribeSlot(cultureGroupIndex, BarbarianTribes.HeldSlots(map));
+		}
+
+		/// <summary>
+		/// The name of a tribe slot, or null when the loaded rules carry no name
+		/// there.
+		/// </summary>
+		public string BarbarianTribeName(int slot) {
+			return BarbarianTribes.TribeName(this, slot);
+		}
+
 		// Set when a goody hut gives out maps ("the tribe gave us maps of
 		// their region"). Civ3 records the reveal in a global flag; OpenCiv3
 		// keeps it here for the same purpose. No consumer reads it yet.
@@ -437,6 +461,17 @@ namespace C7GameData {
 		}
 
 		internal void SpawnUnit(Player player, UnitPrototype proto, Tile tile) {
+			SpawnUnit(player, proto, tile, BarbarianTribes.None);
+		}
+
+		/// <summary>
+		/// Spawns a unit, attaching a barbarian tribe when there is one. A
+		/// barbarian unit spawned without an explicit tribe takes the fallback
+		/// slot, which is what Civ3's own unit constructor does when it is handed
+		/// owner 0 (the barbarian player) and tribe -1: every barbarian unit
+		/// carries a tribe, and the name of an unattributed one is "Barbarian".
+		/// </summary>
+		internal void SpawnUnit(Player player, UnitPrototype proto, Tile tile, int barbarianTribeId) {
 			// TODO: consolidate unit spawning routines (here)
 
 			var defaultExpLevel = this.defaultExperienceLevel;
@@ -447,6 +482,9 @@ namespace C7GameData {
 			newUnit.experienceLevel = player.isBarbarians ? barbExpLevel : defaultExpLevel;
 			newUnit.experienceLevelKey = player.isBarbarians ? barbExpLevel.key : defaultExpLevel.key;
 			newUnit.hitPointsRemaining = player.isBarbarians ? barbExpLevel.baseHitPoints : defaultExpLevel.baseHitPoints;
+			newUnit.barbarianTribeId = player.isBarbarians && barbarianTribeId == BarbarianTribes.None
+				? BarbarianTribes.FallbackSlot
+				: barbarianTribeId;
 
 			tile.unitsOnTile.Add(newUnit);
 			this.mapUnits.Add(newUnit);
