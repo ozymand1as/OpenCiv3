@@ -11955,7 +11955,8 @@
     "radarTileVisibility": 2,
     "goldenAgeDuration": 20,
     "citiesNeededToSupportAnArmy": 4,
-    "allowScientificLeaders": true
+    "allowScientificLeaders": true,
+    "allowCitiesFromGoodyHuts": true
   },
   "timeOptions": {
     "baseUnit": "years",

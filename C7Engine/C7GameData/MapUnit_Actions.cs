@@ -43,27 +43,16 @@ public partial class MapUnit {
 			GoodyHutInteractions.Consume(EngineStorage.gameData, owner, tile);
 		}
 
-		// Disperse barb camp
+		// Disperse barb camp. Spec 22 section 6.3: the camp is removed, its
+		// tribe slot is freed and the tile's tribe id is cleared before the
+		// message is shown, so the freed slot is available to the next tribe in
+		// that band and no tile keeps pointing at a tribe that no longer
+		// exists. The rules live in the shared handler, which the territory
+		// owner writer reaches as well; the receiver is the unit's owner here
+		// and the civ that took the tile there.
 		if (tile.hasBarbarianCamp && !owner.isBarbarians) {
-			// Spec 22 section 6.3: the camp is removed, its tribe slot is freed
-			// and the tile's tribe id is cleared before the message is shown, so
-			// the freed slot is available to the next tribe in that band and no
-			// tile keeps pointing at a tribe that no longer exists.
-			string tribe = EngineStorage.gameData.BarbarianTribeName(tile.barbarianTribeId);
-			EngineStorage.gameData.map.barbarianCamps.Remove(tile);
-			tile.hasBarbarianCamp = false;
-			tile.barbarianTribeId = BarbarianTribes.None;
 			animate(MapUnit.AnimatedAction.VICTORY);
-
-			// TODO: make this configurable
-			owner.gold += 25;
-			if (owner.isHuman) {
-				new MsgShowMilitaryAdvisorPopup(
-					tribe == null
-						? $"We cleared a barbarian encampment and earned 25 gold!"
-						: $"We dispersed a {tribe} encampment and took 25 gold!",
-					happy: true).send();
-			}
+			BarbarianCampInteractions.DisperseCamp(EngineStorage.gameData, tile, owner);
 		}
 
 		// Destroy the enemy city on the tile unless we're the barbarians,

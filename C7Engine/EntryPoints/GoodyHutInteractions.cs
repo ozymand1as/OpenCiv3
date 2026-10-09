@@ -74,6 +74,29 @@ namespace C7Engine {
 		/// village is a table result of its own and is not re-rolled.
 		/// </summary>
 		public static GoodyHutOutcome Consume(GameData gameData, Player player, Tile tile) {
+			return Consume(gameData, player, tile, forcedOutcome: null);
+		}
+
+		/// <summary>
+		/// Consumes a hut on a tile the territory sweep has just given to a new
+		/// owner (spec 17 section 5.1; 22 section 4.6). The original's owner
+		/// writer has no unit to pass, and "no unit" is hard-wired in the writer
+		/// rather than a choice of one caller, so the outcome is forced to City
+		/// instead of rolled - the hut becomes a city of the civ that took the
+		/// tile. Nothing else is bypassed: the City outcome keeps its own guards
+		/// (spec 22 section 4.5), so a civilization that cannot be handed a city
+		/// re-rolls the table exactly as a drawn City outcome would.
+		/// </summary>
+		public static GoodyHutOutcome ConsumeFromTerritoryChange(GameData gameData, Player player, Tile tile) {
+			return Consume(gameData, player, tile, GoodyHutOutcome.City);
+		}
+
+		/// <summary>
+		/// The entry path itself. <paramref name="forcedOutcome"/> replaces the
+		/// table's first draw when it is set, which is how the unit-less owner
+		/// writer reaches the City outcome without consuming a roll.
+		/// </summary>
+		private static GoodyHutOutcome Consume(GameData gameData, Player player, Tile tile, GoodyHutOutcome? forcedOutcome) {
 			// The hut is cleared before the outcome is chosen.
 			tile.hasGoodyHut = false;
 
@@ -81,7 +104,9 @@ namespace C7Engine {
 			bool allowCities = gameData.rules == null || gameData.rules.AllowCitiesFromGoodyHuts;
 
 			for (int attempt = 0; attempt < MaxRollsPerHut; ++attempt) {
-				GoodyHutOutcome drawn = GoodyHutTable.Roll(row, GameData.rng, allowCities);
+				GoodyHutOutcome drawn = attempt == 0 && forcedOutcome.HasValue
+					? forcedOutcome.Value
+					: GoodyHutTable.Roll(row, GameData.rng, allowCities);
 				GoodyHutOutcome applied = Apply(gameData, player, tile, drawn);
 				if (applied != GoodyHutOutcome.Nothing) {
 					return applied;
@@ -101,9 +126,10 @@ namespace C7Engine {
 		/// Applies one drawn outcome, returning the outcome when it took effect
 		/// and Nothing when its preconditions were not met. A caller that wants
 		/// Civ3's behaviour must treat Nothing as a rejected draw and roll again
-		/// (<see cref="Consume"/> does; it is the only production caller). The
-		/// deserted-village outcome itself shows its message here, so a rejected
-		/// draw is silent.
+		/// (the entry path <see cref="Consume"/> does; it is the only production
+		/// caller, and the forced City outcome of the territory path goes through
+		/// it too). The deserted-village outcome itself shows its message here,
+		/// so a rejected draw is silent.
 		/// </summary>
 		public static GoodyHutOutcome Apply(GameData gameData, Player player, Tile tile, GoodyHutOutcome outcome) {
 			switch (outcome) {

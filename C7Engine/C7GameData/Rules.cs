@@ -37,8 +37,11 @@ namespace C7GameData {
 		public int RadarTileVisibility; // how many tiles, a unit with the Radar ability, can see ahead
 
 		// When true, a goody hut may hand over a city ("an advanced tribe has
-		// joined us"). This is the Civ3 "no city from a hut" rule toggle: the
-		// shipped rules leave it enabled, and it is not yet imported from a BIQ.
+		// joined us"). This is the Civ3 "no city from a hut" rule toggle: bit
+		// 0x400 of the toggleable-rules word, the bit the editor calls
+		// "elimination", which the original reads for both meanings. The
+		// shipped rules leave it clear. Carried on both paths: the BIQ import
+		// (ImportRules) and C7/Lua/civ3/ruleset.json.
 		public bool AllowCitiesFromGoodyHuts = true;
 		// How many turns a Golden Age lasts (RULE.GoldenAgeDuration, measured as 20
 		// in the shipped conquests.biq).

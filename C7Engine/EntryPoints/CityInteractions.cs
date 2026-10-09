@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using C7Engine.AI;
 
@@ -131,8 +132,12 @@ namespace C7Engine {
 			city.StartResistance(gameData);
 
 			// Borders and the trade network depend on who owns the city, and
-			// the rank corruption of both players changes with the swap.
-			gameData.UpdateTileOwners();
+			// the rank corruption of both players changes with the swap. The
+			// sweep is told the owner the city's tiles held until now: it
+			// compares a tile's stored owner against the owner it is about to
+			// write (spec 17 section 5.1), and a capture rewrites the owner of
+			// every tile the city already holds.
+			gameData.UpdateTileOwners(new Dictionary<City, Player> { { city, previousOwner } });
 			gameData.InvalidateCachedTradeNetwork();
 			previousOwner.DoCorruptionCalculations(gameData);
 			newOwner.DoCorruptionCalculations(gameData);
