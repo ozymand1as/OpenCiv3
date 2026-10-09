@@ -712,7 +712,7 @@ namespace C7GameData {
 				civ.cultureGroupKey = GetCultureGroupIdentifier(race.CultureGroup);
 
 				// The diplomatic attitude model's data inputs (spec
-				// 20_diplomacy_trade.md sections 3.2 and 3.5): the race's
+				// 20_diplomacy_trade.md sections 3.2 and 3.6): the race's
 				// AggressionLevel seeds the hostility score, and the pair of
 				// government preferences are compared against the two civs' current
 				// governments. The two preferences are government indices in the
@@ -928,6 +928,9 @@ namespace C7GameData {
 							refuseContactUntilTurn =
 								refuseContactForTurns[j] > 0 ?
 									save.TurnNumber + refuseContactForTurns[j] : -1,
+							// The attitude function reads bits 0x8 and 0x10 of this word
+							// (spec 20_diplomacy_trade.md section 3.3); nothing else does.
+							contactGrievances = PlayerRelationship.GrievanceBitsOfContactWord(contacts[j]),
 						});
 					}
 				}
