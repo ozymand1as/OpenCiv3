@@ -48,6 +48,21 @@ public class ResistanceRulesDataTest : IClassFixture<SaveGameFixture> {
 		{ -5, -5, 5, 5, 0, 0, 5, 0 },
 	};
 
+	// The MIDDLE member of the same GOVT_GOVT triple - the propaganda modifier
+	// that Initiate Propaganda's penalty total reads (spec 24 section 6.6). It is
+	// asserted from the same two sources as the resistance matrix, because the two
+	// columns are easy to confuse and a wrong column would still look plausible.
+	private static readonly int[,] BriberyModifiers = {
+		{ 0, 0, 0, 0, 0, 0, 0, 0 },
+		{ 15, 0, -10, -15, -20, -30, 0, 0 },
+		{ 20, 15, 0, -5, -10, -25, 0, 0 },
+		{ 25, 20, 5, 0, -10, -20, 0, 0 },
+		{ 30, 25, 10, 8, 0, -5, 0, 0 },
+		{ 35, 30, 20, 10, 5, 0, 0, 0 },
+		{ 0, 0, -5, -20, -10, -10, 0, 0 },
+		{ 20, 15, 0, -10, -10, -20, -25, 0 },
+	};
+
 	private static void AssertCultureLevels(List<CultureLevel> levels) {
 		Assert.Equal(CultureNames.Length, levels.Count);
 		for (int i = 0; i < levels.Count; i++) {
@@ -67,6 +82,14 @@ public class ResistanceRulesDataTest : IClassFixture<SaveGameFixture> {
 			for (int column = 0; column < GovernmentNames.Length; column++) {
 				Assert.Equal(ResistanceModifiers[row, column],
 					governments[row].ResistanceModifierAgainst(column));
+			}
+
+			// The propaganda modifier is a different column of the same triple, so it
+			// is asserted here too - a wrong-column import would otherwise pass.
+			Assert.Equal(GovernmentNames.Length, governments[row].briberyModifiers.Count);
+			for (int column = 0; column < GovernmentNames.Length; column++) {
+				Assert.Equal(BriberyModifiers[row, column],
+					governments[row].BriberyModifierAgainst(column));
 			}
 		}
 	}

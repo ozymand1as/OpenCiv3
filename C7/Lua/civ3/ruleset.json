@@ -13339,7 +13339,8 @@
       "freeUnitsPerCity": 0,
       "freeUnitsPerMetropolis": 0,
       "unitCost": 1,
-      "resistanceModifiers": [0, 5, 5, 5, 5, 5, 0, 0]
+      "resistanceModifiers": [0, 5, 5, 5, 5, 5, 0, 0],
+      "briberyModifiers": [0, 0, 0, 0, 0, 0, 0, 0]
     },
     {
       "hasTilePenalty": true,
@@ -13362,7 +13363,8 @@
       "freeUnitsPerCity": 4,
       "freeUnitsPerMetropolis": 4,
       "unitCost": 1,
-      "resistanceModifiers": [-5, 0, 5, 5, 5, 5, 0, 0]
+      "resistanceModifiers": [-5, 0, 5, 5, 5, 5, 0, 0],
+      "briberyModifiers": [15, 0, -10, -15, -20, -30, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13386,7 +13388,8 @@
       "freeUnitsPerCity": 4,
       "freeUnitsPerMetropolis": 8,
       "unitCost": 1,
-      "resistanceModifiers": [-5, -5, 0, 5, 5, 5, 0, 0]
+      "resistanceModifiers": [-5, -5, 0, 5, 5, 5, 0, 0],
+      "briberyModifiers": [20, 15, 0, -5, -10, -25, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13410,7 +13413,8 @@
       "freeUnitsPerCity": 6,
       "freeUnitsPerMetropolis": 6,
       "unitCost": 1,
-      "resistanceModifiers": [-5, -5, -5, 0, -5, 5, 0, 0]
+      "resistanceModifiers": [-5, -5, -5, 0, -5, 5, 0, 0],
+      "briberyModifiers": [25, 20, 5, 0, -10, -20, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13434,7 +13438,8 @@
       "freeUnitsPerCity": 3,
       "freeUnitsPerMetropolis": 4,
       "unitCost": 2,
-      "resistanceModifiers": [-5, -5, 5, 5, 0, 5, 0, 0]
+      "resistanceModifiers": [-5, -5, 5, 5, 0, 5, 0, 0],
+      "briberyModifiers": [30, 25, 10, 8, 0, -5, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13458,7 +13463,8 @@
       "freeUnitsPerCity": 0,
       "freeUnitsPerMetropolis": 0,
       "unitCost": 1,
-      "resistanceModifiers": [-5, -5, -5, 5, -5, 0, 0, 0]
+      "resistanceModifiers": [-5, -5, -5, 5, -5, 0, 0, 0],
+      "briberyModifiers": [35, 30, 20, 10, 5, 0, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13482,7 +13488,8 @@
       "freeUnitsPerCity": 7,
       "freeUnitsPerMetropolis": 10,
       "unitCost": 1,
-      "resistanceModifiers": [-5, -5, 0, -10, -5, -5, 0, 0]
+      "resistanceModifiers": [-5, -5, 0, -10, -5, -5, 0, 0],
+      "briberyModifiers": [0, 0, -5, -20, -10, -10, 0, 0]
     },
     {
       "hasTilePenalty": false,
@@ -13506,7 +13513,8 @@
       "freeUnitsPerCity": 2,
       "freeUnitsPerMetropolis": 1,
       "unitCost": 3,
-      "resistanceModifiers": [-5, -5, 5, 5, 0, 0, 5, 0]
+      "resistanceModifiers": [-5, -5, 5, 5, 0, 0, 5, 0],
+      "briberyModifiers": [20, 15, 0, -10, -10, -20, -25, 0]
     }
   ],
   "difficulties": [
