@@ -69,6 +69,99 @@ public sealed class BarricadeMovementCostTest : MapBase {
 	}
 
 	[Fact]
+	public void ARoadedBarricadeInForeignTerritoryConsumesEveryRemainingMovementPoint() {
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(road);
+		Player mover = MakeDiplomaticPlayer("player-1");
+		Tile destination = AddForeignTile(MakeDiplomaticPlayer("player-2"), barricaded: true);
+		destination.overlays.Add(road);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.location = startTile;
+		unit.movementPoints.reset(2);
+
+		// The spec applies the barricade override after all the other branches,
+		// so the road discount cannot shortcut it (11_movement.md §3.8).
+		float cost = TilePath.GetMovementCost(mover, startTile, TileDirection.NORTH, destination, unit);
+
+		Assert.Equal(2.0, cost, Tolerance);
+		unit.movementPoints.onUnitMove(cost);
+		Assert.False(unit.movementPoints.canMove);
+		Assert.Equal(0.0, unit.movementPoints.remaining, Tolerance);
+	}
+
+	[Fact]
+	public void TheSameRoadedForeignStepCostsTheRoadStepWithoutTheBarricade() {
+		// The control for the test above: this exact setup does reach the
+		// road/railroad branch, so the barricade, not the foreign territory, is
+		// what changes the cost.
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(road);
+		Player mover = MakeDiplomaticPlayer("player-1");
+		Tile destination = AddForeignTile(MakeDiplomaticPlayer("player-2"), barricaded: false);
+		destination.overlays.Add(road);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.location = startTile;
+		unit.movementPoints.reset(2);
+
+		Assert.Equal(1.0 / 3.0, TilePath.GetMovementCost(mover, startTile, TileDirection.NORTH, destination, unit), Tolerance);
+	}
+
+	[Fact]
+	public void ARailroadedBarricadeInForeignTerritoryConsumesEveryRemainingMovementPoint() {
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(railroad);
+		Player mover = MakeDiplomaticPlayer("player-1");
+		Tile destination = AddForeignTile(MakeDiplomaticPlayer("player-2"), barricaded: true);
+		destination.overlays.Add(railroad);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.location = startTile;
+		unit.movementPoints.reset(2);
+
+		// A free railroad step is still overridden by the barricade.
+		Assert.Equal(2.0, TilePath.GetMovementCost(mover, startTile, TileDirection.NORTH, destination, unit), Tolerance);
+	}
+
+	[Fact]
+	public void ABarricadedIgnoredTerrainStillConsumesEveryRemainingMovementPoint() {
+		// The barricade override comes after the per-terrain ignore rule too, so a
+		// Keshik-style unit that would pay one point for a hill pays everything.
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		Player mover = MakeDiplomaticPlayer("player-1");
+		Tile destination = AddNeighborsAndUpdateMap(startTile, MakeHillTile(), TileDirection.NORTH);
+		destination.owningCity = new City(destination, MakeDiplomaticPlayer("player-2"), "Foreign City", ID.None("city"));
+		destination.overlays.Add(barricade);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.unitType.ignoreMovementCost.Add("hills");
+		unit.location = startTile;
+		unit.movementPoints.reset(2);
+
+		Assert.Equal(2.0, TilePath.GetMovementCost(mover, startTile, TileDirection.NORTH, destination, unit), Tolerance);
+	}
+
+	[Fact]
+	public void ARoadedBarricadeWithRightOfPassageCostsTheRoadStep() {
+		// The override is conditional: with a right of passage the barricade has
+		// no movement effect, so the road discount stands.
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(road);
+		Player mover = MakeDiplomaticPlayer("player-1");
+		Player tileOwner = MakeDiplomaticPlayer("player-2");
+		Tile destination = AddForeignTile(tileOwner, barricaded: true);
+		destination.overlays.Add(road);
+		GiveRightOfPassage(mover, tileOwner);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.location = startTile;
+		unit.movementPoints.reset(2);
+
+		Assert.Equal(1.0 / 3.0, TilePath.GetMovementCost(mover, startTile, TileDirection.NORTH, destination, unit), Tolerance);
+	}
+
+	[Fact]
 	public void TheBarricadeChargesTheRemainderNotAFixedCost() {
 		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
 		Player mover = MakeDiplomaticPlayer("player-1");

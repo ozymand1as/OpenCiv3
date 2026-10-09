@@ -95,6 +95,24 @@ namespace C7GameData {
 			if (player.isHuman && !player.HasExploredTile(newLocation))
 				return 1f;
 
+			// The barricade override comes first among the real rules because the
+			// spec applies it after all of them: section 3.8 says "After all of the
+			// above, one further override applies" and "the cost is replaced". So a
+			// barricade consumes the remaining movement even when a road, a
+			// railroad, the per-terrain ignore rule or the sea-into-city special
+			// case would otherwise return a smaller cost - the barricade supersedes
+			// every other cost branch (11_movement.md §3.8). The override is
+			// conditional on its own three conditions (barricade present, foreign
+			// owner, no right of passage) and on a non-null unit; when those do not
+			// hold it does not fire at all, and the branches below decide the cost.
+			//
+			// The original computes the charge as (max move points - spent) times
+			// the movement scale, an overshoot that leaves the remainder at zero;
+			// returning the remainder that is left has the same observable result.
+			if (unit != null && BarricadeConsumesRemainingMovement(player, newLocation)) {
+				return unit.movementPoints.remaining;
+			}
+
 			// River crossings disrupt roads, so check that first. Foreign territory
 			// does the same without a right of passage (11_movement.md §3.4 and
 			// §3.10). Both conditions deny only the road/railroad discount: the
@@ -137,16 +155,6 @@ namespace C7GameData {
 			// Chasqui Scout's hill and mountain steps cheap.
 			if (unit != null && unit.unitType.IgnoresMovementCostOf(newLocation.overlayTerrainType)) {
 				return 1f;
-			}
-
-			// A barricade in territory the mover has no right of passage through
-			// consumes all of the unit's remaining movement, whatever the step
-			// would otherwise have cost (11_movement.md §3.8). The original reads
-			// the spent-movement field and charges the remainder times the movement
-			// scale, an overshoot that leaves the remainder at zero; clamping the
-			// remainder at zero makes "charge everything left" the same result.
-			if (unit != null && BarricadeConsumesRemainingMovement(player, newLocation)) {
-				return unit.movementPoints.remaining;
 			}
 
 			return newLocation.MovementCost(); // terrain movement cost
