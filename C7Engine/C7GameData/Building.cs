@@ -119,6 +119,13 @@ namespace C7GameData {
 		// The pollution added to the city each turn by this building.
 		public int pollution = 0;
 
+		// The building's contribution to the naval power of the city that has it
+		// (BLDG.NavalPower, +0xc8). A hostile city's summed naval power is the
+		// threat it projects against a sea unit passing through its zone of
+		// control (11_movement.md §6.2). The shipped rules set it on the Coastal
+		// Fortress only.
+		public int navalPower = 0;
+
 		// The building's shield multiplier, in units of 25 %: the shipped
 		// Factory is 2 (+50 %). The multipliers stack additively in quarters,
 		// and a building with replacesOtherBuildings only counts as the best
@@ -175,6 +182,7 @@ namespace C7GameData {
 			maintenanceCost = building.maintenanceCost;
 			iconRowIndex = building.iconRowIndex;
 			pollution = building.pollution;
+			navalPower = building.navalPower;
 			production = building.production;
 			replacesOtherBuildings = building.flags.Contains(SaveBuilding.Flag.ReplacesOtherBuildings);
 

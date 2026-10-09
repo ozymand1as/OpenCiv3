@@ -159,6 +159,9 @@ namespace C7GameData {
 		public bool HasBarricade() {
 			return this.overlays.GetImprovements().Any(i => i.key == BARRICADE);
 		}
+		public bool HasFortress() {
+			return this.overlays.GetImprovements().Any(i => i.key == FORTRESS);
+		}
 		public bool HasRuins() {
 			return this.overlays.GetImprovements().Any(i => i.key == RUINS);
 		}

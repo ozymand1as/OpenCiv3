@@ -54,6 +54,13 @@ namespace C7GameData.Save {
 			ReplacesOtherBuildings,
 		}
 
+		// The building's contribution to the naval power of the city that has it
+		// (BLDG.NavalPower, +0xc8). A hostile city's summed naval power is the
+		// threat it projects against a sea unit passing through its zone of
+		// control (11_movement.md §6.2). The shipped rules set it on the Coastal
+		// Fortress only, and an absent key means zero.
+		public int navalPower;
+
 		public class GreatWonderProperties {
 			// The name of the building this building gives to every city in the
 			// empire on on the continent (like the pyramids or the internet).

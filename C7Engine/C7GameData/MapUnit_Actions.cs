@@ -217,6 +217,11 @@ public partial class MapUnit {
 
 		Tile newLoc = EngineStorage.gameData.map.tileAt(dx + location.XCoordinate, dy + location.YCoordinate);
 
+		// Zone of control fires before the step's cost is computed and before the
+		// step is known to be legal, so a step this method goes on to refuse
+		// still costs the hit point (11_movement.md §5 step 5, §6).
+		MaybeApplyZoneOfControl(newLoc);
+
 		var canMove = (newLoc != Tile.NONE) && this.CanEnter(newLoc) && (movementPoints.canMove);
 		if (!canMove) return false;
 
@@ -325,6 +330,29 @@ public partial class MapUnit {
 	private void AbandonRefusedAttack() {
 		this.path = TilePath.NONE;
 		movementPoints.onConsumeAll();
+	}
+
+	// The step executor's own conditions around the zone-of-control call. The
+	// original compares the two tiles' water flags at the call site and skips the
+	// call when they differ, so a land-to-water or water-to-land step never fires
+	// it (0x5b9416-0x5b9434). It also resolves the destination first: a step that
+	// fights or captures skips the zone of control, and the refusals it makes
+	// before the call are the "declare war?" ones - a destination held by a civ
+	// the mover is not at war with (11_movement.md §5 steps 2 and 5). Every other
+	// refusal, including the cost and legality stage's "no movement points left"
+	// and passability codes, happens after the call and therefore pays.
+	private void MaybeApplyZoneOfControl(Tile newLoc) {
+		if (newLoc == null || newLoc == Tile.NONE || location == null)
+			return;
+		if (location.IsWater() != newLoc.IsWater())
+			return;
+
+		CanEnter(newLoc, out Intent intent);
+		if (intent is Intent.Fight or Intent.NoticeUnit or Intent.NoticeCity
+				or Intent.NoticeAlliance or Intent.WarDeclaration)
+			return;
+
+		ApplyZoneOfControl(newLoc);
 	}
 
 	public async Task<CombatResult> Fight(MapUnit defender) {

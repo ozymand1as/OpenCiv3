@@ -991,9 +991,13 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 	public void TheArmyKeepsItsRadarFlagAlongsideItsArmyFlag() {
 		// Measured from PRTO 48 of the shipped conquests.biq: Flags1[0] bit 5
 		// (Radar) and Flags1[0] bit 2 (Blitz) are set next to Flags1[2] bit 2
-		// (Army).
+		// (Army), and the record's own ZoneOfControl field (+0x04) is set too
+		// (11_movement.md §6).
 		Assert.Equal(
-			new[] { SaveUnitPrototype.Flag.Radar, SaveUnitPrototype.Flag.Army, SaveUnitPrototype.Flag.Blitz },
+			new[] {
+				SaveUnitPrototype.Flag.Radar, SaveUnitPrototype.Flag.Army,
+				SaveUnitPrototype.Flag.Blitz, SaveUnitPrototype.Flag.ZoneOfControl,
+			},
 			armyType.flags.OrderBy(f => f).ToArray());
 
 		Assert.Equal(
@@ -1155,6 +1159,11 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		if (prto.Blitz) flags.Add(SaveUnitPrototype.Flag.Blitz);
 		if (prto.Amphibious) flags.Add(SaveUnitPrototype.Flag.Amphibious);
 		if (prto.Wheeled) flags.Add(SaveUnitPrototype.Flag.Wheeled);
+		// The record's own ZoneOfControl field (+0x04) and the cruise-missile
+		// ability, the two fields the zone-of-control scan reads
+		// (11_movement.md §6).
+		if (prto.ZoneOfControl != 0) flags.Add(SaveUnitPrototype.Flag.ZoneOfControl);
+		if (prto.CruiseMissile) flags.Add(SaveUnitPrototype.Flag.CruiseMissile);
 		return flags;
 	}
 

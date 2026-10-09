@@ -1647,6 +1647,17 @@ namespace C7GameData {
 			}
 		}
 
+		// The two unit-type fields the zone-of-control rule reads
+		// (11_movement.md §6): the record's own ZoneOfControl field at +0x04,
+		// where any non-zero value means the type projects a zone of control,
+		// and the CruiseMissile ability (Flags1[0] bit 3), which zeroes a
+		// candidate's bombard term. internal rather than private so EngineTests
+		// can pin the mapping against the shipped conquests.biq.
+		internal static IEnumerable<SaveUnitPrototype.Flag> GetZoneOfControlFlags(PRTO prto) {
+			if (prto.ZoneOfControl != 0) yield return SaveUnitPrototype.Flag.ZoneOfControl;
+			if (prto.CruiseMissile) yield return SaveUnitPrototype.Flag.CruiseMissile;
+		}
+
 		private static bool IsUnproducible(PRTO prto) {
 			int[] availableTo = prto.AvailableTo.GetAvailableCivIndexes().ToArray();
 
@@ -1714,6 +1725,10 @@ namespace C7GameData {
 				if (prto.King) prototype.flags.Add(SaveUnitPrototype.Flag.King);
 				if (prto.Blitz) prototype.flags.Add(SaveUnitPrototype.Flag.Blitz);
 				if (prto.Amphibious) prototype.flags.Add(SaveUnitPrototype.Flag.Amphibious);
+				// PRTO.ZoneOfControl is the record's own integer field at +0x04, not
+				// an ability bit; the cruise-missile ability zeroes a candidate's
+				// bombard term in the zone-of-control scan (11_movement.md §6).
+				prototype.flags.UnionWith(GetZoneOfControlFlags(prto));
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
@@ -1900,6 +1915,7 @@ namespace C7GameData {
 					combatDefenseBonus=bldg.DefenseBonus / 100.0,
 					maintenanceCost=bldg.MaintenanceCost,
 					pollution=bldg.Pollution,
+					navalPower=bldg.NavalPower,
 					production=bldg.Production,
 				};
 

@@ -31,6 +31,17 @@ namespace C7GameData.Save {
 			// terrain whose ImpassableByWheeled flag is set unless the tile carries
 			// an improvement that lifts the restriction (11_movement.md §4.1).
 			Wheeled,
+			// The Zone of Control flag (PRTO record +0x04). A unit type that carries
+			// it projects a zone of control, so a unit stepping between two tiles
+			// that share an adjacent tile occupied by one of its owner's enemies can
+			// lose a hit point (11_movement.md §6). The shipped conquests.biq sets it
+			// on 16 of its 141 unit types, so an absent key means "does not project".
+			ZoneOfControl,
+			// The Cruise Missile ability (PRTO Flags1[0] bit 3). A cruise missile
+			// never contributes its bombard strength to a zone of control
+			// (11_movement.md §6.2). This is not the AI-strategy bit of the same
+			// name, which lives in AIStrategy below.
+			CruiseMissile,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The

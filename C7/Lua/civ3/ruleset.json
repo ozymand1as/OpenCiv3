@@ -1271,6 +1271,9 @@
         "Maya"
       ],
       "unproducible": false,
+      "flags": [
+        "zoneOfControl"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -2234,6 +2237,9 @@
         "Maya"
       ],
       "unproducible": false,
+      "flags": [
+        "zoneOfControl"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -2399,7 +2405,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "blitz"
+        "blitz",
+        "zoneOfControl"
       ],
       "aiStrategies": [
         "offense"
@@ -2481,6 +2488,9 @@
         "Maya"
       ],
       "unproducible": false,
+      "flags": [
+        "zoneOfControl"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -2562,7 +2572,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "blitz"
+        "blitz",
+        "zoneOfControl"
       ],
       "aiStrategies": [
         "offense"
@@ -2897,7 +2908,8 @@
       "unproducible": false,
       "flags": [
         "rotateBeforeAttack",
-        "radar"
+        "radar",
+        "zoneOfControl"
       ],
       "aiStrategies": [
         "artillery"
@@ -2981,7 +2993,8 @@
       "unproducible": false,
       "flags": [
         "lethalLandBombardment",
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "cruiseMissile"
       ],
       "aiStrategies": [
         "cruiseMissile"
@@ -4034,7 +4047,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "radar"
+        "radar",
+        "zoneOfControl"
       ],
       "aiStrategies": [
         "navalPower"
@@ -4785,7 +4799,8 @@
       "flags": [
         "radar",
         "army",
-        "blitz"
+        "blitz",
+        "zoneOfControl"
       ],
       "aiStrategies": [
         "army"
@@ -5500,7 +5515,8 @@
       ],
       "flags": [
         "startsGoldenAge",
-        "blitz"
+        "blitz",
+        "zoneOfControl"
       ]
     },
     {
@@ -5557,7 +5573,8 @@
       ],
       "flags": [
         "startsGoldenAge",
-        "blitz"
+        "blitz",
+        "zoneOfControl"
       ]
     },
     {
@@ -5800,7 +5817,8 @@
         "Horses"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "zoneOfControl"
       ]
     },
     {
@@ -5852,7 +5870,8 @@
         "Horses"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "zoneOfControl"
       ]
     },
     {
@@ -5958,7 +5977,8 @@
         "Saltpeter"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "zoneOfControl"
       ]
     },
     {
@@ -8479,6 +8499,9 @@
         "Modern Paratrooper"
       ],
       "unproducible": false,
+      "flags": [
+        "zoneOfControl"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -9140,6 +9163,7 @@
     },
     {
       "name": "Coastal Fortress",
+      "navalPower": 8,
       "shieldCost": 40,
       "populationCost": 0,
       "requiredTech": "tech-39",

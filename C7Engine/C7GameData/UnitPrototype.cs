@@ -173,6 +173,17 @@ namespace C7GameData {
 			}
 		}
 
+		// The unit type projects a zone of control: stepping between two tiles that
+		// share an adjacent tile held by an enemy of the mover's owner can cost the
+		// mover a hit point (11_movement.md §6). Civ3 stores this as the PRTO
+		// record's own ZoneOfControl field (+0x04), not as an ability bit.
+		public bool projectsZoneOfControl => flags.Contains(SaveUnitPrototype.Flag.ZoneOfControl);
+
+		// The Cruise Missile ability (PRTO Flags1[0] bit 3): a cruise missile never
+		// contributes its bombard strength to a zone of control (11_movement.md
+		// §6.2). Distinct from the AI strategy of the same name.
+		public bool isCruiseMissile => flags.Contains(SaveUnitPrototype.Flag.CruiseMissile);
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];
