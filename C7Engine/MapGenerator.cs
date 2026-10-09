@@ -1056,11 +1056,12 @@ namespace C7Engine {
 
 		// Walks a river on from `t` in `dir`. The walk looks at three
 		// continuations - straight on and a quarter turn either way - refuses
-		// any that is water or already carries a river, and takes the best one.
-		// Past the second step it also takes a second, and sometimes a third,
-		// continuation, which is how rivers branch. A run is capped at 21 steps,
-		// and a step whose whole continuation fails is rolled back so that a
-		// river never ends in a stub.
+		// any that is water, that already carries a river, or that would run
+		// alongside the river just laid, and takes the best one. Past the
+		// second step it also takes a second, and sometimes a third,
+		// continuation, which is how rivers branch. A run is capped at 21
+		// steps, and a step whose whole continuation fails is rolled back so
+		// that a river never ends in a stub.
 		private static bool GrowRiver(Tile t, TileDirection dir, int steps, Random rand,
 			HashSet<Tile> visited, List<(Tile tile, TileDirection dir)> path) {
 			if (steps >= RIVER_MAX_STEPS) {
@@ -1081,14 +1082,14 @@ namespace C7Engine {
 				if (n == Tile.NONE || !n.IsLand() || n.BordersRiver() || visited.Contains(n)) {
 					continue;
 				}
-				bool nearWater = false;
+				bool runsAlongside = false;
 				foreach (Tile x in n.neighbors.Values) {
 					if (x != Tile.NONE && x != t && (x.BordersRiver() || visited.Contains(x))) {
-						nearWater = true;
+						runsAlongside = true;
 						break;
 					}
 				}
-				if (nearWater) {
+				if (runsAlongside) {
 					continue;
 				}
 				usable.Add((d, n, RiverSteppingScore(n)));
