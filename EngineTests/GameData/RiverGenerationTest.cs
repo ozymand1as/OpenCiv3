@@ -275,6 +275,36 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(24, half.YCoordinate);
 	}
 
+	// The other side of rule 2.9.14. A source whose only other land probe is off
+	// the map is handed a point at half its own coordinates, so on a map where
+	// that point leaves too little room for a 21-step run the pass keeps no
+	// river at all, even though the source itself looked like a start.
+	[Fact]
+	public void ASourceHandedAHalfPointCanFailToCarryARiver() {
+		List<TerrainType> terrains = RuleTerrains();
+		GameMap m = MakeSyntheticMap(60, 60, terrains, (x, y) => y <= 30);
+
+		WorldCharacteristics wc = new() {
+			landform = WorldCharacteristics.Landform.Pangaea,
+			oceanCoverage = WorldCharacteristics.OceanCoverage.Percent_70,
+			age = WorldCharacteristics.Age.Billion_4,
+			climate = WorldCharacteristics.Climate.Normal,
+			temperature = WorldCharacteristics.Temperature.Temperate,
+			worldSize = new WorldSize() { width = 60, height = 60 },
+			terrainTypes = terrains,
+			mapSeed = 7,
+		};
+
+		// The source at (0,30) is the one the pass finds, and its start tile is
+		// (0,14): half its own coordinates, because the probe that would have
+		// been added to the sum is off the map.
+		Tile source = m.tileAt(0, 30);
+		Assert.Equal(14, MapGenerator.RiverSourceStart(m, source, TileDirection.NORTHWEST).YCoordinate);
+
+		Assert.Equal(0, MapGenerator.AddRivers(wc, m));
+		Assert.DoesNotContain(m.tiles, t => t.BordersRiver());
+	}
+
 	// Builds a map with the tile ordering the generator uses, so that
 	// GameMap.tileAt resolves coordinates the same way it does on a generated
 	// map.
