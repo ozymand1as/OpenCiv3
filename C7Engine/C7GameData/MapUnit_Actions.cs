@@ -24,6 +24,11 @@ public partial class MapUnit {
 			movementPoints.reset(maxMP);
 		}
 
+		// The used-attack state is per turn: clear it with the movement points so
+		// that it never survives into the next turn
+		// (23_leaders_armies_golden_age.md §6.8).
+		hasUsedAttack = false;
+
 		defensiveBombardsRemaining = 1;
 	}
 
@@ -224,6 +229,15 @@ public partial class MapUnit {
 				return true;
 			}
 
+			// The attack-availability test that every attack passes through: the
+			// human's MsgMoveUnit handler and the AI's CombatAI both reach the
+			// fight through this branch. A unit that has already attacked this
+			// turn is refused another attack unless its type has the Blitz
+			// ability (23_leaders_armies_golden_age.md §6.8).
+			if (!CanAttack()) {
+				return true;
+			}
+
 			CombatResult combatResult = await Fight(defender);
 			this.path = TilePath.NONE;
 			// If we were killed then of course there's nothing more to do. If the combat couldn't happen for whatever
@@ -293,6 +307,13 @@ public partial class MapUnit {
 
 	public async Task<CombatResult> Fight(MapUnit defender) {
 		var attacker = this;
+
+		// The first step of the round loop: starting a fight marks the attacker
+		// as having used its attack this turn (Civ3's USF_USED_ATTACK status
+		// bit). The attack-availability test in Move reads it to refuse a second
+		// attack unless the type can blitz (12_combat.md §6.2,
+		// 23_leaders_armies_golden_age.md §6.8).
+		hasUsedAttack = true;
 
 		// Set combat animation facing. We'll restore the defender's original facing direction at the end of the battle.
 		TileDirection attackerAttackDirection = attacker.location.DirectionTo(defender.location);

@@ -1617,6 +1617,8 @@ namespace C7GameData {
 				if (prto.Leader) prototype.flags.Add(SaveUnitPrototype.Flag.Leader);
 				if (prto.StartsGoldenAge) prototype.flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
 				if (prto.King) prototype.flags.Add(SaveUnitPrototype.Flag.King);
+				if (prto.Blitz) prototype.flags.Add(SaveUnitPrototype.Flag.Blitz);
+				if (prto.Amphibious) prototype.flags.Add(SaveUnitPrototype.Flag.Amphibious);
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));

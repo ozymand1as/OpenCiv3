@@ -18,6 +18,15 @@ namespace C7GameData.Save {
 			// regicide-style scenarios. The binary's defender picker prefers a
 			// King unit when choosing who defends a tile (12_combat.md §6.3).
 			King,
+			// The Blitz ability (PRTO Flags1[0] bit 2): the type may attack more
+			// than once per turn, limited only by its movement points. The attack
+			// availability test refuses a second attack to every other type
+			// (23_leaders_armies_golden_age.md §6.8).
+			Blitz,
+			// The Amphibious ability (PRTO Flags1[0] bit 6): the type may attack
+			// from water onto land, and gets the +25% amphibious assault bonus
+			// (12_combat.md §2.1.2).
+			Amphibious,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The

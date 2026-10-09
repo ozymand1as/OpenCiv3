@@ -44,6 +44,9 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		this.fixture = fixture;
 		gd = fixture.saveGame.ToGameData(fixture.behaviors);
 		EngineStorage.InitializeGameDataForTests(gd);
+		// The attacks below go through MapUnit.Move and MapUnit.Fight, which
+		// wait on an animation-complete message that no test UI sends.
+		EngineStorage.animationsEnabled = false;
 
 		armyType = gd.unitPrototypes.First(p => p.isArmy);
 		leaderType = gd.unitPrototypes.First(p => p.isLeader);
@@ -854,16 +857,33 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 	[Fact]
 	public void TheArmyKeepsItsRadarFlagAlongsideItsArmyFlag() {
 		// Measured from PRTO 48 of the shipped conquests.biq: Flags1[0] bit 5
-		// (Radar) is set next to Flags1[2] bit 2 (Army). The type also carries
-		// Blitz, which the importer does not model (section 6.8 is a documented
-		// scope limit), so only the modelled flags are asserted here.
+		// (Radar) and Flags1[0] bit 2 (Blitz) are set next to Flags1[2] bit 2
+		// (Army).
 		Assert.Equal(
-			new[] { SaveUnitPrototype.Flag.Radar, SaveUnitPrototype.Flag.Army },
+			new[] { SaveUnitPrototype.Flag.Radar, SaveUnitPrototype.Flag.Army, SaveUnitPrototype.Flag.Blitz },
 			armyType.flags.OrderBy(f => f).ToArray());
 
 		Assert.Equal(
 			new[] { SaveUnitPrototype.Flag.Leader },
 			leaderType.flags.OrderBy(f => f).ToArray());
+	}
+
+	[Fact]
+	public void TheBlitzCarriersAreTheArmyTheTanksAndTheMountedUniqueUnits() {
+		// Measured from the shipped conquests.biq: PRTO 19 Tank, 21 Modern
+		// Armor, 48 Army, 61 Cossack and 62 Panzer carry Flags1[0] bit 2.
+		Assert.Equal(
+			new[] { "Army", "Cossack", "Modern Armor", "Panzer", "Tank" },
+			gd.unitPrototypes.Where(p => p.isBlitz).Select(p => p.name).OrderBy(n => n).ToArray());
+	}
+
+	[Fact]
+	public void TheAmphibiousCarriersAreTheMarineAndTheBerserk() {
+		// Measured from the shipped conquests.biq: PRTO 4 Marine and 68 Berserk
+		// carry Flags1[0] bit 6.
+		Assert.Equal(
+			new[] { "Berserk", "Marine" },
+			gd.unitPrototypes.Where(p => p.isAmphibious).Select(p => p.name).OrderBy(n => n).ToArray());
 	}
 
 	[Fact]
@@ -919,6 +939,23 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 			gd.Buildings.Where(b => b.requiresVictoriousArmy).Select(b => b.name).OrderBy(n => n).ToArray());
 	}
 
+	// The Blitz and Amphibious flags are what the attack-availability gate and
+	// the amphibious assault bonus read, so the checked-in ruleset is held to
+	// the shipped BIQ itself. The importer de-dupes the BIQ's 141 PRTO entries
+	// by name, hence the name-set comparison.
+	[SkippableFact]
+	public void BlitzAndAmphibiousUnitFlagsMatchTheShippedBiq() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		BiqData biq = BiqData.LoadFile(PathUtils.defaultBicPath);
+		Assert.Equal(
+			biq.Prto.Where(p => p.Blitz).Select(p => p.Name).Distinct().OrderBy(n => n).ToArray(),
+			gd.unitPrototypes.Where(p => p.isBlitz).Select(p => p.name).OrderBy(n => n).ToArray());
+		Assert.Equal(
+			biq.Prto.Where(p => p.Amphibious).Select(p => p.Name).Distinct().OrderBy(n => n).ToArray(),
+			gd.unitPrototypes.Where(p => p.isAmphibious).Select(p => p.name).OrderBy(n => n).ToArray());
+	}
+
 	// The PRTO booleans the importer maps onto SaveUnitPrototype.Flag.
 	private static HashSet<SaveUnitPrototype.Flag> ModelledBiqFlags(PRTO prto) {
 		HashSet<SaveUnitPrototype.Flag> flags = [];
@@ -932,6 +969,8 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		if (prto.Army) flags.Add(SaveUnitPrototype.Flag.Army);
 		if (prto.Leader) flags.Add(SaveUnitPrototype.Flag.Leader);
 		if (prto.StartsGoldenAge) flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
+		if (prto.Blitz) flags.Add(SaveUnitPrototype.Flag.Blitz);
+		if (prto.Amphibious) flags.Add(SaveUnitPrototype.Flag.Amphibious);
 		return flags;
 	}
 
@@ -1124,6 +1163,129 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.False(carried.hasVictoriousArmy);
 	}
 
+	// ---------- the used-attack state and the Blitz gate ----------
+
+	// A map tile the fixture's generator produced, emptied of units and
+	// features, for attacks that go through MapUnit.Move.
+	private Tile CleanMapTile(int x, int y) {
+		Tile tile = gd.map.tileAt(x, y);
+		tile.unitsOnTile.Clear();
+		tile.overlays.Clear();
+		tile.hasGoodyHut = false;
+		tile.hasBarbarianCamp = false;
+		tile.overlayTerrainType = new TerrainType { Key = "test" };
+		tile.baseTerrainType = tile.overlayTerrainType;
+		return tile;
+	}
+
+	private UnitPrototype MakeBlitzPrototype(int attack, int defense, int movement) {
+		UnitPrototype proto = MakeLandPrototype(attack, defense, movement);
+		proto.flags.Add(SaveUnitPrototype.Flag.Blitz);
+		return proto;
+	}
+
+	// The Blitz gate at its boundary: a non-Blitz unit that has attacked is
+	// refused a second attack even though movement points remain, so the second
+	// defender is untouched and the attacker never moves. The attack goes
+	// through MapUnit.Move, the branch the human's MsgMoveUnit handler and the
+	// AI's CombatAI both use.
+	[Fact]
+	public void AUnitThatAttackedIsRefusedASecondAttackEvenWithMovementLeft() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit attacker = MakeUnit(player, MakeLandPrototype(100, 0, movement: 3), attackerTile);
+		MapUnit first = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		MapUnit second = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1; // the attacker wins every round
+
+		// The first attack kills the first defender and leaves the second one on
+		// the tile, so the unit is still adjacent to an enemy with movement to
+		// spare.
+		Assert.True(attacker.Move(TileDirection.EAST).Result);
+		Assert.True(attacker.hasUsedAttack);
+		Assert.DoesNotContain(first, gd.mapUnits);
+		Assert.Same(attackerTile, attacker.location);
+		Assert.True(attacker.movementPoints.canMove);
+		Assert.False(attacker.unitType.isBlitz);
+
+		// The second attack is refused: the used-attack bit blocks it even
+		// though movement points remain.
+		Assert.True(attacker.Move(TileDirection.EAST).Result);
+		Assert.Same(attackerTile, attacker.location);
+		Assert.Contains(second, gd.mapUnits);
+		Assert.Equal(second.maxHitPoints, second.hitPointsRemaining);
+	}
+
+	// The Blitz escape: the same setup with a Blitz type attacks twice in one
+	// turn. Once the movement points are gone the unit still may attack in
+	// principle - only the movement points stop it.
+	[Fact]
+	public void ABlitzUnitAttacksAgainInTheSameTurnUntilItsMovementRunsOut() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit attacker = MakeUnit(player, MakeBlitzPrototype(100, 0, movement: 2), attackerTile);
+		MapUnit first = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		MapUnit second = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1;
+
+		Assert.True(attacker.Move(TileDirection.EAST).Result);
+		Assert.True(attacker.Move(TileDirection.EAST).Result);
+
+		Assert.True(attacker.hasUsedAttack);
+		Assert.DoesNotContain(first, gd.mapUnits);
+		Assert.DoesNotContain(second, gd.mapUnits);
+		// The bit does not block the Blitz type; the exhausted movement points
+		// do.
+		Assert.True(attacker.CanAttack());
+		Assert.False(attacker.movementPoints.canMove);
+	}
+
+	[Fact]
+	public void OnlyABlitzTypeMayAttackTwiceInOneTurn() {
+		Player player = MakePlayer();
+		MapUnit plain = MakeUnit(player, MakeLandPrototype(4, 2, movement: 3), MakeTile());
+		MapUnit blitz = MakeUnit(player, MakeBlitzPrototype(4, 2, movement: 3), MakeTile());
+
+		Assert.True(plain.CanAttack());
+		Assert.True(blitz.CanAttack());
+
+		plain.hasUsedAttack = true;
+		blitz.hasUsedAttack = true;
+		Assert.False(plain.CanAttack());
+		Assert.True(blitz.CanAttack());
+
+		// The refused unit still has all its movement points.
+		Assert.True(plain.movementPoints.canMove);
+	}
+
+	// The state is per turn: the per-turn unit update clears it with the
+	// movement points, so it never survives into the next turn.
+	[Fact]
+	public void TheUsedAttackStateResetsAtTheTurnBoundary() {
+		Player player = MakePlayer();
+		MapUnit unit = MakeUnit(player, MakeLandPrototype(4, 2, movement: 2), MakeTile());
+		unit.hasUsedAttack = true;
+		unit.movementPoints.onUnitMove(1);
+		Assert.False(unit.CanAttack());
+
+		TurnHandling.InitTurnData(player);
+
+		Assert.False(unit.hasUsedAttack);
+		Assert.True(unit.CanAttack());
+		Assert.Equal(2f, unit.movementPoints.remaining);
+
+		// A direct begin-turn does the same.
+		unit.hasUsedAttack = true;
+		unit.OnBeginTurn();
+		Assert.False(unit.hasUsedAttack);
+	}
+
 	// ---------- persistence ----------
 
 	[Fact]
@@ -1142,10 +1304,11 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		leader.leaderKind = MapUnit.LeaderKind.Scientific;
 		leader.hasProducedLeader = true;
 
-		// An army carrying two members.
+		// An army carrying two members, which has already attacked this turn.
 		UnitPrototype memberType = gd.unitPrototypes.First(p => p.name == "Warrior");
 		MapUnit army = MakeUnit(player, armyType, tile, experience: "Regular");
 		army.hitPointsRemaining = army.maxHitPoints;
+		army.hasUsedAttack = true;
 		for (int i = 0; i < 2; ++i) {
 			MapUnit member = MakeUnit(player, memberType, tile, experience: "Regular");
 			Assert.True(member.LoadIntoArmy(army));
@@ -1172,6 +1335,8 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 			Assert.Equal(2, reloadedArmy.Members().Count);
 			Assert.Equal(6, reloadedArmy.maxHitPoints);
 			Assert.Equal(6, reloadedArmy.hitPointsRemaining);
+			Assert.True(reloadedArmy.hasUsedAttack);
+			Assert.True(reloadedArmy.CanAttack(), "the reloaded army is a Blitz type");
 		} finally {
 			System.IO.File.Delete(path);
 		}

@@ -27,6 +27,39 @@ namespace C7GameData {
 		// where both bonuses are EXPR.RetreatBonus values (12_combat.md §6.2).
 		public const int RetreatChanceDenominatorOffset = 50;
 
+		// The amphibious assault bonus: +25% for a land unit with the Amphibious
+		// ability that attacks from water onto a non-water tile
+		// (12_combat.md §2.1.2).
+		public const int AmphibiousAssaultBonusPercent = 25;
+
+		// The attack-availability test (23_leaders_armies_golden_age.md §6.8):
+		// a unit that has already attacked this turn is refused another attack
+		// unless its type has the Blitz ability. The Army type carries Blitz, so
+		// an army may attack repeatedly, limited only by its remaining movement
+		// points.
+		public bool CanAttack() => !hasUsedAttack || unitType.isBlitz;
+
+		// Whether this unit receives the amphibious assault bonus for a fight
+		// against `defender` (12_combat.md §2.1.2): an Amphibious land type with
+		// a positive attack strength, attacking from a water tile onto a
+		// non-water tile, and either not having used its attack this turn or
+		// being able to blitz. The binary reads the used-attack status bit here;
+		// because a fight sets that bit at entry (§6.2 step 1) the bonus reaches
+		// a real fight only for a Blitz type — the clear-bit branch is the
+		// pre-fight estimate the AI and the UI compute.
+		public bool GetsAmphibiousAssaultBonus(MapUnit defender) {
+			if (!unitType.isAmphibious || !unitType.IsLandUnit() || AttackStrength() <= 0) {
+				return false;
+			}
+			if (!Tile.IsTileValid(location) || !Tile.IsTileValid(defender.location)) {
+				return false;
+			}
+			if (defender.location.IsWater() || !location.IsWater()) {
+				return false;
+			}
+			return !hasUsedAttack || unitType.isBlitz;
+		}
+
 		// A unit type may retreat only when it moves faster than one tile per
 		// turn: the binary gates retreat on the type's maximum move points
 		// exceeding RULE.MovementAlongRoads (3, measured from the shipped
@@ -78,10 +111,9 @@ namespace C7GameData {
 		// original's integer arithmetic.
 		//
 		// The ignoreDefensiveBonuses switch skips only the defender's tile
-		// bonuses — the barbarian terms still apply (12_combat.md §2). No
-		// non-barbarian attack bonuses are modelled yet: the +25 per-civ tile
-		// mask and the amphibious +25 both need spec §7.1's open questions
-		// answered first.
+		// bonuses — the barbarian terms still apply (12_combat.md §2). The
+		// attacker's +25% amphibious assault term is modelled; the +25 per-civ
+		// tile mask still needs spec §7.1's open questions answered.
 		public static (int attackerEffective, int defenderEffective) EffectiveCombatStrengths(
 			MapUnit attacker, MapUnit defender, TileDirection? attackDirection, bool ignoreDefensiveBonuses = false) {
 			int defenderPercent = ignoreDefensiveBonuses

@@ -26,6 +26,11 @@ namespace C7GameData.Save {
 		public MapUnit.LeaderKind leaderKind = MapUnit.LeaderKind.None;
 		public bool hasProducedLeader;
 
+		// True when this unit has already attacked this turn (Civ3's
+		// USF_USED_ATTACK status bit). Persisted so that reloading a save in the
+		// middle of a turn cannot hand the unit a second attack.
+		public bool hasUsedAttack;
+
 		// True for multiple types of automation, including worker automation
 		// and automated exploring.
 		public bool isAutomated;
@@ -45,6 +50,7 @@ namespace C7GameData.Save {
 			loadedOnUnitId = unit.loadedOnUnitId;
 			leaderKind = unit.leaderKind;
 			hasProducedLeader = unit.hasProducedLeader;
+			hasUsedAttack = unit.hasUsedAttack;
 			if (unit.path?.PathLength() > 0) {
 				path = unit.path.path.ToList().ConvertAll(tile => new TileLocation(tile));
 			}
@@ -70,6 +76,7 @@ namespace C7GameData.Save {
 				loadedOnUnitId = loadedOnUnitId,
 				leaderKind = leaderKind,
 				hasProducedLeader = hasProducedLeader,
+				hasUsedAttack = hasUsedAttack,
 				previousLocation = currentLocation.X == - 1 ? Tile.NONE : map.tileAt(previousLocation.X, previousLocation.Y),
 				hitPointsRemaining = hitPointsRemaining,
 				movementPoints = new MovementPoints(),

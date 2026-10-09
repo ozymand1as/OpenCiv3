@@ -141,6 +141,15 @@ namespace C7GameData {
 		// unit over a non-King unit (12_combat.md §6.3).
 		public bool isKing => flags.Contains(SaveUnitPrototype.Flag.King);
 
+		// The unit type may attack more than once per turn, limited only by its
+		// movement points. Every other type is refused a second attack in the
+		// same turn (23_leaders_armies_golden_age.md §6.8).
+		public bool isBlitz => flags.Contains(SaveUnitPrototype.Flag.Blitz);
+
+		// The unit type may attack from water onto land and receives the +25%
+		// amphibious assault bonus (12_combat.md §2.1.2).
+		public bool isAmphibious => flags.Contains(SaveUnitPrototype.Flag.Amphibious);
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];

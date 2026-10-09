@@ -52,6 +52,13 @@ namespace C7GameData {
 		}
 		public bool isFortified { get; set; }
 
+		// Whether this unit has already attacked this turn — Civ3's
+		// USF_USED_ATTACK status bit. MapUnit.Fight sets it when a fight starts
+		// and OnBeginTurn clears it with the movement points, so it never
+		// survives into the next turn (23_leaders_armies_golden_age.md §6.8,
+		// 12_combat.md §6.2).
+		public bool hasUsedAttack { get; set; }
+
 		public bool isAutomated { get; set; }
 
 		//sentry, etc. will come later.  For now, let's just have a couple things so we can cycle through units that aren't fortified.
@@ -292,6 +299,10 @@ namespace C7GameData {
 						yield return sb;
 					}
 				}
+			} else if (role == CombatRole.Attack && GetsAmphibiousAssaultBonus(opponent)) {
+				// The attacker's +25% amphibious assault bonus (12_combat.md
+				// §2.1.2), applied to the attacker's percent term.
+				yield return new StrengthBonus("Amphibious assault", AmphibiousAssaultBonusPercent / 100.0);
 			}
 		}
 

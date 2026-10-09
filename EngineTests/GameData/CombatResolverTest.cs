@@ -251,6 +251,88 @@ public class CombatResolverTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(100, defenderEffective);
 	}
 
+	// ---------- the amphibious assault bonus ----------
+
+	// A flat water tile: an attacker standing on it is attacking from water
+	// (12_combat.md §2.1.2).
+	private Tile MakeWaterTile() {
+		Tile tile = new Tile(gd.GenerateID("tile")) {
+			overlayTerrainType = new TerrainType { Key = "sea" },
+		};
+		tile.baseTerrainType = tile.overlayTerrainType;
+		tile.overlays.Clear();
+		return tile;
+	}
+
+	private UnitPrototype MakeAmphibiousPrototype(int attack, int defense, int movement = 1) {
+		UnitPrototype proto = MakePrototype(attack, defense, movement);
+		proto.flags.Add(SaveUnitPrototype.Flag.Amphibious);
+		return proto;
+	}
+
+	// +25% for an Amphibious land unit with a positive attack strength that
+	// attacks from water onto a non-water tile (12_combat.md §2.1.2): the
+	// attacker's effective strength goes from 4 * 100 to 4 * 125, and the
+	// defender's odds from 512 to 455.
+	[Fact]
+	public void AnAmphibiousAssaultFromWaterAddsTwentyFivePercent() {
+		MapUnit attacker = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), MakeWaterTile());
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), MakeFlatTile());
+
+		var (attackerEffective, defenderEffective) =
+			MapUnit.EffectiveCombatStrengths(attacker, defender, TileDirection.WEST);
+
+		Assert.Equal(500, attackerEffective);
+		Assert.Equal(400, defenderEffective);
+		Assert.Equal(455, MapUnit.DefenderCombatOdds(attacker, defender, TileDirection.WEST));
+	}
+
+	// The bonus needs every one of its conditions: the Amphibious ability, a
+	// land type, a positive attack strength, the attacker on water and the
+	// defender off it.
+	[Fact]
+	public void TheAmphibiousBonusNeedsWaterAndTheAbility() {
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), MakeFlatTile());
+
+		MapUnit plain = MakeUnit(MakePlayer(), MakePrototype(4, 0), MakeWaterTile());
+		Assert.Equal(400, MapUnit.EffectiveCombatStrengths(plain, defender, null).attackerEffective);
+
+		MapUnit onLand = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), MakeFlatTile());
+		Assert.Equal(400, MapUnit.EffectiveCombatStrengths(onLand, defender, null).attackerEffective);
+
+		MapUnit onWater = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), MakeWaterTile());
+		MapUnit waterDefender = MakeUnit(MakePlayer(), MakePrototype(0, 4), MakeWaterTile());
+		Assert.Equal(400, MapUnit.EffectiveCombatStrengths(onWater, waterDefender, null).attackerEffective);
+
+		MapUnit defenceless = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(0, 0), MakeWaterTile());
+		Assert.Equal(0, MapUnit.EffectiveCombatStrengths(defenceless, defender, null).attackerEffective);
+	}
+
+	// The bonus reads the attacker's used-attack status bit: a unit that has
+	// already attacked this turn loses it unless its type can Blitz
+	// (12_combat.md §2.1.2). A fight sets that bit at entry (§6.2 step 1), so
+	// the clear-bit branch is the pre-fight estimate the AI and the UI compute
+	// and the in-fight bonus reaches a real fight only for a Blitz type.
+	[Fact]
+	public void TheAmphibiousBonusReadsTheUsedAttackBitUnlessTheTypeCanBlitz() {
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), MakeFlatTile());
+		MapUnit attacker = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), MakeWaterTile());
+
+		Assert.False(attacker.hasUsedAttack);
+		Assert.True(attacker.GetsAmphibiousAssaultBonus(defender));
+		Assert.Equal(500, MapUnit.EffectiveCombatStrengths(attacker, defender, null).attackerEffective);
+
+		attacker.hasUsedAttack = true;
+		Assert.False(attacker.GetsAmphibiousAssaultBonus(defender));
+		Assert.Equal(400, MapUnit.EffectiveCombatStrengths(attacker, defender, null).attackerEffective);
+
+		MapUnit blitz = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), MakeWaterTile());
+		blitz.unitType.flags.Add(SaveUnitPrototype.Flag.Blitz);
+		blitz.hasUsedAttack = true;
+		Assert.True(blitz.GetsAmphibiousAssaultBonus(defender));
+		Assert.Equal(500, MapUnit.EffectiveCombatStrengths(blitz, defender, null).attackerEffective);
+	}
+
 	// ---------- the anti-barbarian bonus ----------
 
 	// A barbarian attacker gives the defender DIFF.AttackBonusAgainstBarbarians
@@ -452,6 +534,30 @@ public class CombatResolverTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(attacker.maxHitPoints, attacker.hitPointsRemaining);
 		// Exactly maxHitPoints rounds, each rolling against 1024.
 		Assert.Equal(defender.maxHitPoints, rng.RollsAgainst(MapUnit.CombatOddsScale));
+	}
+
+	// Starting a fight marks the attacker as having used its attack this turn,
+	// which is the state the availability test in MapUnit.Move reads
+	// (12_combat.md §6.2 step 1, 23_leaders_armies_golden_age.md §6.8).
+	[Fact]
+	public void StartingAFightSetsTheUsedAttackBit() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = attackerTile.neighbors[TileDirection.EAST];
+		defenderTile.unitsOnTile.Clear();
+		defenderTile.overlays.Clear();
+		MapUnit attacker = MakeUnit(MakePlayer(), MakePrototype(3, 0, movement: 1), attackerTile);
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 3, movement: 1), defenderTile);
+
+		Assert.False(attacker.hasUsedAttack);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		for (int i = 0; i < defender.maxHitPoints; ++i) {
+			rng.intResults.Enqueue(MapUnit.CombatOddsScale - 1); // attacker wins every round
+		}
+
+		_ = attacker.Fight(defender).Result;
+
+		Assert.True(attacker.hasUsedAttack);
 	}
 
 	// A losing attacker escapes only when reduced to exactly one hit point —

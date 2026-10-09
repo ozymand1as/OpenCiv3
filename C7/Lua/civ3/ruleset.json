@@ -1160,6 +1160,9 @@
         "Maya"
       ],
       "unproducible": false,
+      "flags": [
+        "amphibious"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -2348,6 +2351,9 @@
         "Modern Armor"
       ],
       "unproducible": false,
+      "flags": [
+        "blitz"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -2506,6 +2512,9 @@
         "Maya"
       ],
       "unproducible": false,
+      "flags": [
+        "blitz"
+      ],
       "aiStrategies": [
         "offense"
       ],
@@ -4699,7 +4708,8 @@
       ],
       "flags": [
         "radar",
-        "army"
+        "army",
+        "blitz"
       ],
       "aiStrategies": [
         "army"
@@ -5400,7 +5410,8 @@
         "Saltpeter"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "blitz"
       ]
     },
     {
@@ -5455,7 +5466,8 @@
         "Rubber"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "blitz"
       ]
     },
     {
@@ -5797,7 +5809,8 @@
         "load"
       ],
       "flags": [
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "amphibious"
       ]
     },
     {
