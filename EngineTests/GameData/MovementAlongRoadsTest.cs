@@ -206,3 +206,69 @@ public sealed class MovementScaleMovementTest : MapBase {
 		Assert.Equal(1.0 / 3.0, TilePath.GetMovementCost(unit.owner, startTile, TileDirection.NORTH, plains, unit), Tolerance);
 	}
 }
+
+/// <summary>
+/// A save written before the movement scale existed carries the old fractional
+/// road cost (0.33333334) in its terrain-improvement records, and SaveGame
+/// writes and reads that field verbatim. The step cost must derive the road and
+/// railroad steps from the rules at runtime rather than from that field, so an
+/// old save still moves at the shipped rate and a scenario with a different
+/// MovementAlongRoads still changes it (11_movement.md §3.2, §3.3; gap G10).
+/// </summary>
+public sealed class OldSaveMovementScaleTest : MapBase, IClassFixture<SaveGameFixture> {
+	private const double Tolerance = 0.0001;
+	private readonly SaveGameFixture fixture;
+
+	public OldSaveMovementScaleTest(SaveGameFixture fixture) {
+		this.fixture = fixture;
+	}
+
+	[SkippableFact]
+	public async void AnOldSavesTerrainImprovementDataDoesNotChangeTheShippedRoadStep() {
+		string savePath = await SampleSaves.TryEnsurePreChangeGameDataSave();
+		Skip.If(savePath == null, "The pre-change game-data save fixture is not present and could not be fetched.");
+
+		SaveGame oldSave = SaveGame.Load(savePath, _ => "");
+
+		// Pin the fixture: it really is a save written before the scale existed,
+		// so this test cannot quietly pass against the new value.
+		Assert.Equal(0.33333334f, oldSave.TerrainImprovements.Single(i => i.key == Tile.TileOverlays.ROAD).movementCost, 5);
+
+		C7GameData.GameData gameData = oldSave.ToGameData(fixture.behaviors);
+		EngineStorage.InitializeGameDataForTests(gameData);
+
+		TerrainImprovement savedRoad = gameData.terrainImprovements.Single(i => i.key == Tile.TileOverlays.ROAD);
+		TerrainImprovement savedRailroad = gameData.terrainImprovements.Single(i => i.key == Tile.TileOverlays.RAILROAD);
+
+		Player mover = MakePlayer();
+		mover.civilization = new Civilization();
+
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.overlays.Add(savedRoad);
+		Tile roadStart = startTile;
+		var roadDestination = AddNeighborsAndUpdateMap(startTile, MakePlainsTile(), TileDirection.NORTH);
+		roadDestination.overlays.Add(savedRoad);
+
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(60, 60));
+		startTile.overlays.Add(savedRailroad);
+		Tile railStart = startTile;
+		var railDestination = AddNeighborsAndUpdateMap(startTile, MakePlainsTile(), TileDirection.NORTH);
+		railDestination.overlays.Add(savedRailroad);
+
+		MapUnit unit = MakeLandUnit(movementPoints: 2);
+		unit.location = roadStart;
+
+		// The loaded fraction is ignored: the shipped scale of 3 still gives a
+		// third of a point, not a ninth.
+		Assert.Equal(1.0 / 3.0, TilePath.GetMovementCost(mover, roadStart, TileDirection.NORTH, roadDestination, unit), Tolerance);
+
+		// And the railroad stays free.
+		Assert.Equal(0.0, TilePath.GetMovementCost(mover, railStart, TileDirection.NORTH, railDestination, unit), Tolerance);
+
+		// A ruleset with a different scale still changes the step: the fix reads
+		// RULE.MovementAlongRoads at runtime rather than freezing the shipped
+		// rate into the old save's data.
+		gameData.rules.MovementAlongRoads = 4;
+		Assert.Equal(1.0 / 4.0, TilePath.GetMovementCost(mover, roadStart, TileDirection.NORTH, roadDestination, unit), Tolerance);
+	}
+}

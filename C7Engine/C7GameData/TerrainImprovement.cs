@@ -30,7 +30,25 @@ namespace C7GameData {
 		// units: one whole movement point is RULE.MovementAlongRoads of them, so
 		// a road is 1 and the movement code divides by the rule's scale. A
 		// negative cost means the improvement does not affect movement at all.
+		//
+		// This is the value carried by the save. The step cost does NOT read it:
+		// StepCostInInternalUnits derives the road and railroad costs from the
+		// rules, so a save written before the scale existed still moves at the
+		// shipped rate.
 		public readonly float movementCost = -1;
+
+		// This improvement's contribution to a step's internal movement cost
+		// (11_movement.md §3.2 and §3.3). Civ3's cost function charges a raw
+		// constant for a road (1 internal unit) and for a railroad (0), so the
+		// value comes from the improvement's identity and the rules, never from
+		// the save-carried movementCost field - an old save stores the fraction
+		// 0.33333334 there, and dividing that by the scale would make the step
+		// nine times too cheap. TilePath.GetMovementCost then divides by
+		// RULE.MovementAlongRoads, which it reads at runtime.
+		public int StepCostInInternalUnits =>
+			layer == Layer.Roads && key == Tile.TileOverlays.RAILROAD
+				? Rules.RailroadStepInternalUnits
+				: Rules.RoadStepInternalUnits;
 
 		// In the default ruleset, Road upgrades to Railroad and Fortress upgrades to Barricade.
 		// The upgrade relationship affects:

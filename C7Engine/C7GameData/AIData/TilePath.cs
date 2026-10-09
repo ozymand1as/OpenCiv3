@@ -138,12 +138,13 @@ namespace C7GameData {
 				if (fromRoadCost.HasValue && toRoadCost.HasValue) {
 					// Railroads are free and also count as roads, so the slower end
 					// determines the step: rail-to-rail is free, while rail-to-road
-					// and road-to-road cost the road improvement's movement cost.
-					// The improvement's cost is in Civ3's internal movement units, so
-					// the movement scale converts it into movement points: a road
-					// step costs 1 / MovementAlongRoads, which is 1/3 of a point with
-					// the shipped scale of 3, and a scenario that changes the scale
-					// changes the road step with it (11_movement.md §2.1, §3.2).
+					// and road-to-road cost the road cost. That cost is the original's
+					// constant in Civ3's internal movement units, taken from the rules
+					// (not from the improvement's save-carried movementCost), and the
+					// movement scale converts it into movement points: a road step
+					// costs 1 / MovementAlongRoads, which is 1/3 of a point with the
+					// shipped scale of 3, and a scenario that changes the scale changes
+					// the road step with it (11_movement.md §2.1, §3.2).
 					return Math.Max(fromRoadCost.Value, toRoadCost.Value) / MovementPointsScale;
 				}
 			}

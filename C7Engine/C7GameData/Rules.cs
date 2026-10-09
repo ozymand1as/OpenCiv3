@@ -12,6 +12,17 @@ namespace C7GameData {
 		public const int DefaultMovementAlongRoads = 3;
 		public int MovementAlongRoads = DefaultMovementAlongRoads;
 
+		// Civ3's internal movement cost of a road step and a railroad step
+		// (11_movement.md §3.2 and §3.3). The cost function charges the raw
+		// constants 1 and 0 internal units, and only MovementAlongRoads converts
+		// them into movement points at runtime. The step reads them from the rules
+		// rather than from the save-carried per-improvement movementCost field, so
+		// a save written before the scale existed (which carries the old fraction
+		// 0.33333334 there) still moves at the shipped rate, and a scenario with a
+		// different MovementAlongRoads still changes the step.
+		public const int RoadStepInternalUnits = 1;
+		public const int RailroadStepInternalUnits = 0;
+
 		public int MaximumResearchTime;
 		public int MinimumResearchTime;
 
