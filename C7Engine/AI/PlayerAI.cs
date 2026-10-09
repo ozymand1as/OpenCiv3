@@ -75,8 +75,6 @@ namespace C7Engine {
 		}
 
 		public static void MaybePickTechToResearch(Player player, GameData gameData) {
-			List<Tech> techs = gameData.techs;
-
 			// A human player holding a free advance picks it themselves. Leave
 			// the research slot empty so the ScienceSelection prompt fires, and
 			// only spend the advance when the player makes an explicit choice.
@@ -86,7 +84,7 @@ namespace C7Engine {
 			}
 
 			while (player.currentlyResearchedTech == null || player.knownTechs.Contains(player.currentlyResearchedTech)) {
-				Tech toResearch = player.GetAvailableTechsToResearch(techs).FirstOrDefault();
+				Tech toResearch = player.GetAvailableTechsToResearch(gameData).FirstOrDefault();
 				if (toResearch == null) {
 					// Every technology in the tree is known. Civ3 keeps research
 					// going with the repeatable future technology instead of

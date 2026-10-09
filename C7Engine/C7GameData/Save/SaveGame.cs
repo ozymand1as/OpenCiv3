@@ -72,6 +72,7 @@ namespace C7GameData.Save {
 				ScenarioSearchPath = data.scenarioSearchPath,
 				DefaultExperienceLevel = data.defaultExperienceLevelKey,
 				Techs = data.techs.ConvertAll(t => t.ToSaveTech()),
+				Eras = data.eras,
 				CitizenTypes = data.citizenTypes,
 				TerraForms = data.Terraforms.ConvertAll(t => t.ToSaveTerraform()),
 				Governments = data.governments,
@@ -245,6 +246,7 @@ namespace C7GameData.Save {
 				cultureGroups = CultureGroups,
 				alliances = Alliances,
 				citizenTypes = CitizenTypes,
+				eras = Eras,
 				governments = Governments,
 				espionageMissions = EspionageMissions,
 				cultureLevels = CultureLevels,
@@ -519,6 +521,7 @@ namespace C7GameData.Save {
 		public bool GameOver { get; set; }
 		public SavePlayer Winner { get; set; }
 		public List<SaveTech> Techs = new();
+		public List<Era> Eras = new();
 		public List<CitizenType> CitizenTypes = new();
 		public List<SaveTerraform> TerraForms = new();
 		public List<Government> Governments = new();

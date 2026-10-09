@@ -18,6 +18,8 @@ public class FutureTechTest {
 			rules = new Rules { MinimumResearchTime = 4, MaximumResearchTime = 50, FutureTechCost = 400 },
 			gameDifficulty = new Difficulty { AiCostFactor = 1, HumanCostFactor = 1 },
 		};
+		// The eras a real game gets from its rules.
+		gameData.eras = ShippedEras.Load();
 		gameData.map.techRate = 1;
 		gameData.players.Add(player);
 		return gameData;

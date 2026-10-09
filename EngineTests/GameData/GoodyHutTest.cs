@@ -4,6 +4,7 @@ using System.Linq;
 using C7Engine;
 using C7GameData;
 using C7GameData.Save;
+using EngineTests.Utils;
 using Xunit;
 
 namespace EngineTests.GameData;
@@ -53,6 +54,9 @@ public class GoodyHutTest {
 		C7GameData.GameData gd = new(customSeed: 7);
 		gd.map = MakeMap(mapSize, mapSize);
 		gd.rules = new Rules() { MaxRankOfWorkableTiles = 2 };
+		// The eras a real game gets from its rules. The goody-hut Tech outcome
+		// only fires in the first era of this list.
+		gd.eras = ShippedEras.Load();
 		gd.difficulties = new List<Difficulty> { new(), new(), new(), new() };
 		gd.gameDifficulty = gd.difficulties[3];
 		gd.barbarianInfo = new BarbarianInfo();

@@ -12,10 +12,10 @@ public partial class ScienceAdvisor : Control {
 
 	[Export] public TextureRect background;
 
-	private ImageTexture AncientBackground;
-	private ImageTexture MiddleBackground;
-	private ImageTexture IndustrialBackground;
-	private ImageTexture ModernBackground;
+	// The era art, keyed by the era's artName from the rules. The shipped
+	// rules name the four shipped texture sets; a mod's era can name its own,
+	// and an unknown name falls back to the first one.
+	private readonly Dictionary<string, ImageTexture> eraBackgrounds = new();
 
 	private TextureButton _close;
 	private TextureRect _advisorHead;
@@ -43,17 +43,16 @@ public partial class ScienceAdvisor : Control {
 	private void CreateUI() {
 		// science_industrial_new is used as the industrial tech tree is
 		// different from vanilla civ3.
-		AncientBackground = TextureLoader.Load("advisors.science.background.ancient");
-		MiddleBackground = TextureLoader.Load("advisors.science.background.middle");
-		IndustrialBackground = TextureLoader.Load("advisors.science.background.industrial");
-		ModernBackground = TextureLoader.Load("advisors.science.background.modern");
+		foreach (string artName in ShippedEraArtNames) {
+			eraBackgrounds[artName] = TextureLoader.Load($"advisors.science.background.{artName}");
+		}
 
 		_advisorHead = AdvisorUtils.CreateAdvisorHead(background, AdvisorHead.Advisor.Science);
 		_close = AdvisorUtils.CreateExitButton(background);
 		_close.Pressed += () => { this.GetParent<Advisors>().Hide(); };
 		(_dialogBox, _dialogBoxLabel) = AdvisorUtils.CreateAdvisorDialogBox(background);
 
-		AdvisorUtils.CreateAdvisorTitle(background, AncientBackground.GetWidth(), "SCIENCE ADVISOR");
+		AdvisorUtils.CreateAdvisorTitle(background, eraBackgrounds[ShippedEraArtNames[0]].GetWidth(), "SCIENCE ADVISOR");
 
 		CreatePreviousEraButton();
 		CreateNextEraButton();
@@ -102,11 +101,19 @@ public partial class ScienceAdvisor : Control {
 			List<Tech> allTechs = gameData.techs;
 			Player player = gameData.GetFirstHumanPlayer();
 			eraName = string.IsNullOrEmpty(lastOpenedEra) ? player.eraCivilopediaName : lastOpenedEra;
-			this.DrawTechTree(eraName, player, allTechs, player.GetAvailableTechsToResearch(allTechs));
+			this.DrawTechTree(gameData, eraName, player, allTechs, player.GetAvailableTechsToResearch(gameData));
 		});
 	}
 
-	void DrawTechTree(string eraName, Player player, List<Tech> allTechs, HashSet<Tech> availableTechsToResearch) {
+	// The background art for an era. The art name comes from the era's rules
+	// entry, so a new era gets whatever art its rules name; an era with no art
+	// (or none in the rules at all) falls back to the first shipped set.
+	private ImageTexture EraBackground(IReadOnlyList<Era> eras, string eraName) {
+		string artName = GetEraArtName(eras, eraName);
+		return eraBackgrounds.TryGetValue(artName, out ImageTexture texture) ? texture : eraBackgrounds[ShippedEraArtNames[0]];
+	}
+
+	void DrawTechTree(GameData gameData, string eraName, Player player, List<Tech> allTechs, HashSet<Tech> availableTechsToResearch) {
 		// clear all tech-box items so we don't draw new ones over the old ones
 		foreach (TechBox tb in techBoxes) {
 			background.RemoveChild(tb);
@@ -122,17 +129,16 @@ public partial class ScienceAdvisor : Control {
 
 		Queue<Tech> queue = player.ResearchQueue;
 
-		// Set the tech background based on the player's era.
-		if (eraName == ANCIENT_TIMES_CVLPD) {
-			previousEra.Hide();
-			background.Texture = AncientBackground;
-		} else if (eraName == MIDDLE_AGES_CVLPD) {
-			background.Texture = MiddleBackground;
-		} else if (eraName == INDUSTRIAL_AGE_CVLPD) {
-			background.Texture = IndustrialBackground;
-		} else if (eraName == MODERN_ERA_CVLPD) {
-			background.Texture = ModernBackground;
-			nextEra.Hide();
+		// Set the tech background based on the player's era, and hide the
+		// navigation button that would step off either end of the rules' era
+		// list. The list's length is the only end: a ruleset with six eras
+		// pages through all six.
+		List<Era> eras = gameData.eras;
+		int eraIndex = GetEraIndex(eras, eraName);
+		previousEra.Visible = eraIndex != 0;
+		nextEra.Visible = eraIndex != eras.Count - 1;
+		if (eraIndex >= 0) {
+			background.Texture = EraBackground(eras, eraName);
 		}
 		_advisorHead.Texture = AdvisorHead.GetPopupImage(AdvisorHead.Advisor.Science, AdvisorHead.Mood.Happy, player.EraIndex());
 
@@ -178,9 +184,9 @@ public partial class ScienceAdvisor : Control {
 			List<Tech> allTechs = gameData.techs;
 			Player player = gameData.GetFirstHumanPlayer();
 			eraName = string.IsNullOrEmpty(lastOpenedEra)
-				? EraIndexToEra(GetEraIndex(eraName) + delta)
-				: EraIndexToEra(GetEraIndex(lastOpenedEra) + delta);
-			DrawTechTree(eraName, player, allTechs, player.GetAvailableTechsToResearch(allTechs));
+				? EraIndexToEra(gameData.eras, GetEraIndex(gameData.eras, eraName) + delta)
+				: EraIndexToEra(gameData.eras, GetEraIndex(gameData.eras, lastOpenedEra) + delta);
+			DrawTechTree(gameData, eraName, player, allTechs, player.GetAvailableTechsToResearch(gameData));
 		});
 	}
 

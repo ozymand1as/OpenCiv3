@@ -42,17 +42,35 @@ public class GameSetup {
 	}
 
 	private void PopulatePlayers(SaveGame save) {
+		// Every player starts in an era, and the era list is rules data: the
+		// BIQ's ERAS section, or the game mode's ruleset.json. A rules file with
+		// no eras cannot start a game, so say which file is missing what here,
+		// where the game mode is known, instead of letting the player loop
+		// throw an index error.
+		string startingEra = EraUtils.GetStartingEraCivilopediaName(save.Eras);
+		if (startingEra == null) {
+			string rulesLocation = save.GameModeConfig?.baseModeDir is string dir
+				? $"Lua/{dir}/ruleset.json"
+				: "the game mode's ruleset.json";
+			throw new InvalidOperationException(
+				$"The rules define no eras, so a new game has no era to put its players in: " +
+				$"{rulesLocation} has no \"eras\" array. Add one - each entry needs a " +
+				"civilopediaName, a name and an artName, in era order, like the shipped four in " +
+				"C7/Lua/civ3/ruleset.json - or start the game from a BIQ scenario, whose ERAS " +
+				"section supplies the list.");
+		}
+
 		Random rand = new(worldCharacteristics.mapSeed + 0x531);
 
 		// Add barbarian
-		AddPlayer(save, save.Civilizations.Find(c => c.isBarbarian), isHuman: false);
+		AddPlayer(save, save.Civilizations.Find(c => c.isBarbarian), isHuman: false, startingEra);
 		save.BarbarianInfo.barbarianActivity = worldCharacteristics.barbarianActivity;
 
 		// TODO: There is an option called "Culturally Linked Start Loc."
 		// which (if on) puts players with the same culture group near each other
 
 		// Add the human player.
-		AddPlayer(save, this.playerCivilization, isHuman: true);
+		AddPlayer(save, this.playerCivilization, isHuman: true, startingEra);
 
 		// Add the opponents.
 		HashSet<string> taken = new();
@@ -74,11 +92,11 @@ public class GameSetup {
 			taken.Add(selectedName);
 
 			Civilization civ = save.Civilizations.Find(x => x.name == selectedName);
-			AddPlayer(save, civ, isHuman: false);
+			AddPlayer(save, civ, isHuman: false, startingEra);
 		}
 	}
 
-	private void AddPlayer(SaveGame save, Civilization civ, bool isHuman) {
+	private void AddPlayer(SaveGame save, Civilization civ, bool isHuman, string startingEra) {
 		SavePlayer player = new() {
 			human = isHuman,
 			id = ids.CreateID("Player"),
@@ -86,8 +104,10 @@ public class GameSetup {
 			secondaryColorIndex = civ.secondaryColorIndex,
 			civilization = civ.name,
 			knownTechs = civ.startingTechs,
-			// TODO: stop hardcoding this
-			eraCivilopediaName = "ERAS_Ancient_Times",
+			// The first era of the rules' era list is where a new game starts;
+			// PopulatePlayers resolved it, and refused to start a game whose
+			// rules carry no era list.
+			eraCivilopediaName = startingEra,
 			// TODO: load this from the rules
 			gold = 10,
 			governmentId = worldCharacteristics.defaultGovernment.id,

@@ -164,7 +164,7 @@ public partial class TechBox : TextureButton {
 
 	private void UpdateLabelTheme() {
 		Color color = Colors.Black;
-		bool isTechEraBeyondPlayerEra = GetEraIndex(tech.EraCivilopediaName) > GetEraIndex(EngineStorage.gameData.GetFirstHumanPlayer().eraCivilopediaName);
+		bool isTechEraBeyondPlayerEra = GetEraIndex(EngineStorage.gameData.eras, tech.EraCivilopediaName) > GetEraIndex(EngineStorage.gameData.eras, EngineStorage.gameData.GetFirstHumanPlayer().eraCivilopediaName);
 
 		if (techState is TechState.kKnown)
 			color = Colors.MediumBlue;
@@ -278,14 +278,12 @@ public partial class TechBox : TextureButton {
 		}
 	}
 
+	// The art name the tech box for a technology in this era is drawn with. It
+	// is the era's artName from the rules (the shipped rules name the four
+	// shipped texture sets), resolved through the imported era list rather than
+	// a chain on the four shipped constants.
 	private string CalculateTechEraTexture(string techEra) {
-		return techEra switch {
-			ANCIENT_TIMES_CVLPD => "ancient",
-			MIDDLE_AGES_CVLPD => "middle",
-			INDUSTRIAL_AGE_CVLPD => "industrial",
-			MODERN_ERA_CVLPD => "modern",
-			_ => "ancient"
-		};
+		return GetEraArtName(EngineStorage.gameData?.eras, techEra);
 	}
 
 	private Image DrawXOnImage(Image image, Color color, int thickness) {

@@ -198,9 +198,8 @@ namespace C7Engine {
 		/// "The tribe taught us ..." - hands over an advance, Ancient era only.
 		/// </summary>
 		private static bool ApplyTech(GameData gameData, Player player) {
-			// The outcome is only possible while the player is in the Ancient
-			// era.
-			if (player.EraIndex() != 0) {
+			// The outcome is only possible while the player is in the first era.
+			if (EraUtils.GetEraIndex(gameData.eras, player.eraCivilopediaName) != 0) {
 				return false;
 			}
 
@@ -209,7 +208,7 @@ namespace C7Engine {
 			// (unknown, era not ahead of the player, prerequisites known), the
 			// ones the player is not already researching, and the ones whose
 			// prerequisite tree is at most four levels deep.
-			HashSet<Tech> researchable = player.GetAvailableTechsToResearch(gameData.techs);
+			HashSet<Tech> researchable = player.GetAvailableTechsToResearch(gameData);
 			List<Tech> candidates = gameData.techs
 				.Where(researchable.Contains)
 				.Where(t => player.currentlyResearchedTech == null || t.id != player.currentlyResearchedTech)
@@ -404,7 +403,7 @@ namespace C7Engine {
 
 			if (proto.requiredTech != null) {
 				Tech required = gameData.techs.Find(t => t.id == proto.requiredTech.id);
-				if (required == null || EraUtils.GetEraIndex(required.EraCivilopediaName) != player.EraIndex()) {
+				if (required == null || EraUtils.GetEraIndex(gameData.eras, required.EraCivilopediaName) != player.EraIndex()) {
 					return false;
 				}
 			}

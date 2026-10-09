@@ -484,12 +484,12 @@ public partial class Game : Node {
 			// once they have a city.
 			if (controller.cities.Count > 0
 					&& controller.currentlyResearchedTech == null
-					&& controller.GetAvailableTechsToResearch(gameData.techs).Count > 0) {
+					&& controller.GetAvailableTechsToResearch(gameData).Count > 0) {
 				popupOverlay.ShowPopup(
 						new ScienceSelection(controller),
 						PopupOverlay.PopupCategory.Info);
 
-				if (controller.currentlyResearchedTech == null && controller.GetAvailableTechsToResearch(gameData.techs).Count > 0) {
+				if (controller.currentlyResearchedTech == null && controller.GetAvailableTechsToResearch(gameData).Count > 0) {
 					PlayerAI.MaybePickTechToResearch(controller, gameData);
 				}
 			}
