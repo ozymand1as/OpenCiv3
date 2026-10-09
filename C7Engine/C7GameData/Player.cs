@@ -634,6 +634,15 @@ namespace C7GameData {
 
 			other.CompleteResearchAndBeginNew(gameData, ourOffer.techs);
 			this.CompleteResearchAndBeginNew(gameData, theirOffer.techs);
+
+			// A completed technology deal is remembered on both sides (reputation
+			// index 10, `refused_tribute_demands`). The AI-to-AI bargaining loop
+			// @ 0x43e470 bumps it next to its "Tech traded!!!!" log line, and spec
+			// 20_diplomacy_trade.md section 9.2 records it as a bilateral event.
+			if (ourOffer.techs.Count > 0 || theirOffer.techs.Count > 0) {
+				DiplomaticAttitude.Relationship(this, other)?.reputation.RecordCompletedTechnologyDeal();
+				DiplomaticAttitude.Relationship(other, this)?.reputation.RecordCompletedTechnologyDeal();
+			}
 		}
 
 		public int EstimateTurnsToResearch(GameData gameData, Tech tech) {

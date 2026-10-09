@@ -711,6 +711,18 @@ namespace C7GameData {
 				civ.traits = LoadCivTraits(race).ToHashSet();
 				civ.cultureGroupKey = GetCultureGroupIdentifier(race.CultureGroup);
 
+				// The diplomatic attitude model's data inputs (spec
+				// 20_diplomacy_trade.md sections 3.2 and 3.5): the race's
+				// AggressionLevel seeds the hostility score, and the pair of
+				// government preferences are compared against the two civs' current
+				// governments. The two preferences are government indices in the
+				// BIQ, so they are resolved to names here - the engine's government
+				// ids are generated per import path and are not comparable across
+				// them, while the BIQ GOVT names are.
+				civ.aggressionLevel = race.AggressionLevel;
+				civ.favoriteGovernmentName = GovernmentNameOrNull(theBiq, race.FavoriteGovernment);
+				civ.shunnedGovernmentName = GovernmentNameOrNull(theBiq, race.ShunnedGovernment);
+
 				// Look up the image for non-barbarian civs.
 				string artName = pediaIcons.GetLeaderArtName(race.CivilopediaEntry);
 				if (artName != null) {
@@ -720,6 +732,14 @@ namespace C7GameData {
 				save.Civilizations.Add(civ);
 				i++;
 			}
+		}
+
+		// Resolves a BIQ government index to the government's name, or null when
+		// the race has no preference (index -1).
+		private static string GovernmentNameOrNull(BiqData theBiq, int governmentIndex) {
+			if (theBiq.Govt == null || governmentIndex < 0 || governmentIndex >= theBiq.Govt.Length)
+				return null;
+			return theBiq.Govt[governmentIndex].Name;
 		}
 
 		private static string GetCultureGroupIdentifier(int cultureGroupIndex) {

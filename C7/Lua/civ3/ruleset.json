@@ -10386,7 +10386,10 @@
         "Kushite",
         "Barbarian"
       ],
-      "isBarbarian": true
+      "isBarbarian": true,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": null,
+      "shunnedGovernmentName": null
     },
     {
       "name": "Rome",
@@ -10452,7 +10455,10 @@
         "militaristic",
         "commercial"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Communism"
     },
     {
       "name": "Egypt",
@@ -10503,7 +10509,10 @@
         "religious",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Despotism",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Greece",
@@ -10554,7 +10563,10 @@
         "commercial",
         "scientific"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Democracy",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Babylon",
@@ -10603,7 +10615,10 @@
         "scientific",
         "religious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Germany",
@@ -10641,7 +10656,10 @@
         "militaristic",
         "scientific"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 2,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Communism"
     },
     {
       "name": "Russia",
@@ -10702,7 +10720,10 @@
         "expansionist",
         "scientific"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Communism",
+      "shunnedGovernmentName": "Democracy"
     },
     {
       "name": "China",
@@ -10742,7 +10763,10 @@
         "militaristic",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -1,
+      "favoriteGovernmentName": "Communism",
+      "shunnedGovernmentName": "Feudalism"
     },
     {
       "name": "America",
@@ -10804,7 +10828,10 @@
         "expansionist",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Democracy",
+      "shunnedGovernmentName": "Communism"
     },
     {
       "name": "Japan",
@@ -10852,7 +10879,10 @@
         "militaristic",
         "religious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Feudalism",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "France",
@@ -10895,7 +10925,10 @@
         "commercial",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -2,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Fascism"
     },
     {
       "name": "India",
@@ -10934,7 +10967,10 @@
         "commercial",
         "religious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -2,
+      "favoriteGovernmentName": "Democracy",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Persia",
@@ -10985,7 +11021,10 @@
         "scientific",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Aztecs",
@@ -11043,7 +11082,10 @@
         "militaristic",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Despotism",
+      "shunnedGovernmentName": "Monarchy"
     },
     {
       "name": "Zululand",
@@ -11081,7 +11123,10 @@
         "militaristic",
         "expansionist"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 2,
+      "favoriteGovernmentName": "Despotism",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Iroquois",
@@ -11132,7 +11177,10 @@
         "commercial",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -1,
+      "favoriteGovernmentName": "Communism",
+      "shunnedGovernmentName": "Monarchy"
     },
     {
       "name": "England",
@@ -11183,7 +11231,10 @@
         "commercial",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Democracy",
+      "shunnedGovernmentName": "Fascism"
     },
     {
       "name": "Mongols",
@@ -11235,7 +11286,10 @@
         "militaristic",
         "expansionist"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 2,
+      "favoriteGovernmentName": "Despotism",
+      "shunnedGovernmentName": "Democracy"
     },
     {
       "name": "Spain",
@@ -11288,7 +11342,10 @@
         "religious",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Scandinavia",
@@ -11343,7 +11400,10 @@
         "militaristic",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Ottomans",
@@ -11394,7 +11454,10 @@
         "scientific",
         "industrious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Celts",
@@ -11446,7 +11509,10 @@
         "religious",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Despotism",
+      "shunnedGovernmentName": "Feudalism"
     },
     {
       "name": "Arabia",
@@ -11496,7 +11562,10 @@
         "expansionist",
         "religious"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Carthage",
@@ -11548,7 +11617,10 @@
         "industrious",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -1,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Communism"
     },
     {
       "name": "Korea",
@@ -11600,7 +11672,10 @@
         "commercial",
         "scientific"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -1,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Sumeria",
@@ -11647,7 +11722,10 @@
         "scientific",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": -1,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Hittites",
@@ -11694,7 +11772,10 @@
         "commercial",
         "expansionist"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 1,
+      "favoriteGovernmentName": "Fascism",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Netherlands",
@@ -11741,7 +11822,10 @@
         "agricultural",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Monarchy",
+      "shunnedGovernmentName": "Despotism"
     },
     {
       "name": "Portugal",
@@ -11799,7 +11883,10 @@
         "expansionist",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Democracy",
+      "shunnedGovernmentName": "Fascism"
     },
     {
       "name": "Byzantines",
@@ -11846,7 +11933,10 @@
         "scientific",
         "seafaring"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Republic",
+      "shunnedGovernmentName": "Feudalism"
     },
     {
       "name": "Inca",
@@ -11893,7 +11983,10 @@
         "expansionist",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Communism",
+      "shunnedGovernmentName": "Republic"
     },
     {
       "name": "Maya",
@@ -11941,7 +12034,10 @@
         "industrious",
         "agricultural"
       ],
-      "isBarbarian": false
+      "isBarbarian": false,
+      "aggressionLevel": 0,
+      "favoriteGovernmentName": "Feudalism",
+      "shunnedGovernmentName": "Democracy"
     }
   ],
   "cultureGroups": [

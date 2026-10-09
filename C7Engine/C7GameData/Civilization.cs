@@ -71,6 +71,21 @@ namespace C7GameData {
 		// The traits that this civilization has.
 		public HashSet<Trait> traits = new();
 
+		// BIQ RACE.AggressionLevel, the -2..2 value that seeds the diplomatic
+		// hostility score (spec 20_diplomacy_trade.md section 3.5). A ruleset game
+		// carries it in ruleset.json, a BIQ/SAV game imports it from the RACE
+		// record.
+		public int aggressionLevel;
+
+		// The government names this race prefers and shuns (BIQ
+		// RACE.FavoriteGovernment / ShunnedGovernment resolved to the BIQ GOVT
+		// name). They are the two comparative attitude terms of spec
+		// 20_diplomacy_trade.md section 3.2. Names rather than ids, because the
+		// BIQ and ruleset import paths mint different government ids for the same
+		// government.
+		public string favoriteGovernmentName;
+		public string shunnedGovernmentName;
+
 		public bool isBarbarian = false;
 
 		public class SettlerTileAdjustments {
