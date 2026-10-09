@@ -729,6 +729,17 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 	// test pins the whole order for one seed, and fails against the earlier port
 	// that used `n = count`, stopped at `i < n` (so the last start could never
 	// move) and swapped with the off-by-one fixed slot `(2 * count - 2) / 3`.
+	//
+	// GAP 3 / record correction: the pinned order below is a REGRESSION PIN FOR
+	// THE PORT, not a verified Civ3 order. This unit test seeds the stream
+	// directly with 1234, whereas a real generation seeds it with
+	// `mapSeed + 0x16062 + 1` for the single-player path (`0x5ef046`, the
+	// `0x16062` constant plus the gate byte). The port now uses that formula at
+	// its call site (`MapGenerator.START_SEED_OFFSET`), but the unit test
+	// deliberately bypasses the offset so the reshuffle mechanics are pinned on
+	// their own. An earlier round recorded the offset as an arbitrary port
+	// choice and could not tell a measured order from a port one; the comment
+	// now says which this is.
 	[Fact]
 	public void TheFinalReshuffleCoversEveryStartAndLeavesOnlyTheBinariesUnusedSlotAlone() {
 		const int count = 8;
@@ -776,6 +787,96 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(Order(7), Order(7));
 		Assert.Equal(8, Order(7).Distinct().Count());
 		Assert.NotEqual(string.Join(",", Order(7)), string.Join(",", Order(8)));
+	}
+
+	// The reshuffle's deterministic first step is keyed on `FUN_005eeee0`'s
+	// THIRD argument, `2g - 1` from the driver's second argument `g`
+	// (`0x5ef682` compares the loop counter against `[esp+0x68]`): g = 0 gives
+	// slot 1 and the step fires, otherwise it is -1 and the step is an ordinary
+	// draw. This pins that half of the shared gate.
+	[Fact]
+	public void TheReshuffleSentinelIsTurnedOffWithTheGate() {
+		List<Tile> Gated(bool gate) {
+			List<Tile> starts = new();
+			ID.Factory factory = new();
+			for (int i = 0; i < 8; ++i) {
+				Tile t = new(factory.CreateID("tile"));
+				t.XCoordinate = i;
+				starts.Add(t);
+			}
+			MapGenerator.ReshuffleStartOrder(new Civ3StartRandom(1234), starts, startOrderingGate: gate);
+			return starts;
+		}
+
+		Assert.Equal(5, Gated(true)[0].XCoordinate);
+		Assert.NotEqual(string.Join(",", Gated(true).Select(t => t.XCoordinate)),
+			string.Join(",", Gated(false).Select(t => t.XCoordinate)));
+	}
+
+	// GAP 3: the start-order stream must be seeded with the binary's formula,
+	// `seed + 0x16062 + the gate byte` (`0x5ef046`), not the placeholder `0x1337`
+	// the port used while the state was believed to be a word shared between
+	// passes. The `+ 1` is applied at the call site because the port models the
+	// single-player path, where the gate byte is 1.
+	[Fact]
+	public void TheStartStreamUsesTheBinariesSeedOffset() {
+		Assert.Equal(0x16062, MapGenerator.START_SEED_OFFSET);
+		Assert.True(MapGenerator.START_ORDERING_GATE);
+	}
+
+	// ------------------------------------------- the same-body permutation
+
+	private static List<Tile> StartsOnBodies(params int[] bodies) {
+		List<Tile> starts = new();
+		ID.Factory factory = new();
+		foreach (int body in bodies) {
+			Tile t = new(factory.CreateID("tile"));
+			t.continent = body;
+			starts.Add(t);
+		}
+		return starts;
+	}
+
+	private static int[] BodiesOf(List<Tile> starts) {
+		return starts.Select(t => t.continent).ToArray();
+	}
+
+	// `FUN_005eeee0`'s second deterministic block (`0x5ef6e6`-`0x5ef839`) walks
+	// the one-based slot array from slot 2 and, whenever a start's body differs
+	// from the one before it, swaps it with the first LATER slot whose body
+	// matches the previous start's (`0x5ef7e1` swaps slots `i` and `j`). The
+	// fork did not model it at all, so this case - bodies 0, 1, 0 - stays
+	// 0, 1, 0 there while the binary produces 0, 0, 1: slot 2 (body 1) swaps
+	// with slot 3 (body 0), which is the body of slot 1.
+	[Fact]
+	public void AdjacentStartsAreForcedOntoTheSameBody() {
+		List<Tile> starts = StartsOnBodies(0, 1, 0);
+		MapGenerator.PermuteAdjacentStartsOntoSameBody(starts);
+		Assert.Equal(new int[] { 0, 0, 1 }, BodiesOf(starts));
+	}
+
+	// The pass only reorders when a later slot can supply the previous body;
+	// when none does the pair is left out of order, and the first start is
+	// always fixed because the walk begins at slot 2.
+	[Fact]
+	public void TheSameBodyPermutationLeavesStartsWithNoLaterMatchAlone() {
+		List<Tile> starts = StartsOnBodies(0, 1, 1);
+		MapGenerator.PermuteAdjacentStartsOntoSameBody(starts);
+		Assert.Equal(new int[] { 0, 1, 1 }, BodiesOf(starts));
+
+		List<Tile> firstFixed = StartsOnBodies(1, 0, 0);
+		MapGenerator.PermuteAdjacentStartsOntoSameBody(firstFixed);
+		Assert.Equal(new int[] { 1, 0, 0 }, BodiesOf(firstFixed));
+	}
+
+	// The block runs only when the same driver's-second-argument gate the
+	// reshuffle's sentinel uses is on (`0x5ef6e6` tests the fourth argument),
+	// so with the gate off it does nothing.
+	[Fact]
+	public void TheSameBodyPermutationIsGatedWithTheReshuffle() {
+		List<Tile> starts = StartsOnBodies(0, 1, 0);
+		MapGenerator.PermuteAdjacentStartsOntoSameBody(starts, startOrderingGate: false);
+		Assert.Equal(new int[] { 0, 1, 0 }, BodiesOf(starts));
 	}
 
 	// ------------------------------------------------------- the pass gates

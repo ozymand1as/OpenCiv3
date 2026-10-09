@@ -66,11 +66,27 @@ namespace C7Engine {
 		internal const int START_DRY_DIVISOR = 512;
 		internal const int START_FRESH_WATER_DIVISOR = 256;
 
-		// `FUN_005eeee0` seeds its two shuffles from the world seed. The original
-		// uses the generator's own stream; this offset is ours, chosen so the
-		// start order is a pure function of the seed and independent of the
-		// passes before it.
-		private const int START_SEED_OFFSET = 0x1337;
+		// `FUN_005eeee0` initialises its start-order stream from the seed the
+		// driver stored in the world object (`0x5eb591`, world `+0x1ec`, the
+		// `Map_impl_generate` first argument) plus this constant plus the fourth
+		// argument (`0x5ef046`, where `lea` adds `0x16062` and the gate byte to
+		// the seed). The fourth argument is 1 on the path the port models - the
+		// driver's second argument is 0, i.e. single-player - so a single-player
+		// generation seeds with `mapSeed + 0x16062 + 1`. Every generation pass
+		// derives its own stream the same way; the state is not a word shared
+		// between passes. Matching the constant therefore makes the port's
+		// start-order stream the original's for a given seed, which the earlier
+		// placeholder `0x1337` did not.
+		internal const int START_SEED_OFFSET = 0x16062;
+
+		// The driver's second argument reaches `FUN_005eeee0` twice: the call
+		// site turns it into the reshuffle's deterministic-step sentinel `2g - 1`
+		// (`0x5eb7a5`-`0x5eb7a9`, so +1 only when `g` is 0), and into the
+		// same-body permutation's gate `(g == 0)` (`0x5eb79f`, tested at
+		// `0x5ef6e6`). The shipped single-player path passes 0, so both ordering
+		// blocks run; the port keeps them behind this one flag rather than
+		// enabling one without the other.
+		internal const bool START_ORDERING_GATE = true;
 
 		// ------------------------------------------------------------- the spiral
 
@@ -712,7 +728,8 @@ namespace C7Engine {
 			Dictionary<int, int> bodyAreas = BodyAreas(m);
 			HashSet<Tile> cityRadiusTiles = CityRadiusTiles(m);
 
-			Civ3StartRandom rand = new(wc.mapSeed + START_SEED_OFFSET);
+			Civ3StartRandom rand = new(wc.mapSeed + START_SEED_OFFSET
+				+ (START_ORDERING_GATE ? 1 : 0));
 			for (int i = 0; i < 32; ++i) {
 				rand.NextFloat();
 			}
@@ -811,9 +828,15 @@ namespace C7Engine {
 				log.Error("More civs than available starting locations.");
 			}
 
-			// The original's final reshuffle (`0x5ef655`-`0x5ef6de`), which the
-			// driver always asks for (it passes 1 for the flag the block tests).
-			ReshuffleStartOrder(rand, startingLocations);
+			// The original's two deterministic ordering blocks, in the binary's
+			// order: the final reshuffle (`0x5ef655`-`0x5ef6de`), which the driver
+			// always asks for because it passes 1 for that block's first argument,
+			// and then the permutation that forces adjacent starts onto the same
+			// body (`0x5ef6e6`-`0x5ef839`). The reshuffle's deterministic step and
+			// the permutation are both keyed on the driver's second argument, so
+			// the one flag drives both.
+			ReshuffleStartOrder(rand, startingLocations, START_ORDERING_GATE);
+			PermuteAdjacentStartsOntoSameBody(startingLocations, START_ORDERING_GATE);
 
 			passOfStart = passes[..startingLocations.Count];
 			return startingLocations;
@@ -878,19 +901,62 @@ namespace C7Engine {
 		// does not draw at all but swaps slot 1 with the fixed slot
 		// `(2n - 2) / 3 + 1`, which is what keeps the first start off the single
 		// best site; the drawn steps continue the same stream the candidate
-		// shuffle used.
+		// shuffle used. That first step is conditional: `0x5ef682` takes it when
+		// the loop counter equals `FUN_005eeee0`'s THIRD argument `[esp+0x68]`,
+		// which the call site computes as `2g - 1` from the driver's second
+		// argument `g`. With `g` = 0 that is slot 1, so the step fires on the
+		// first iteration; with `g` non-zero it is -1 and never fires. An
+		// earlier reading called `[esp+0x68]` the driver's first argument, which
+		// is the constant 1 at `[esp+0x60]` (`0x5eb7ac`) and gates the block
+		// itself; that was wrong.
 		//
 		// `startingLocations` is zero-based, so slot `s` is `startingLocations[s - 1]`
 		// and the loop variable `i` is the binary's slot number. The old port used
 		// `n = Count` and stopped at `i < n`, which dropped the last start from the
 		// walk and used the off-by-one fixed slot `(2 * Count - 2) / 3`.
-		internal static void ReshuffleStartOrder(Civ3StartRandom rand, List<Tile> startingLocations) {
+		internal static void ReshuffleStartOrder(Civ3StartRandom rand, List<Tile> startingLocations,
+				bool startOrderingGate = true) {
 			int n = startingLocations.Count + 1;
+			int sentinel = startOrderingGate ? 1 : -1;
 			for (int i = 1; i < n; ++i) {
-				int j = i == 1 ? (2 * n - 2) / 3 + 1 : i + rand.Next(n - i);
+				int j = i == sentinel ? (2 * n - 2) / 3 + 1 : i + rand.Next(n - i);
 				if (j != i) {
 					(startingLocations[i - 1], startingLocations[j - 1]) =
 						(startingLocations[j - 1], startingLocations[i - 1]);
+				}
+			}
+		}
+
+		// `FUN_005eeee0`'s second deterministic ordering block (`0x5ef6e6`-
+		// `0x5ef839`), which the port used to leave out. It walks the one-based
+		// start slots from slot 2 and, when a start's body differs from the one
+		// before it, swaps that start with the first later slot whose body
+		// matches the previous start's. So it pulls same-body starts together
+		// whenever a later start can supply the body; when no later slot carries
+		// it the pair is left out of order. The body is the plot's `+0xb8`
+		// method (`0x5eaaf0`), the short at `+0x1e` - the fork's
+		// `Tile.continent`. The block draws nothing. It runs only when its fourth
+		// argument (`0x5ef6e6`) and the first argument (`0x5ef6f2`) are non-zero
+		// and there is more than one start (`0x5ef6fe`); the fourth argument is
+		// the one the driver's second argument also sets for the reshuffle, so
+		// the two blocks share that gate.
+		internal static void PermuteAdjacentStartsOntoSameBody(List<Tile> startingLocations,
+				bool startOrderingGate = true) {
+			if (!startOrderingGate) {
+				return;
+			}
+			int n = startingLocations.Count + 1;
+			for (int i = 2; i < n; ++i) {
+				int previousBody = startingLocations[i - 2].continent;
+				if (startingLocations[i - 1].continent == previousBody) {
+					continue;
+				}
+				for (int j = i + 1; j < n; ++j) {
+					if (startingLocations[j - 1].continent == previousBody) {
+						(startingLocations[i - 1], startingLocations[j - 1]) =
+							(startingLocations[j - 1], startingLocations[i - 1]);
+						break;
+					}
 				}
 			}
 		}
