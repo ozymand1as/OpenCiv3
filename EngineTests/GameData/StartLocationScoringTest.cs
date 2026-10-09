@@ -789,9 +789,9 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		Assert.NotEqual(string.Join(",", Order(7)), string.Join(",", Order(8)));
 	}
 
-	// The reshuffle's deterministic first step is keyed on `FUN_005eeee0`'s
-	// THIRD argument, `2g - 1` from the driver's second argument `g`
-	// (`0x5ef682` compares the loop counter against `[esp+0x68]`): g = 0 gives
+	// The reshuffle's deterministic first step is keyed on the start-placement
+	// routine's THIRD argument, computed as `2 * (g == 0) - 1` from the driver's
+	// second argument `g` (`0x5ef682` compares the loop counter against it): g = 0 gives
 	// slot 1 and the step fires, otherwise it is -1 and the step is an ordinary
 	// draw. This pins that half of the shared gate.
 	[Fact]
@@ -882,7 +882,8 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 		return starts.Select(t => t.continent).ToArray();
 	}
 
-	// `FUN_005eeee0`'s second deterministic block (`0x5ef6e6`-`0x5ef839`) walks
+	// The start-placement routine's second deterministic block (`0x5ef6e6`-
+	// `0x5ef839`) walks
 	// the one-based slot array from slot 2 and, whenever a start's body differs
 	// from the one before it, swaps it with the first LATER slot whose body
 	// matches the previous start's (`0x5ef7e1` swaps slots `i` and `j`). The
