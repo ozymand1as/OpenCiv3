@@ -234,7 +234,7 @@ namespace C7GameData {
 		/// weapons used, make floor(sum / 10) + 1 attempts, and on each attempt
 		/// that beats the sum, draw a tile and convert it to the terrain its
 		/// current terrain's TERR.PollutionEffect names, clearing mine and
-		/// irrigation as it does so. **[C]** (FUN_004f4380 @ 0x4f4380, called
+		/// irrigation as it does so. **[C]** (the warming pass @ 0x4f4380, called
 		/// from perform_interturn @ 0x4f5ef0).
 		/// </summary>
 		public static void DoPerTurnGlobalWarming(GameData gameData) {

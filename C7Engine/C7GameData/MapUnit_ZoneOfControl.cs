@@ -150,7 +150,7 @@ namespace C7GameData {
 			return IsLandUnit() && location.HasCity() && HasWorkingWalls(location.cityAtTile);
 		}
 
-		// The city bypass's own test (FUN_00437e60 @ 0x437e60): the city is
+		// The city bypass's own test (at 0x437e60): the city is
 		// still a town - its population is at most RULE.MaximumLevel1CitySize
 		// (and at most MaximumLevel2CitySize) - and one of its buildings still
 		// supplies a bombard defence, which is how the rules encode city walls.

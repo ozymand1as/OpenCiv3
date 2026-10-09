@@ -9,7 +9,7 @@ namespace C7Engine {
 	// Civ3's starting-location scoring and placement, read out of the shipped
 	// map generator.
 	//
-	// The algorithm is `FUN_005eeee0` @ `0x5eeee0`: score every tile with the
+	// The algorithm is the start-placement routine @ `0x5eeee0`: score every tile with the
 	// world object's vtable slot `+0x8` - the wrapper `Map_eval_city_location` @
 	// `0x5d3830`, which calls the city-site value function
 	// `Match_ai_eval_city_location` @ `0x442480` with its fourth argument (the
@@ -80,7 +80,7 @@ namespace C7Engine {
 		internal const int START_SEED_OFFSET = 0x16062;
 
 		// The driver's second argument reaches `FUN_005eeee0` twice: the call
-		// site turns it into the reshuffle's deterministic-step sentinel `2g - 1`
+		// site turns it into the reshuffle's deterministic-step sentinel `2 * (g == 0) - 1`
 		// (`0x5eb7a5`-`0x5eb7a9`, so +1 only when `g` is 0), and into the
 		// same-body permutation's gate `(g == 0)` (`0x5eb79f`, tested at
 		// `0x5ef6e6`). The shipped single-player path passes 0, so both ordering
@@ -151,7 +151,7 @@ namespace C7Engine {
 
 		// ------------------------------------------------------- score helpers
 
-		// The area of the body a tile sits on. `FUN_005eeee0` reads it through
+		// The area of the body a tile sits on. The start-placement routine reads it through
 		// the world's body accessor at `+0x84` (record field `+0x24`).
 		internal static Dictionary<int, int> BodyAreas(GameMap m) {
 			Dictionary<int, int> areas = new();
@@ -280,7 +280,7 @@ namespace C7Engine {
 		}
 
 		// The terrain record's irrigation bonus - the `+0x4c` field of the tile's
-		// terrain. `FUN_00442480` uses this, not the terrain's food, as its
+		// terrain. Match_ai_eval_city_location uses this, not the terrain's food, as its
 		// "may a city stand here" gate (`0x442c7c` calls the irrigation-bonus
 		// getter @ `0x5dbe70` and rejects the tile when the result is zero), and
 		// the fresh-water lake pass @ `0x5ed5d0` uses the same getter as its
@@ -359,7 +359,7 @@ namespace C7Engine {
 
 		// The tiles that lie inside an existing city's working radius. Civ3 marks
 		// these with kind-2 bit 17 (`0x20000`): the city constructor
-		// `FUN_004ae2a0` @ `0x4ae2a0` sets it on the city's own plot and on the
+		// at `0x4ae2a0` sets it on the city's own plot and on the
 		// twenty tiles of the big fat cross around it (`0x4ae513` sets it inside
 		// that loop), and `City_raze` @ `0x4aecc0` clears it again on the tiles
 		// around the razed plot that no longer have a city within their own cross
@@ -585,7 +585,7 @@ namespace C7Engine {
 		}
 
 		// The full candidate score: `Match_ai_eval_city_location` @ `0x442480`
-		// with the AI-evaluation flag set, i.e. the value `FUN_005eeee0` sorts its
+		// with the AI-evaluation flag set, i.e. the value the start-placement routine sorts its
 		// candidates by. Returns 0 for a rejected tile, otherwise at least 1.
 		//
 		// There is no flat "river bonus" and no flat "coast bonus"; what the
@@ -715,7 +715,7 @@ namespace C7Engine {
 			m.startingLocations = PlaceStartingLocations(wc, m, out _);
 		}
 
-		// `FUN_005eeee0` @ `0x5eeee0`: the start placement itself. The original
+		// The start-placement routine @ `0x5eeee0`: the start placement itself. The original
 		// clears the start array first (it can run over a partly-populated
 		// scenario map), scores and sorts every tile, then runs up to eight
 		// passes with progressively relaxed gates. `passOfStart[i]` records the
@@ -766,7 +766,7 @@ namespace C7Engine {
 			// scores, which is what the shuffle is for.
 			List<Tile> ordered = shuffled.OrderByDescending(t => scores[t]).ToList();
 
-			// The per-body counters: `FUN_005eeee0` counts the luxury resources
+			// The per-body counters: the start-placement routine counts the luxury resources
 			// on each body and, as starts are accepted, the starts on each body.
 			Dictionary<int, int> luxuriesPerBody = new();
 			foreach (Tile t in m.tiles) {
@@ -859,7 +859,7 @@ namespace C7Engine {
 			return startingLocations;
 		}
 
-		// The seven acceptance screens `FUN_005eeee0` runs on a candidate before
+		// The seven acceptance screens the start-placement routine runs on a candidate before
 		// its body-size, per-body counter, score and spacing gates
 		// (`0x5ef2ee`-`0x5ef3b1`), in the binary's order. Each tests something on
 		// the plot that has to come back empty:
@@ -868,7 +868,7 @@ namespace C7Engine {
 		//  * `plot+0x8c` (`0x5eaa30`): the tile's terrain is water, so the site
 		//    must be land;
 		//  * `plot+0x3c(0)` (`0x5ea7a0`), kind-0 bit 5: the GOODY HUT. The sparse
-		//    pass `FUN_005f21b0` @ `0x5f21b0` sets that bit, and Civ3 runs the pass
+		//    pass @ `0x5f21b0` sets that bit, and Civ3 runs the pass
 		//    *before* the starts (driver `0x5eb773` against `0x5eb7b0`), so a Civ3
 		//    start is never on a hut. The fork's generator places its starts
 		//    before that pass, so the screen cannot fire on a generated map here -
@@ -881,7 +881,7 @@ namespace C7Engine {
 		//    recorded as an open item;
 		//  * `plot+0x0c` (`0x5ea9f0`): the unit id, which must be -1;
 		//  * `plot+0x1c(0)` (`0x5ea630`), kind-0 bit 7: the BARBARIAN CAMP. The
-		//    camp placement `FUN_0055f9f0` sets that bit (`0x55fbe4`, kind 0, bit
+		//    camp placement @ `0x55f9f0` sets that bit (`0x55fbe4`, kind 0, bit
 		//    `0x80`) and the sparse pass sets it too; C7 models it as
 		//    `hasBarbarianCamp`. Like the hut screen it cannot fire on a generated
 		//    map here, because the fork places its camps after the starts.

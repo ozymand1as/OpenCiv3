@@ -402,7 +402,7 @@ namespace QueryCiv3 {
 		/// entries, from 3 a two-chunk object, and from 4 one more 4-byte field. Below save
 		/// format 20 the loader zeroes the field and behaves as revision 0, so a file in
 		/// that format stores none of this and the record ends after the date sub-record
-		/// (city reader `FUN_004bbed0` at 0x4bc39b).
+		/// (the city reader at 0x4bc39b).
 		/// </summary>
 		private unsafe void ReadCityFormat20FieldAndTail(byte* end) {
 			if (!layout.CityStoresFormat20Field) {

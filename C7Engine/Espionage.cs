@@ -545,8 +545,8 @@ namespace C7Engine {
 			target.playerRelationships[actor.id].caughtSpyCount++;
 
 			// The same event bumps the target's diplomatic memory of the actor:
-			// one caught spy (reputation index 4), the provocation handler
-			// FUN_00502cc0 @ 0x502cc0.
+			// one caught spy (reputation index 4), the provocation handler at
+			// `0x502cc0`.
 			target.playerRelationships[actor.id].reputation.RecordSpyCaught();
 
 			// A caught spy is consumed: the actor must plant a new agent before

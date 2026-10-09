@@ -9,8 +9,8 @@ using Xunit;
 
 namespace EngineTests.GameData;
 
-// Civ3's starting-location scoring and placement, as read out of
-// `FUN_005eeee0` @ `0x5eeee0` and the city-site value function
+// Civ3's starting-location scoring and placement, as read out of the shipped
+// start-placement routine @ `0x5eeee0` and the city-site value function
 // `Match_ai_eval_city_location` @ `0x442480` it sorts its candidates by. The
 // rules, the addresses they were read from and what was verified against the
 // binary are written up in re/notes/civ3_map_generator_spec.md section 2.14.
@@ -655,7 +655,7 @@ public class StartLocationScoringTest : IClassFixture<SaveGameFixture> {
 
 	// --------------------------------------------------- the acceptance screens
 
-	// The seven screens `FUN_005eeee0` runs on a candidate (`0x5ef2ee`-
+	// The seven screens the start-placement routine runs on a candidate (`0x5ef2ee`-
 	// `0x5ef3b1`), in the binary's order: not already a start, land, no goody
 	// hut (kind-0 bit 5), no city, no colony (C7 has no colony model), no unit,
 	// no barbarian camp (kind-0 bit 7). Each has to be able to fire on its own,
