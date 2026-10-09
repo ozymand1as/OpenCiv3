@@ -17,6 +17,22 @@ namespace C7GameData {
 		public int baseShieldProduction { get; set; }
 		public int baseCommerceProduction { get; set; }
 		public int movementCost { get; set; }
+
+		// The Civ3 TERR.RoadsBonus field, the runtime terrain record's +0x54.
+		// It is the commerce a road adds on this terrain, so it is a value with
+		// a magnitude rather than a flag; the original only ever tests it
+		// against zero, when a city is founded (0x4ae651 reads it through
+		// Tile_get_road_bonus and 0x4ae658 skips the road/railroad write when
+		// it is zero). The shipped conquests.biq has 1 on the ten land terrains
+		// and 0 on volcano, coast, sea and ocean.
+		//
+		// This is the same BIQ field the BIQ import already turns into the road
+		// and railroad terrain improvements' commerce bonus (see
+		// AddYieldBonusesForTerrainImprovements, which the start-location score
+		// reads); it is kept on the terrain as well because the founding
+		// callback reads the terrain record's field directly.
+		public int roadsBonus { get; set; }
+
 		public bool allowCities { get; set; } = true;
 		public bool impassable { get; set; }
 
@@ -98,6 +114,7 @@ namespace C7GameData {
 				baseShieldProduction = civ3Terrain.Shields,
 				baseCommerceProduction = civ3Terrain.Commerce,
 				movementCost = civ3Terrain.MovementCost,
+				roadsBonus = civ3Terrain.RoadBonus,
 				allowCities = civ3Terrain.AllowCities != 0,
 				impassable = civ3Terrain.Impassable != 0,
 				defenseBonus = new StrengthBonus {

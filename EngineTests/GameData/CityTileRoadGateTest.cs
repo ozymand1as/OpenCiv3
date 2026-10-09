@@ -34,8 +34,12 @@ namespace EngineTests.GameData;
 ///
 /// Founding a city also sets the tile's road flag, and sets its railroad flag
 /// when the owner knows the rules' railroad technology (0x4ae2a0: the
-/// Tile_get_road_bonus test at 0x4ae651, the +0x218 read at 0x4ae66b and
-/// Set_Tile_Flags at 0x4ae6e1).
+/// Tile_get_road_bonus test at 0x4ae651, the zero test at 0x4ae656, the jump
+/// over the write at 0x4ae658, the +0x218 read at 0x4ae66b and Set_Tile_Flags
+/// at 0x4ae6e1). The terrain's road bonus gates that whole write: a terrain
+/// with RoadsBonus 0 gets no road and no railroad, which the shipped rules
+/// cannot reach (every terrain they allow a city on carries 1) but a rules set
+/// can.
 /// </summary>
 public sealed class CityTileRoadGateTest : MapBase {
 	private const double Tolerance = 0.0001;
@@ -204,6 +208,173 @@ public sealed class CityTileRoadGateTest : MapBase {
 		Assert.False(startTile.HasRailroad());
 	}
 
+	// ------------------------------------------------------------------
+	// Founding a city: the terrain's road bonus gates the road entirely.
+	// ------------------------------------------------------------------
+
+	[Fact]
+	private void FoundingACityOnATerrainWithNoRoadBonusSetsNoRoad() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+		EngineStorage.gameData.terrainImprovements.Add(railroad);
+
+		Player player = MakePlayer();
+		InitilizeStartTile(MakeNoRoadBonusTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+
+		// Tile_get_road_bonus is tested at 0x4ae656 and a zero value jumps over
+		// Set_Tile_Flags at 0x4ae658, so a terrain with no road bonus gets
+		// neither bit - not even the road the founding callback otherwise sets
+		// without consulting any technology.
+		Assert.False(startTile.HasRoad());
+		Assert.False(startTile.HasRailroad());
+	}
+
+	[Fact]
+	private void FoundingACityOnATerrainWithNoRoadBonusSetsNoRailroadEither() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+		EngineStorage.gameData.terrainImprovements.Add(railroad);
+
+		// An owner who does know the rules' railroad technology is not enough:
+		// the jump at 0x4ae658 skips the whole road/railroad write, so the
+		// railroad branch is unreachable on a terrain with no road bonus.
+		Player player = MakePlayer(RailTech);
+		InitilizeStartTile(MakeNoRoadBonusTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+
+		Assert.False(startTile.HasRailroad());
+		Assert.False(startTile.HasRoad());
+	}
+
+	[Fact]
+	private void FoundingACityOnATerrainWithARoadBonusOfTwoSetsTheRoad() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+		EngineStorage.gameData.terrainImprovements.Add(railroad);
+
+		// RoadsBonus carries a magnitude - it is the commerce a road adds on the
+		// terrain - but the original only tests it against zero, so any non-zero
+		// value behaves the same. The shipped Intro2 scenario has a terrain with
+		// a road bonus of 2, so the magnitude is reachable data, not a
+		// hypothetical.
+		Tile tile = new(ID.None("")) {
+			baseTerrainType = new() { Key = "plains" },
+			overlayTerrainType = new() { Key = "plains", movementCost = 1, roadsBonus = 2 },
+		};
+
+		Player player = MakePlayer();
+		InitilizeStartTile(tile, new TileLocation(50, 50));
+		tile.cityAtTile = new City(tile, player, "City", ID.None(""));
+
+		Assert.True(tile.HasRoad());
+		Assert.False(tile.HasRailroad());
+	}
+
+	[Fact]
+	private void TheRoadBonusIsReadFromTheTerrainTheTileCarriesOnEntry() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+
+		// A forest overlay on tundra, with the road bonus on the forest only.
+		// The original's constructor contains no terrain clear at all, so the
+		// record it reads at 0x4ae651 is the one the tile carries on entry, not
+		// the base terrain the fork's foliage clear swaps in.
+		Tile tile = new(ID.None("")) {
+			baseTerrainType = new() { Key = "tundra", movementCost = 1, roadsBonus = 0 },
+			overlayTerrainType = new() {
+				Key = "forest",
+				movementCost = 2,
+				roadsBonus = 1,
+				allowedFoliageAction = TerrainType.Civ3FoliageAction.ClearForest,
+			},
+		};
+
+		Player player = MakePlayer();
+		InitilizeStartTile(tile, new TileLocation(50, 50));
+		tile.cityAtTile = new City(tile, player, "City", ID.None(""));
+
+		// The clear did happen ...
+		Assert.Equal("tundra", tile.overlayTerrainType.Key);
+		// ... and the road is there because the forest's bonus was the one read.
+		Assert.True(tile.HasRoad());
+	}
+
+	[Fact]
+	private void AStepOutOfACityOnATerrainWithNoRoadBonusCostsTheTerrain() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+
+		Player player = MakePlayer();
+		InitilizeStartTile(MakeNoRoadBonusTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+		Assert.False(startTile.HasRoad());
+
+		Tile destination = AddRoadedDestination();
+
+		// A city tile with no road of its own is not a road end, so the step
+		// onto the roaded tile costs the terrain rather than a road step
+		// (11_movement.md section 3.2).
+		Assert.Equal(1.0,
+			TilePath.GetMovementCost(player, startTile, TileDirection.NORTH, destination), Tolerance);
+	}
+
+	[Fact]
+	private void AStepOutOfACityOnATerrainWithARoadBonusOntoARoadCostsTheRoad() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+
+		Player player = MakePlayer();
+		InitilizeStartTile(MakePlainsTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+		Assert.True(startTile.HasRoad());
+
+		Tile destination = AddRoadedDestination();
+
+		// The shipped plains' road bonus of 1 is what makes this a road step.
+		Assert.Equal(RoadCost,
+			TilePath.GetMovementCost(player, startTile, TileDirection.NORTH, destination), Tolerance);
+	}
+
+	// ------------------------------------------------------------------
+	// The wheeled-impassability lift is the gated predicate too.
+	// ------------------------------------------------------------------
+
+	[Fact]
+	private void AWheeledUnitCannotCrossACityTileWhoseOwnerCannotUseItsRoad() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+		EngineStorage.gameData.rules = new Rules { CityRoadRequiredTech = RoadTech };
+
+		Player player = MakePlayer();
+		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+		Assert.False(startTile.HasRoad());
+
+		// The destination is roaded, so only the source's gate decides: section
+		// 4.1 tests the road flag through the live Tile_Check_Roads on both
+		// ends, and this end's owner cannot use its road yet.
+		Tile mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
+		mountain.overlays.Add(road);
+
+		MapUnit wheeled = MakeWheeledLandUnit();
+		wheeled.location = startTile;
+
+		Assert.False(wheeled.CanEnter(mountain));
+	}
+
+	[Fact]
+	private void AWheeledUnitCanCrossACityTileWhoseOwnerCanUseItsRoad() {
+		EngineStorage.gameData.terrainImprovements.Add(road);
+		EngineStorage.gameData.rules = new Rules { CityRoadRequiredTech = RoadTech };
+
+		Player player = MakePlayer(RoadTech);
+		InitilizeStartTile(MakeHillTile(), new TileLocation(50, 50));
+		startTile.cityAtTile = new City(startTile, player, "City", ID.None(""));
+		Assert.True(startTile.HasRoad());
+
+		Tile mountain = AddNeighborsAndUpdateMap(startTile, MakeMountainTile(), TileDirection.NORTH);
+		mountain.overlays.Add(road);
+
+		MapUnit wheeled = MakeWheeledLandUnit();
+		wheeled.location = startTile;
+
+		Assert.True(wheeled.CanEnter(mountain));
+	}
+
 	[Fact]
 	private void FoundingACityWithTheRailroadTechnologySetsTheRailroadFlag() {
 		EngineStorage.gameData.terrainImprovements.Add(road);
@@ -327,6 +498,42 @@ public class CityTileTechGateDataTest : IClassFixture<SaveGameFixture> {
 		Assert.Null(imported.Rules.CityRoadRequiredTech);
 		Assert.Equal("Hidden Railroads",
 			imported.Techs.Single(t => t.id == imported.Rules.CityRailroadRequiredTech).Name);
+	}
+
+	[SkippableFact]
+	public void ImportBiqCarriesTheTerrainRoadBonuses() {
+		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
+
+		// The same scenario the city-tile technologies use. Its own TERR records
+		// carry the road bonus, and they are not the base rules': Mountains is 2
+		// (the magnitude the founding callback only tests against zero), and its
+		// Rain Forest - index 7, the fork's "forest" - is 0.
+		EngineStorage.animationsEnabled = false;
+		SaveGame imported = ImportCiv3.ImportBiq(
+			ScenarioPath("Conquests", "Intro2 The Three Sisters.biq"),
+			PathUtils.defaultBicPath,
+			GetPediaIconsPath("Conquests/Conquests"));
+
+		Assert.Equal(2, imported.TerrainTypes.Single(t => t.Key == "mountains").roadsBonus);
+		Assert.Equal(0, imported.TerrainTypes.Single(t => t.Key == "forest").roadsBonus);
+		Assert.Equal(1, imported.TerrainTypes.Single(t => t.Key == "plains").roadsBonus);
+	}
+
+	[Fact]
+	public void TheShippedRulesetCarriesTheTerrainRoadBonuses() {
+		// The shipped conquests.biq's TERR.RoadBonus, the terrain record field at
+		// +0x54 that Tile_get_road_bonus reads: 1 on the ten land terrains and 0
+		// on volcano and the three water terrains. Founding a city reads this
+		// value, so it has to be on the ruleset path as well as the BIQ path.
+		foreach (string key in new string[] {
+			"desert", "plains", "grassland", "tundra", "flood plain",
+			"hills", "mountains", "forest", "jungle", "marsh" }) {
+			Assert.Equal(1, save.TerrainTypes.Single(t => t.Key == key).roadsBonus);
+		}
+
+		foreach (string key in new string[] { "volcano", "coast", "sea", "ocean" }) {
+			Assert.Equal(0, save.TerrainTypes.Single(t => t.Key == key).roadsBonus);
+		}
 	}
 
 	private static string ScenarioPath(string subfolder, string fileName) {

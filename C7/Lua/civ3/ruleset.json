@@ -8,6 +8,7 @@
       "baseShieldProduction": 1,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Desert",
@@ -30,6 +31,7 @@
       "baseShieldProduction": 1,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Plains",
@@ -54,6 +56,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Grassland",
@@ -77,6 +80,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Tundra",
@@ -99,6 +103,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Flood Plain",
@@ -118,6 +123,7 @@
       "baseShieldProduction": 1,
       "baseCommerceProduction": 0,
       "movementCost": 2,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Hills",
@@ -146,6 +152,7 @@
       "baseShieldProduction": 1,
       "baseCommerceProduction": 0,
       "movementCost": 3,
+      "roadsBonus": 1,
       "allowCities": false,
       "impassableTo": {
         "wheeled": [
@@ -176,6 +183,7 @@
       "baseShieldProduction": 2,
       "baseCommerceProduction": 0,
       "movementCost": 2,
+      "roadsBonus": 1,
       "allowCities": true,
       "defenseBonus": {
         "description": "Forest",
@@ -202,6 +210,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 3,
+      "roadsBonus": 1,
       "allowCities": true,
       "impassableTo": {
         "wheeled": [
@@ -233,6 +242,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 2,
+      "roadsBonus": 1,
       "allowCities": false,
       "impassableTo": {
         "wheeled": [
@@ -261,6 +271,7 @@
       "baseShieldProduction": 3,
       "baseCommerceProduction": 0,
       "movementCost": 3,
+      "roadsBonus": 0,
       "allowCities": false,
       "impassableTo": {
         "wheeled": [
@@ -283,6 +294,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 2,
       "movementCost": 1,
+      "roadsBonus": 0,
       "allowCities": false,
       "defenseBonus": {
         "description": "Coast",
@@ -302,6 +314,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 1,
       "movementCost": 1,
+      "roadsBonus": 0,
       "allowCities": false,
       "defenseBonus": {
         "description": "Sea",
@@ -322,6 +335,7 @@
       "baseShieldProduction": 0,
       "baseCommerceProduction": 0,
       "movementCost": 1,
+      "roadsBonus": 0,
       "allowCities": false,
       "defenseBonus": {
         "description": "Ocean",

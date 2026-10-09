@@ -129,6 +129,30 @@ namespace C7GameData {
 		}
 
 		private void BuildCityCallback() {
+			// Founding a city sets the tile's road flag only when the tile's terrain
+			// has a non-zero road bonus: the original reads Tile_get_road_bonus
+			// (0x5dbf10, the terrain record field at +0x54) at 0x4ae651, tests it at
+			// 0x4ae656 and jumps over the Set_Tile_Flags call at 0x4ae658 when it
+			// is zero, so a terrain with no road bonus gets no road and no railroad.
+			//
+			// RoadsBonus is a value with a magnitude - the commerce a road adds on
+			// that terrain - rather than a flag, but the original only tests it
+			// against zero, so every non-zero value behaves the same. The shipped
+			// conquests.biq sets it to 1 on the ten land terrains and 0 on volcano,
+			// coast, sea and ocean, so the test is inert for a city founded on a
+			// terrain the shipped rules allow a city on (mountains, marsh and
+			// volcano carry 1 but cannot hold a city); only a rules set that
+			// zeroes a city-site terrain's road bonus reaches the difference.
+			//
+			// The read happens before the foliage clear below because the original
+			// has no clear at all at this point: the constructor's only tile writes
+			// are the kind-2 city-radius mark on the 21 tiles of the cross and this
+			// road/railroad write, so it reads the terrain the tile carries on
+			// entry. The fork's clear (upstream behaviour, see the note in
+			// 11_movement.md section 11) would otherwise swap in the base terrain
+			// and change which record is read.
+			bool terrainHasRoadBonus = overlayTerrainType.roadsBonus != 0;
+
 			// The raw road and railroad overlay bits are a property of the tile,
 			// not of its owner: the original reads them through the owner gate of
 			// Tile_Check_Roads / Tile_Check_Railroads (11_movement.md section 4.2)
@@ -144,23 +168,23 @@ namespace C7GameData {
 
 			overlays.Clear();
 
-			// Founding a city sets the tile's road flag, and sets its railroad
-			// flag too when the city's owner knows the rules' railroad
-			// technology; the original ORs the bits, so a railroad flag that was
-			// already there survives either way (0x4ae2a0: the terrain
-			// Tile_get_road_bonus test at 0x4ae651, the rules field +0x218 read
-			// at 0x4ae66b, and Set_Tile_Flags at 0x4ae6e1 with 1 for road and 3
-			// for road+railroad). Tile_get_road_bonus reads the terrain's
-			// RoadsBonus (+0x54), which is non-zero for every terrain a city can
-			// be founded on in the shipped rules, so the road flag is always set.
-			//
-			// The road is added without consulting the road technology: the
-			// original never checks it here, and a rules set that requires one
-			// still gates the tile at query time through CityRoadRequiredTech.
-			if (hadRailroad || OwnerKnows(CityRailroadRequiredTech)) {
-				AddImprovement(RAILROAD);
-			} else {
-				AddImprovement(ROAD);
+			// What the original writes here are the raw overlay bits, not the gated
+			// participation the rest of this file implements: Set_Tile_Flags
+			// (0x4ae6e1) lands in Plot_Set_Tile_Flags (0x5eabf0), which ORs the
+			// value into the overlay word at tile +0x28 and never consults the
+			// owner's road technology. Bit 0 is the road and bit 1 the railroad, so
+			// 3 sets both and 1 sets the road alone, leaving a railroad the tile
+			// already carried in place. The railroad half is chosen by the
+			// Leader_has_tech test at 0x4ae691 on the rules field +0x218, the rules'
+			// railroad technology read at 0x4ae66b; the road half is never gated
+			// here, and a rules set that requires a road technology still gates the
+			// tile at query time through CityRoadRequiredTech.
+			if (terrainHasRoadBonus) {
+				if (hadRailroad || OwnerKnows(CityRailroadRequiredTech)) {
+					AddImprovement(RAILROAD);
+				} else {
+					AddImprovement(ROAD);
+				}
 			}
 
 			// Somehow in the base game, craters persist when a city is built on top.
@@ -229,6 +253,11 @@ namespace C7GameData {
 		// road movement discount follows: an unroaded approach into a roaded
 		// mountain still blocks a wheeled unit. The test is the road flag, which a
 		// railroad also sets, so rails lift it too.
+		//
+		// The flag is read the way §4.1 reads it - through the live
+		// Tile_Check_Roads / Tile_Check_Railroads, not through the raw overlay
+		// bit - so the §4.2 owner-technology gate applies to both ends: a city
+		// tile whose owner cannot use its road does not lift the restriction.
 		public bool IsImpassableTo(UnitPrototype unitType, Tile from) {
 			if (IsImpassable())
 				return true;
@@ -237,15 +266,32 @@ namespace C7GameData {
 				if (!unitType.flags.Contains(flag))
 					continue;
 
-				return !(HasAnyImprovement(improvements) && from.HasAnyImprovement(improvements));
+				return !(HasAnyGatedImprovement(improvements) && from.HasAnyGatedImprovement(improvements));
 			}
 
 			return false;
 		}
 
-		// Whether this tile carries any of the given improvements.
-		private bool HasAnyImprovement(string[] keys) {
-			return keys.Any(HasImprovementWithKey);
+		// Whether this tile carries any of the given improvements as the movement
+		// rules see them: through the owner gate of §4.2, not through the raw
+		// overlay bit. The two road-layer keys go through the gated predicates, so
+		// the road entry answers for a railroad tile as well (a railroad sets the
+		// road bit, §3.3).
+		private bool HasAnyGatedImprovement(string[] keys) {
+			return keys.Any(HasGatedImprovement);
+		}
+
+		private bool HasGatedImprovement(string key) {
+			if (key == ROAD) {
+				return HasRoad();
+			}
+			if (key == RAILROAD) {
+				return HasRailroad();
+			}
+
+			// Any other improvement a mod names as lifting the restriction is not a
+			// road or railroad, so the gate of §4.2 does not apply to it.
+			return HasImprovementWithKey(key);
 		}
 
 		private bool HasImprovementWithKey(string key) {
@@ -437,12 +483,24 @@ namespace C7GameData {
 		// The road technology the rules require of a city or colony tile's owner
 		// before the tile counts as a road (the rules field at +0x1A4,
 		// 11_movement.md section 4.2). Null is the original's -1: no technology.
+		//
+		// The original reads the field out of the single global rules object
+		// (0x9c7324 + 0x1A4). The fork asks the city's owner first and falls back
+		// to the global rules when the owner carries no rules object, or carries a
+		// null field (the fork's encoding of the original's -1). Both agree with
+		// the original in production because SaveGame gives every player the same
+		// global Rules instance. In tests it is the fallback that fires: the
+		// synthetic road-gate cases set the gate on EngineStorage.gameData.rules,
+		// while their hand-built players carry a rules object whose road field is
+		// null (CityTileRoadGateTest).
 		private ID CityRoadRequiredTech {
 			get => cityAtTile?.owner?.rules?.CityRoadRequiredTech
 				?? EngineStorage.gameData?.rules?.CityRoadRequiredTech;
 		}
 
-		// The railroad technology, the rules field at +0x218. Null is -1.
+		// The railroad technology, the rules field at +0x218. Null is -1. Read the
+		// same way as CityRoadRequiredTech above: the owner's rules first, the
+		// global rules as the fallback.
 		private ID CityRailroadRequiredTech {
 			get => cityAtTile?.owner?.rules?.CityRailroadRequiredTech
 				?? EngineStorage.gameData?.rules?.CityRailroadRequiredTech;
