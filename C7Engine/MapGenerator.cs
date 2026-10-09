@@ -1210,9 +1210,15 @@ namespace C7Engine {
 		}
 
 		// The order the pass considers the three continuations in, and how many
-		// of them it takes. Read at `0x5f0530`. The scores arrive in the order the
-		// three are offered: straight on, a quarter turn counter-clockwise, a
-		// quarter turn clockwise, and are ranked best first. A continuation the
+		// of them it takes. The port offers them in its own array order - straight
+		// on, a quarter turn counter-clockwise, a quarter turn clockwise - and
+		// ranks them best first with a stable sort. The original samples and arrays
+		// the same three in a DIFFERENT order: counter-clockwise, straight on,
+		// clockwise (`0x5f0182`, `0x5f01bf`, `0x5f020d`), received by its ranker in
+		// that order at `0x5f0308`. So an exact tie between two continuations can
+		// resolve the other way here; only ties are affected, because the scores
+		// themselves are compared by value. Recorded in the spec's port summary.
+		// A continuation the
 		// pass refuses outright (rule 2.9.17.1) scores the refusal, so it can
 		// never lead the step, and a step whose best score is the refusal leads
 		// nowhere; a continuation whose score is not above the refusal earns no
@@ -1220,8 +1226,7 @@ namespace C7Engine {
 		// best is always taken, and from the third step of a run onwards a second
 		// continuation is taken as well, and sometimes a third, the choice
 		// depending on how far behind the second (and third) score trails the best
-		// and on a random draw. The sort is stable, so ties keep the order of
-		// `options` and the river prefers to run straight on.
+		// and on a random draw.
 		//
 		// A sampled score that is negative without being the refusal is still a
 		// candidate here. The binary instead ends a step whose best score is
