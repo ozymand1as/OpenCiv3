@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using C7Engine;
@@ -190,6 +191,91 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 				Assert.True(t.IsLand(), $"({t.XCoordinate},{t.YCoordinate}) is water but carries a river");
 			}
 		}
+	}
+
+	// Rule 2.9.17's divisor, read at `0x5f015c` (the counter-clockwise turn) and
+	// `0x5f01e7` (the clockwise one). The lateral counter falls with every
+	// counter-clockwise turn and rises with every clockwise one, and a sideways
+	// step is halved only when that counter already stands on the side the turn
+	// is taking the river. The counter-clockwise case used to be inverted - it
+	// returned 2 at a lateral value of 0 and 0 at -1, the opposite of the binary -
+	// so every counter-clockwise continuation was scaled the wrong way.
+	[Theory]
+	[InlineData(0, 0, 0, 0)]
+	[InlineData(0, 0, -1, 2)]
+	[InlineData(0, 0, -2, 2)]
+	[InlineData(2, 0, 0, 0)]
+	[InlineData(2, 0, 1, 2)]
+	[InlineData(2, 0, 2, 2)]
+	[InlineData(1, 0, 0, 0)]
+	[InlineData(1, 1, 0, 0)]
+	[InlineData(1, 2, 0, 2)]
+	[InlineData(1, 5, 0, 16)]
+	public void TheSidewaysDivisorDependsOnTheSideTheRiverIsTurning(int turn, int straight, int lateral, int expected) {
+		Assert.Equal(expected, MapGenerator.RiverScoreDivisor(turn, straight, lateral));
+	}
+
+	// Rule 2.9.17.1, read at `0x5f0141` and `0x5f01d1`: the pass refuses a
+	// counter-clockwise continuation once the lateral counter has run two turns
+	// that way, and a clockwise one once it has run two turns the other way. The
+	// boundary values on the permitted side are still offered, and a straight step
+	// is never refused. The port had no refusal at all before this round, so it
+	// could keep turning the same way for ever.
+	[Theory]
+	[InlineData(0, -3, true)]
+	[InlineData(0, -2, true)]
+	[InlineData(0, -1, false)]
+	[InlineData(0, 0, false)]
+	[InlineData(2, 3, true)]
+	[InlineData(2, 2, true)]
+	[InlineData(2, 1, false)]
+	[InlineData(2, 0, false)]
+	[InlineData(1, -5, false)]
+	[InlineData(1, 5, false)]
+	public void ThePassRefusesAContinuationThatKeepsTurningTheSameWay(int turn, int lateral, bool refused) {
+		Assert.Equal(refused, MapGenerator.RiverContinuationIsRefused(turn, lateral));
+	}
+
+	// What the refusal does to the ranking (rule 2.9.17.1, read at `0x5f0530`): a
+	// refused continuation scores -1, so it can never lead the step when another
+	// continuation is offered, and a step whose best score is the refusal leads
+	// nowhere; a refused continuation also earns no second or third branch, so
+	// the draw for one is not made and the pass's random stream is not advanced.
+	[Fact]
+	public void ARefusedContinuationCanNeverLeadTheStepAndEarnsNoBranch() {
+		Assert.Equal(-1, MapGenerator.RiverRefusedScore);
+
+		// Scores in the order the three continuations are offered: straight on 5,
+		// counter-clockwise refused, clockwise -4. The refusal trails the offered
+		// -4 by value, but it is the second best score, and a refusal never earns
+		// the second branch, so the pass takes the best alone and draws nothing.
+		Random rand = new Random(20240607);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 5, -1, -4 }, rand,
+			out List<int> order, out int branches));
+		Assert.Equal(new[] { 0, 1, 2 }, order);
+		Assert.Equal(1, branches);
+		Assert.Equal(new Random(20240607).Next(2), rand.Next(2));
+
+		// Here the refusal is the best score, so the step leads nowhere even
+		// though the counter-clockwise and clockwise continuations are offered.
+		Assert.False(MapGenerator.RiverContinuationPlan(2, new[] { -1, -4, -9 }, new Random(1), out _, out _));
+		Assert.False(MapGenerator.RiverContinuationPlan(2, new[] { -1, -1, -1 }, new Random(1), out _, out _));
+
+		// The draw for a second or third branch, when it is made, advances the
+		// pass's stream; a refused third does not earn one.
+		Random reference = new Random(99);
+		int firstDraw = reference.Next(2);
+		int secondDraw = reference.Next(2);
+
+		rand = new Random(99);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 80, 70, -1 }, rand, out order, out branches));
+		Assert.Equal(2, branches);
+		Assert.Equal(firstDraw, rand.Next(2));
+
+		rand = new Random(99);
+		Assert.True(MapGenerator.RiverContinuationPlan(2, new[] { 80, 70, 60 }, rand, out order, out branches));
+		Assert.InRange(branches, 2, 3);
+		Assert.Equal(secondDraw, rand.Next(2));
 	}
 
 	// A 60x70 map that is land above row 50 and ocean below it has a single

@@ -1163,32 +1163,26 @@ namespace C7Engine {
 				if (runsAlongside) {
 					continue;
 				}
-				usable.Add((d, n, RiverSteppingScore(m, t, d, steps, RiverScoreDivisor(turn, straight, lateral), rand), turn));
+				if (RiverContinuationIsRefused(turn, lateral)) {
+					// The pass refuses this continuation outright and never samples
+					// the terrain for it, so it draws no random numbers here
+					// (rule 2.9.17.1).
+					usable.Add((d, n, RiverRefusedScore, turn));
+					continue;
+				}
+				int sum = RiverSampleSum(m, t, d, steps, rand);
+				int divisor = RiverScoreDivisor(turn, straight, lateral);
+				usable.Add((d, n, divisor < 1 ? sum : sum / divisor, turn));
 			}
 
-			if (usable.Count == 0) {
+			if (!RiverContinuationPlan(steps, usable.Select(x => x.score).ToList(), rand,
+					out List<int> order, out int branches)) {
 				return false;
 			}
 
-			// OrderByDescending is stable, so ties keep the order of `options`
-			// and the river prefers to run straight on.
-			List<(TileDirection dir, Tile tile, int score, int turn)> ordered = usable.OrderByDescending(x => x.score).ToList();
-
-			int branches = 1;
-			if (steps > 1 && ordered.Count > 1) {
-				int best = ordered[0].score;
-				int gap = best - ordered[1].score;
-				if (best / 8 < gap) {
-					branches = 1 + rand.Next(2);
-				} else {
-					branches = ordered.Count > 2 ? 2 + rand.Next(2) : 2;
-				}
-			}
-			branches = Math.Min(branches, ordered.Count);
-
 			bool grew = false;
 			for (int i = 0; i < branches; ++i) {
-				(TileDirection d, Tile n, int _, int turn) = ordered[i];
+				(TileDirection d, Tile n, int _, int turn) = usable[order[i]];
 				int nextStraight = turn == 1 ? straight + 1 : 0;
 				int nextLateral = turn == 0 ? lateral - 1 : (turn == 2 ? lateral + 1 : lateral);
 				visited.Add(n);
@@ -1215,45 +1209,115 @@ namespace C7Engine {
 			};
 		}
 
-		// The score of taking the step in `dir` from `t`, read at `0x5efa90`
+		// The order the pass considers the three continuations in, and how many
+		// of them it takes. Read at `0x5f0530`. The scores arrive in the order the
+		// three are offered: straight on, a quarter turn counter-clockwise, a
+		// quarter turn clockwise, and are ranked best first. A continuation the
+		// pass refuses outright (rule 2.9.17.1) scores the refusal, so it can
+		// never lead the step, and a step whose best score is the refusal leads
+		// nowhere; a continuation whose score is not above the refusal earns no
+		// second or third branch and draws no random number for one. Otherwise the
+		// best is always taken, and from the third step of a run onwards a second
+		// continuation is taken as well, and sometimes a third, the choice
+		// depending on how far behind the second (and third) score trails the best
+		// and on a random draw. The sort is stable, so ties keep the order of
+		// `options` and the river prefers to run straight on.
+		//
+		// A sampled score that is negative without being the refusal is still a
+		// candidate here. The binary instead ends a step whose best score is
+		// below zero, and when the run is old enough it sets the terrain of a
+		// folded position to mountains rather than taking the step back (read at
+		// `0x5f021e` and `0x5f023a`). That branch is not part of the port's model,
+		// so the port keeps such a step alive.
+		internal static bool RiverContinuationPlan(int steps, IReadOnlyList<int> scores, Random rand,
+			out List<int> order, out int branches) {
+			order = Enumerable.Range(0, scores.Count)
+				.OrderByDescending(i => scores[i])
+				.ToList();
+			branches = 0;
+			if (order.Count == 0 || scores[order[0]] == RiverRefusedScore) {
+				return false;
+			}
+
+			branches = 1;
+			if (steps > 1 && order.Count > 1) {
+				int best = scores[order[0]];
+				int gap = best - scores[order[1]];
+				if (best / 8 < gap) {
+					if (scores[order[1]] > RiverRefusedScore) {
+						branches = 1 + rand.Next(2);
+					}
+				} else {
+					branches = 2;
+					if (order.Count > 2 && scores[order[2]] > RiverRefusedScore) {
+						branches = 2 + rand.Next(2);
+					}
+				}
+			}
+			branches = Math.Min(branches, order.Count);
+			return true;
+		}
+
+		// The score the pass gives a continuation it refuses outright, read at
+		// `0x5f0141` and `0x5f01d1`: the continuation is never sampled, and a step
+		// whose best score is this leads nowhere.
+		internal const int RiverRefusedScore = -1;
+
+		// Whether the pass refuses one of the three continuations outright. Read
+		// at `0x5f0141` and `0x5f01d1`: a quarter turn counter-clockwise (the
+		// `dir + 3` continuation, turn 0) is refused once the lateral counter has
+		// run two turns that way, and a quarter turn clockwise (the `dir + 1`
+		// continuation, turn 2) once it has run two turns the other way. A
+		// straight step is never refused.
+		internal static bool RiverContinuationIsRefused(int turn, int lateral) {
+			return turn switch {
+				0 => lateral < -1,
+				2 => lateral >= 2,
+				_ => false,
+			};
+		}
+
+		// The sum of the two samples the score is built from, read at `0x5efa90`
 		// sampling through `0x5ef880`: two samples along the direction, one on
 		// each side of it, averaged. The two centres sit four steps along the
 		// direction from the tile the river is on, the second one a step to the
 		// side of it; each contributes the 49 positions of the spiral, and a
-		// position off the map or under water is worth -10. The sum is divided by
-		// the pass's own scaling before the three continuations are compared.
-		private static int RiverSteppingScore(GameMap m, Tile t, TileDirection dir, int steps, int divisor, Random rand) {
+		// position off the map or under water is worth -10. The pass adds the two
+		// centres together index by index, so for each position of the spiral it
+		// reads the first centre's value and then the second centre's value for
+		// that same position before moving on.
+		private static int RiverSampleSum(GameMap m, Tile t, TileDirection dir, int steps, Random rand) {
 			(int dx, int dy) = RiverDirectionOffset(dir);
 			(int px, int py) = RiverDirectionOffset(RiverPerpendicular(dir));
 
+			int centreX = t.XCoordinate + RIVER_SAMPLE_LEAD * dx;
+			int centreY = t.YCoordinate + RIVER_SAMPLE_LEAD * dy;
 			int sum = 0;
-			foreach ((int cx, int cy) in new[] {
-				(t.XCoordinate + RIVER_SAMPLE_LEAD * dx, t.YCoordinate + RIVER_SAMPLE_LEAD * dy),
-				(t.XCoordinate + RIVER_SAMPLE_LEAD * dx + px, t.YCoordinate + RIVER_SAMPLE_LEAD * dy + py),
-			}) {
-				for (int i = 0; i < RIVER_SAMPLE_SPIRAL_SIZE; ++i) {
-					(int ox, int oy) = riverSampleOffsets[i];
-					sum += RiverSampleValue(m, cx + ox, cy + oy, steps, i + 1, rand);
-				}
+			for (int i = 0; i < RIVER_SAMPLE_SPIRAL_SIZE; ++i) {
+				(int ox, int oy) = riverSampleOffsets[i];
+				sum += RiverSampleValue(m, centreX + ox, centreY + oy, steps, i + 1, rand);
+				sum += RiverSampleValue(m, centreX + px + ox, centreY + py + oy, steps, i + 1, rand);
 			}
 
-			if (divisor < 1) {
-				return sum;
-			}
-			return sum / divisor;
+			return sum;
 		}
 
 		// The divisor the score is scaled by before the three continuations are
-		// compared. A sideways step is halved; a step that goes straight on is
-		// not divided at all for its first two steps and then halved more and
-		// more as the run gets longer, which is what turns a river rather than
-		// letting it run straight across the map.
-		private static int RiverScoreDivisor(int turn, int straight, int lateral) {
+		// compared, read at `0x5f015c` for the counter-clockwise turn and at
+		// `0x5f01e7` for the clockwise one. A sideways step is halved only while
+		// the lateral counter is already on the side the turn is taking the
+		// river: the counter falls with every counter-clockwise turn and rises
+		// with every clockwise one, so a counter-clockwise step is halved when it
+		// is below zero and a clockwise step when it is above zero. A step that
+		// goes straight on is not divided at all for its first two steps and then
+		// halved more and more as the run gets longer, which is what turns a
+		// river rather than letting it run straight across the map.
+		internal static int RiverScoreDivisor(int turn, int straight, int lateral) {
 			switch (turn) {
 				case 1:
 					return straight < 2 ? 0 : 1 << (straight - 1);
 				case 0:
-					return lateral >= 0 ? 2 : 0;
+					return lateral < 0 ? 2 : 0;
 				default:
 					return lateral <= 0 ? 0 : 2;
 			}
