@@ -8679,7 +8679,8 @@
       "maintenanceCost": 1,
       "iconRowIndex": 4,
       "flags": [
-        "increasesLuxuryTrade"
+        "increasesLuxuryTrade",
+        "plus50PercentCommerce"
       ],
       "traits": [
         "commercial"
@@ -8774,6 +8775,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 1,
       "iconRowIndex": 9,
+      "flags": [
+        "plus50PercentCommerce"
+      ],
       "traits": [
         "commercial"
       ]
@@ -8828,6 +8832,7 @@
     {
       "name": "Factory",
       "pollution": 2,
+      "production": 2,
       "shieldCost": 240,
       "populationCost": 0,
       "requiredTech": "tech-48",
@@ -8844,6 +8849,7 @@
     {
       "name": "Manufacturing Plant",
       "pollution": 2,
+      "production": 2,
       "shieldCost": 320,
       "populationCost": 0,
       "requiredTech": "tech-80",
@@ -8874,6 +8880,7 @@
     {
       "name": "Coal Plant",
       "pollution": 2,
+      "production": 2,
       "shieldCost": 160,
       "populationCost": 0,
       "requiredTech": "tech-48",
@@ -8884,12 +8891,16 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 3,
       "iconRowIndex": 16,
+      "flags": [
+        "replacesOtherBuildings"
+      ],
       "requiredResources": [
         "Coal"
       ]
     },
     {
       "name": "Hydro Plant",
+      "production": 2,
       "shieldCost": 240,
       "populationCost": 0,
       "requiredTech": "tech-62",
@@ -8901,7 +8912,8 @@
       "maintenanceCost": 3,
       "iconRowIndex": 17,
       "flags": [
-        "mustBeNearRiver"
+        "mustBeNearRiver",
+        "replacesOtherBuildings"
       ],
       "productionPrerequisites": [
         "buildings.production_rules.must_be_near_river"
@@ -8909,6 +8921,7 @@
     },
     {
       "name": "Nuclear Plant",
+      "production": 4,
       "shieldCost": 240,
       "populationCost": 0,
       "requiredTech": "tech-70",
@@ -8919,6 +8932,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 3,
       "iconRowIndex": 18,
+      "flags": [
+        "replacesOtherBuildings"
+      ],
       "requiredResources": [
         "Uranium"
       ]
@@ -9023,6 +9039,7 @@
     },
     {
       "name": "Solar Plant",
+      "production": 2,
       "shieldCost": 320,
       "populationCost": 0,
       "requiredTech": "tech-73",
@@ -9033,6 +9050,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 3,
       "iconRowIndex": 24,
+      "flags": [
+        "replacesOtherBuildings"
+      ],
       "traits": [
         "agricultural"
       ]
@@ -9613,6 +9633,7 @@
     {
       "name": "Iron Works",
       "pollution": 4,
+      "production": 4,
       "shieldCost": 300,
       "populationCost": 0,
       "isSmallWonder": true,
@@ -9977,6 +9998,9 @@
       "combatDefenseBonus": 0,
       "maintenanceCost": 3,
       "iconRowIndex": 76,
+      "flags": [
+        "plus50PercentCommerce"
+      ],
       "traits": [
         "commercial"
       ]
@@ -10138,6 +10162,7 @@
   "inflows": [
     {
       "name": "Wealth",
+      "capitalization": true,
       "localYield": [
         {
           "yieldType": "commerce",

@@ -29,6 +29,10 @@ public class Inflow : IProducible {
 	public Tech requiredTech { get; set; }
 	public HashSet<Resource> requiredResources { get; set; }
 
+	// Whether this inflow is the Wealth build, whose production converts a
+	// city's net shields into gold (spec 14 §4.2 step 6).
+	public bool capitalization;
+
 	public int iconRowIndex;
 	public List<LocalYield> localYield { get; set; }
 	// TODO: Implement a globalYield where for example, 10 cities must be producing this in order for something to happen
@@ -47,6 +51,7 @@ public class Inflow : IProducible {
 	public Inflow(SaveInflow saveInflow, BehaviorEngine luaRulesEngine) {
 		this.name = saveInflow.name;
 		this.iconRowIndex = saveInflow.iconRowIndex;
+		this.capitalization = saveInflow.capitalization;
 		this.localYield = saveInflow.localYield.ConvertAll(y => new LocalYield(y.yieldType, luaRulesEngine, y.yieldCalculation));
 	}
 

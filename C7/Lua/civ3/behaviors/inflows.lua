@@ -1,35 +1,13 @@
-﻿local function rules()
-  return GAME_DATA().rules
-end
+﻿local inflows = {}
 
-local inflows = {}
-
--- to match an item in a list based on a predicate
-local function any(list, predicate)
-  for _, v in ipairs(list) do
-    if predicate(v) then
-      return true
-    end
-  end
-  return false
-end
-  
-local function doubles_wealth_production(tech)
-  return tech.DoublesWealthProduction == true
-end
-
--- context is [ Player player, City city ]
--- this is the actual (minimal) implementation we would do for Wealth, for conquests
+-- The Wealth build's shields-to-gold conversion now lives in
+-- C7Engine/C7GameData/City.cs (City.WealthBuildGoldIncome), because the rate is
+-- driven by the produced item's Capitalization flag rather than by this inflow
+-- hook. This function stays defined so that the
+-- "inflows.result.wealth.commerce" path in ruleset.json still resolves, and it
+-- returns 0 so the two implementations cannot double count.
 local function extra_commerce_calculation(context)
-  local player = context.player
-  local city = context.city
-  
-  local useful_shields = city.CurrentProductionYield().useful
-  local known_techs = player.GetKnownTechs()
-  local double_effect = any(known_techs, doubles_wealth_production)
-  local ratio = double_effect and (rules().ShieldCostPerGold / 2) or rules().ShieldCostPerGold
-  
-  return math.max(1, useful_shields / ratio)
+  return 0
 end
 
 -- Any and all of the table values below should return an integer
