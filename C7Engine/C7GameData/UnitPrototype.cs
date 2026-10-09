@@ -76,6 +76,14 @@ namespace C7GameData {
 		// bitmask). The AI must key its role decisions off these, not off names.
 		public HashSet<SaveUnitPrototype.AIStrategy> aiStrategies = [];
 
+		// The terrain types this unit type ignores the movement cost of
+		// (PRTO.IgnoreMovementCost). A step onto one of them costs one movement
+		// point instead of the terrain's MovementCost, unless a road or railroad
+		// already discounted the step (11_movement.md §3.6).
+		public HashSet<string> ignoreMovementCost { get; set; } = [];
+
+		public bool IgnoresMovementCostOf(TerrainType terrain) => ignoreMovementCost.Contains(terrain.Key);
+
 		public bool HasAIStrategy(SaveUnitPrototype.AIStrategy strategy) => aiStrategies.Contains(strategy);
 
 		// The roles the AI used to infer from a unit's name.
@@ -197,6 +205,7 @@ namespace C7GameData {
 			attributes = new HashSet<string>(proto.attributes);
 			flags = new HashSet<SaveUnitPrototype.Flag>(proto.flags);
 			aiStrategies = new HashSet<SaveUnitPrototype.AIStrategy>(proto.aiStrategies);
+			ignoreMovementCost = new HashSet<string>(proto.ignoreMovementCost);
 
 			terraformActions = proto.terraformActions.Select(id => terraforms.First(t => t.Id == id)).ToHashSet();
 		}

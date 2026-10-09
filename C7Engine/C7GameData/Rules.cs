@@ -1,5 +1,28 @@
 namespace C7GameData {
 	public class Rules {
+		// The number of internal movement units in one whole movement point,
+		// Civ3's RULE.MovementAlongRoads. The original reads it at runtime and
+		// scales both every unit's maximum movement and every cost by it, so a
+		// scenario can change the movement scale; the shipped conquests.biq uses
+		// 3, and the shipped scenarios range from 2 (Intro2 The Three Sisters) to
+		// 4 (Scenarios/2 MP Rise of Rome) (11_movement.md §2.1).
+		//
+		// This is the default for a rules object that predates the field, so an
+		// older save or ruleset still moves at the shipped rate.
+		public const int DefaultMovementAlongRoads = 3;
+		public int MovementAlongRoads = DefaultMovementAlongRoads;
+
+		// Civ3's internal movement cost of a road step and a railroad step
+		// (11_movement.md §3.2 and §3.3). The cost function charges the raw
+		// constants 1 and 0 internal units, and only MovementAlongRoads converts
+		// them into movement points at runtime. The step reads them from the rules
+		// rather than from the save-carried per-improvement movementCost field, so
+		// a save written before the scale existed (which carries the old fraction
+		// 0.33333334 there) still moves at the shipped rate, and a scenario with a
+		// different MovementAlongRoads still changes the step.
+		public const int RoadStepInternalUnits = 1;
+		public const int RailroadStepInternalUnits = 0;
+
 		public int MaximumResearchTime;
 		public int MinimumResearchTime;
 

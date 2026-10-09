@@ -156,6 +156,9 @@ namespace C7GameData {
 		public bool HasPollution() {
 			return this.overlays.GetImprovements().Any(i => i.key == POLLUTION);
 		}
+		public bool HasBarricade() {
+			return this.overlays.GetImprovements().Any(i => i.key == BARRICADE);
+		}
 		public bool HasRuins() {
 			return this.overlays.GetImprovements().Any(i => i.key == RUINS);
 		}

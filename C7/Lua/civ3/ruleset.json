@@ -357,7 +357,7 @@
       "key": "road",
       "layer": "roads",
       "zIndex": 1,
-      "movementCost": 0.33333334,
+      "movementCost": 1,
       "bonusYields": {
         "desert": {
           "commerce": 1
@@ -822,6 +822,7 @@
   "unitPrototypes": [
     {
       "name": "Settler",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Settler",
@@ -905,6 +906,7 @@
     },
     {
       "name": "Worker",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Worker",
@@ -1000,6 +1002,7 @@
     },
     {
       "name": "Scout",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Scout"
@@ -1053,6 +1056,7 @@
     },
     {
       "name": "Explorer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Explorer"
@@ -1127,6 +1131,7 @@
     },
     {
       "name": "Marine",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Marine"
@@ -1208,6 +1213,7 @@
     },
     {
       "name": "Modern Paratrooper",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Paratrooper"
@@ -1287,6 +1293,7 @@
     },
     {
       "name": "Warrior",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Warrior"
@@ -1367,6 +1374,7 @@
     },
     {
       "name": "Archer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Archer"
@@ -1444,6 +1452,7 @@
     },
     {
       "name": "Spearman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Spearman"
@@ -1519,6 +1528,7 @@
     },
     {
       "name": "Swordsman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Swordsman"
@@ -1597,6 +1607,7 @@
     },
     {
       "name": "Chariot",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "chariot"
@@ -1680,6 +1691,7 @@
     },
     {
       "name": "Horseman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Horseman"
@@ -1767,6 +1779,7 @@
     },
     {
       "name": "Pikeman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Pikeman"
@@ -1846,6 +1859,7 @@
     },
     {
       "name": "Longbowman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Longbowman"
@@ -1923,6 +1937,7 @@
     },
     {
       "name": "Musketman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Musketman"
@@ -2004,6 +2019,7 @@
     },
     {
       "name": "Knight",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Knight"
@@ -2083,6 +2099,7 @@
     },
     {
       "name": "Rifleman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Rifleman"
@@ -2161,6 +2178,7 @@
     },
     {
       "name": "Cavalry",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Cavalry"
@@ -2238,6 +2256,7 @@
     },
     {
       "name": "Infantry",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Infantry"
@@ -2319,6 +2338,7 @@
     },
     {
       "name": "Tank",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Tank"
@@ -2403,6 +2423,7 @@
     },
     {
       "name": "Mech Infantry",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Mech Infantry"
@@ -2482,6 +2503,7 @@
     },
     {
       "name": "Modern Armor",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Modern Armor"
@@ -2564,6 +2586,7 @@
     },
     {
       "name": "Catapult",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Catapult"
@@ -2646,6 +2669,7 @@
     },
     {
       "name": "Cannon",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Cannon"
@@ -2733,6 +2757,7 @@
     },
     {
       "name": "Artillery",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Artillery"
@@ -2812,6 +2837,7 @@
     },
     {
       "name": "Radar Artillery",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Radar Artillery"
@@ -2895,6 +2921,7 @@
     },
     {
       "name": "Cruise Missile",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Cruise Missile"
@@ -2977,6 +3004,7 @@
     },
     {
       "name": "Tactical Nuke",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Tactical Nuke"
@@ -3057,6 +3085,7 @@
     },
     {
       "name": "ICBM",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "ICBM"
@@ -3135,6 +3164,7 @@
     },
     {
       "name": "Galley",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Galley"
@@ -3216,6 +3246,7 @@
     },
     {
       "name": "Caravel",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Caravel"
@@ -3296,6 +3327,7 @@
     },
     {
       "name": "Frigate",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Frigate"
@@ -3377,6 +3409,7 @@
     },
     {
       "name": "Galleon",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Galleon"
@@ -3458,6 +3491,7 @@
     },
     {
       "name": "Ironclad",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Ironclad"
@@ -3540,6 +3574,7 @@
     },
     {
       "name": "Transport",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Transport"
@@ -3618,6 +3653,7 @@
     },
     {
       "name": "Carrier",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Carrier"
@@ -3700,6 +3736,7 @@
     },
     {
       "name": "Submarine",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Submarine"
@@ -3777,6 +3814,7 @@
     },
     {
       "name": "Destroyer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Destroyer"
@@ -3855,6 +3893,7 @@
     },
     {
       "name": "Battleship",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Battleship"
@@ -3936,6 +3975,7 @@
     },
     {
       "name": "AEGIS Cruiser",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "AEGIS Cruiser"
@@ -4018,6 +4058,7 @@
     },
     {
       "name": "Nuclear Submarine",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Nuclear Submarine"
@@ -4583,6 +4624,7 @@
     },
     {
       "name": "Leader",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Leader Ancient Times",
@@ -4673,6 +4715,7 @@
     },
     {
       "name": "Army",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Army Ancient Times",
@@ -4813,6 +4856,7 @@
     },
     {
       "name": "Bowman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Bowman"
@@ -4864,6 +4908,7 @@
     },
     {
       "name": "Hoplite",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Hoplite"
@@ -4915,6 +4960,7 @@
     },
     {
       "name": "Impi",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Impi"
@@ -4966,6 +5012,7 @@
     },
     {
       "name": "Legionary",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Legionary"
@@ -5020,6 +5067,7 @@
     },
     {
       "name": "Immortals",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Immortals"
@@ -5074,6 +5122,7 @@
     },
     {
       "name": "War Chariot",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "War Chariot"
@@ -5129,6 +5178,7 @@
     },
     {
       "name": "Rider",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Rider"
@@ -5184,6 +5234,7 @@
     },
     {
       "name": "Mounted Warrior",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Mounted Warrior"
@@ -5238,6 +5289,7 @@
     },
     {
       "name": "Musketeer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Musketeer"
@@ -5292,6 +5344,7 @@
     },
     {
       "name": "Samurai",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Samurai"
@@ -5346,6 +5399,7 @@
     },
     {
       "name": "War Elephant",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "War Elephant"
@@ -5397,6 +5451,7 @@
     },
     {
       "name": "Cossack",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Cossack"
@@ -5450,6 +5505,7 @@
     },
     {
       "name": "Panzer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Panzer"
@@ -5506,6 +5562,7 @@
     },
     {
       "name": "Man-O-War",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Man-O-War"
@@ -5611,6 +5668,7 @@
     },
     {
       "name": "Privateer",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Privateer"
@@ -5692,6 +5750,7 @@
     },
     {
       "name": "Keshik",
+      "ignoreMovementCost": ["hills", "mountains", "sea"],
       "art": {
         "mainArt": {
           "defaultName": "Keshik"
@@ -5746,6 +5805,7 @@
     },
     {
       "name": "Conquistador",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Conquistador"
@@ -5797,6 +5857,7 @@
     },
     {
       "name": "Berserk",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Berserk"
@@ -5849,6 +5910,7 @@
     },
     {
       "name": "Sipahi",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Sipahi"
@@ -5901,6 +5963,7 @@
     },
     {
       "name": "Gallic Swordsman",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "gallic swordsman"
@@ -5955,6 +6018,7 @@
     },
     {
       "name": "Ansar Warrior",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "ansar warrior"
@@ -6010,6 +6074,7 @@
     },
     {
       "name": "Numidian Mercenary",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Libyan Mercenary"
@@ -6061,6 +6126,7 @@
     },
     {
       "name": "Hwach'a",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Hwacha"
@@ -6119,6 +6185,7 @@
     },
     {
       "name": "Medieval Infantry",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Medieval Infantry"
@@ -6199,6 +6266,7 @@
     },
     {
       "name": "Guerilla",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Guerilla"
@@ -7346,6 +7414,7 @@
     },
     {
       "name": "Enkidu Warrior",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Enkidu Warrior"
@@ -7396,6 +7465,7 @@
     },
     {
       "name": "Three-Man Chariot",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Three Man Chariot"
@@ -7580,6 +7650,7 @@
     },
     {
       "name": "Carrack",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Carrack"
@@ -7632,6 +7703,7 @@
     },
     {
       "name": "Swiss Mercenary",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Swiss Mercenary"
@@ -7729,6 +7801,7 @@
     },
     {
       "name": "Trebuchet",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Trebuchet"
@@ -7940,6 +8013,7 @@
     },
     {
       "name": "Chasqui Scout",
+      "ignoreMovementCost": ["hills", "mountains"],
       "art": {
         "mainArt": {
           "defaultName": "Chasquis Scout"
@@ -8041,6 +8115,7 @@
     },
     {
       "name": "Dromon",
+      "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
           "defaultName": "Dromon"
@@ -11924,6 +11999,7 @@
     "city": 2
   },
   "rules": {
+    "movementAlongRoads": 3,
     "maximumResearchTime": 50,
     "minimumResearchTime": 4,
     "futureTechCost": 400,

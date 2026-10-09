@@ -184,16 +184,24 @@ public partial class Tile {
 			return canBeReplaced;
 		}
 
-		// The movement cost of this tile's road or railroad improvement, or null
-		// when the tile carries neither. Roads and railroads share the Roads
-		// layer, so this returns the cost of whichever is present.
+		// The movement cost of this tile's road or railroad improvement, in
+		// Civ3's internal movement units (one whole movement point is
+		// RULE.MovementAlongRoads of them), or null when the tile carries
+		// neither. Roads and railroads share the Roads layer, so this returns the
+		// cost of whichever is present.
+		//
+		// The cost is the original's constant for the improvement
+		// (11_movement.md §3.2, §3.3), read from the rules at runtime rather than
+		// from the improvement's save-carried movementCost field: a save written
+		// before the scale existed carries the old fraction 0.33333334 there, and
+		// an old save must still move at the shipped rate.
 		//
 		// Returning null for "no improvement" (rather than a sentinel cost such
 		// as -1) keeps callers from mistaking a tile without an improvement for
 		// a cheap one.
 		public float? RoadMovementCost() {
 			if (terrainImprovementByLayer.TryGetValue(Layer.Roads, out TerrainImprovement roads)) {
-				return roads.movementCost;
+				return roads.StepCostInInternalUnits;
 			}
 
 			return null;

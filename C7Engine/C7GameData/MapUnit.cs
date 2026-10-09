@@ -515,15 +515,22 @@ namespace C7GameData {
 			if (!Tile.IsTileValid(tile))
 				return Intent.Disabled;
 
+			var unitOwner = this.owner;
+
+			// The passability predicate has an early exit: a destination tile
+			// inside a city owned by the mover's own civ is always passable,
+			// whatever the terrain says (11_movement.md §4.1). It precedes the
+			// terrain test, so a wheeled unit may enter a mountain city of its
+			// own civ while a foreign mountain city still refuses it.
+			var hasOwnCity = HasOwnCity(tile, unitOwner);
+
 			// Terrain can be impassable to every unit (e.g. some mods'
 			// deserts) or only to some of them (mountains, jungle, marsh and
 			// volcano are impassable to wheeled units, unless both ends of the
 			// step are roaded). A barbarian camp tile stays enterable either
 			// way, like a city, so the camp's garrison can move out and back in.
-			if (tile.IsImpassableTo(this.unitType, from ?? this.location) && !tile.hasBarbarianCamp)
+			if (!hasOwnCity && tile.IsImpassableTo(this.unitType, from ?? this.location) && !tile.hasBarbarianCamp)
 				return Intent.Disabled;
-
-			var unitOwner = this.owner;
 
 			// TODO: Perhaps this is not sufficient, but it is for now,
 			// since otherwise we can move air units on land and sea
@@ -532,8 +539,6 @@ namespace C7GameData {
 
 			if (unitOwner.isHuman && !unitOwner.HasExploredTile(tile))
 				return Intent.MoveFreely;
-
-			var hasOwnCity = HasOwnCity(tile, unitOwner);
 
 			// Keep land units on land and sea units on water
 			if (this.IsWaterUnit() && tile.IsLand()) {

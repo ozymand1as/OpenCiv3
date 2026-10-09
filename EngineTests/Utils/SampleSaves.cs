@@ -23,6 +23,14 @@ public static class SampleSaves {
 	private const string SampleSaveName = "12345.SAV";
 	private const string SampleSaveMd5 = "d34dd19a76eaebe26d29d73132c2fa60";
 
+	// A C7 game-data JSON save written before the movement scale existed, so its
+	// terrain-improvement records still carry the old fractional road cost
+	// (0.33333334). Tests that need a pre-change save ask for it here.
+	private const string PreChangeGameDataSaveName = "Conquests 16 Players.json";
+	private const string PreChangeGameDataSaveMd5 = "306c342992bfcfd502bfafd6a8cccf09";
+	private const string PreChangeGameDataSaveUri =
+		"https://www.dropbox.com/scl/fi/g1qxuvc6xptg1l6hx9s21/Conquests-16-Players.json?rlkey=bkq158od7469pibhtw44g04if&st=tqax1064&dl=1";
+
 	/// <summary>
 	/// Ensures 12345.SAV is present, downloading it when it is missing or does not
 	/// match the pinned hash. Returns its path, or null when the download failed —
@@ -47,6 +55,33 @@ public static class SampleSaves {
 		}
 
 		return GetMd5FileHash(savePath) == SampleSaveMd5 ? savePath : null;
+	}
+
+	/// <summary>
+	/// Ensures the pre-change game-data save fixture is present, downloading it
+	/// when it is missing or does not match the pinned hash. Returns its path, or
+	/// null when the download failed or the file is absent - callers should skip
+	/// with a reason rather than fail, so an offline run reports why instead of
+	/// appearing to pass.
+	/// </summary>
+	public static async Task<string> TryEnsurePreChangeGameDataSave() {
+		string savesPath = PathUtils.getDataPath(Path.Combine("saves", "game-data"));
+		Directory.CreateDirectory(savesPath);
+
+		string savePath = Path.Combine(savesPath, PreChangeGameDataSaveName);
+		if (GetMd5FileHash(savePath) == PreChangeGameDataSaveMd5) {
+			return savePath;
+		}
+
+		try {
+			using HttpClient client = new();
+			byte[] fileData = await client.GetByteArrayAsync(PreChangeGameDataSaveUri);
+			await File.WriteAllBytesAsync(savePath, fileData);
+		} catch (Exception e) when (e is HttpRequestException or TaskCanceledException) {
+			return null;
+		}
+
+		return GetMd5FileHash(savePath) == PreChangeGameDataSaveMd5 ? savePath : null;
 	}
 
 	public static string GetMd5FileHash(string path) {
