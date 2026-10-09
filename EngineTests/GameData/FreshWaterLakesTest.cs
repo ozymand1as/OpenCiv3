@@ -147,7 +147,7 @@ public class FreshWaterLakesTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal("coast", lake.overlayTerrainType.Key);
 
 		HashSet<Tile> lakeBody = m.continents.First(c => c.Contains(lake));
-		Assert.Equal(1, lakeBody.Count);
+		Assert.Single(lakeBody);
 		Assert.True(lake.isFreshWater, "the seeded lake is not marked as fresh water");
 
 		// Every tile of the body carries the same body id, and the lake is a
