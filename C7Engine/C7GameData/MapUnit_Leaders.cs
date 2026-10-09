@@ -51,6 +51,28 @@ public partial class MapUnit {
 		return location.unitsOnTile.Where(u => u.loadedOnUnitId == id).ToList();
 	}
 
+	// Civ3's Unit_get_max_move_points army branch (0x5be470): an army's maximum
+	// movement is the maximum of the maxima of the units whose container is the
+	// army, plus RULE.MovementAlongRoads internal units, which is exactly one
+	// movement point. The branch is skipped when no member yields a value, so an
+	// empty army keeps its own type's rate (11_movement.md §2.2).
+	//
+	// C7 counts movement in movement points - TilePath divides an improvement's
+	// internal cost by RULE.MovementAlongRoads - so the bonus is one point at
+	// every scale and no rules field has to be read here. Armies carry land units
+	// only, whose maxima are their own type's Movement field. [C]
+	public float MaxMovementPoints {
+		get {
+			if (IsArmy) {
+				List<MapUnit> members = Members();
+				if (members.Count > 0) {
+					return members.Max(m => m.MaxMovementPoints) + 1f;
+				}
+			}
+			return unitType.movement;
+		}
+	}
+
 	// The container this unit is loaded into, if any.
 	private MapUnit Container() {
 		if (!IsLoaded() || location == null) {
@@ -215,7 +237,7 @@ public partial class MapUnit {
 		army.experienceLevelKey = gameData.defaultExperienceLevelKey;
 		army.experienceLevel = gameData.defaultExperienceLevel;
 		army.hitPointsRemaining = army.maxHitPoints;
-		army.movementPoints.reset(armyType.movement);
+		army.movementPoints.reset(army.MaxMovementPoints);
 
 		location.unitsOnTile.Add(army);
 		gameData.mapUnits.Add(army);

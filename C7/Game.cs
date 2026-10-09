@@ -1267,7 +1267,7 @@ public partial class Game : Node {
 			} else if (unit != null && unit.location != tile) {
 				result.path = PathingAlgorithmChooser.GetAlgorithm(unit).PathFrom(unit.location, tile, unit);
 				result.moveCost =
-					result.path.PathCost(unit.owner, unit.location, unit.unitType.movement, unit.movementPoints.remaining);
+					result.path.PathCost(unit.owner, unit.location, unit.MaxMovementPoints, unit.movementPoints.remaining);
 				result.pathCoords = result.path.GetPathCoords();
 
 				// If we couldn't path onto the tile, but the tile is next to us and
@@ -1282,7 +1282,7 @@ public partial class Game : Node {
 					pathQueue.Enqueue(tile);
 
 					result.path = new TilePath(tile, pathQueue);
-					result.moveCost = result.path.PathCost(unit.owner, unit.location, unit.unitType.movement,
+					result.moveCost = result.path.PathCost(unit.owner, unit.location, unit.MaxMovementPoints,
 						unit.movementPoints.remaining);
 					result.pathCoords = result.path.GetPathCoords();
 

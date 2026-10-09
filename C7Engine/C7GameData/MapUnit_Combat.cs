@@ -60,13 +60,16 @@ namespace C7GameData {
 			return !hasUsedAttack || unitType.isBlitz;
 		}
 
-		// A unit type may retreat only when it moves faster than one tile per
-		// turn: the binary gates retreat on the type's maximum move points
-		// exceeding RULE.MovementAlongRoads (3, measured from the shipped
-		// conquests.biq), and move points are counted in thirds of a whole
-		// move, so for whole-move rates the gate reads "movement rate greater
-		// than one" — slow units never retreat (12_combat.md §6.1).
-		public bool CanRetreat() => unitType.movement > 1;
+		// A unit may retreat only when it moves faster than one tile per turn: the
+		// binary gates retreat on Unit_get_max_move_points exceeding
+		// RULE.MovementAlongRoads (3, measured from the shipped conquests.biq),
+		// and move points are counted in thirds of a whole move, so for
+		// whole-move rates the gate reads "maximum movement greater than one point"
+		// — slow units never retreat (12_combat.md §6.1). Asking the unit rather
+		// than its prototype is what lets a loaded army retreat: the Army type's
+		// own movement field is 1, but its members' maximum plus the army bonus is
+		// always greater than one point (11_movement.md §2.2).
+		public bool CanRetreat() => MaxMovementPoints > 1;
 
 		// The chance this unit escapes a fight it is losing, as a probability
 		// in [0, 1]. The per-round roll in Fight uses the equivalent integer

@@ -208,7 +208,7 @@ public partial class LowerRightInfoBox : Civ3TextureRect {
 		if (unit.unitType.bombard > 0) {
 			bombardText = $"({unit.unitType.bombard})";
 		}
-		attackDefenseMovement.Text = $"{unit.unitType.attack}{bombardText}.{unit.unitType.defense} {movementPointsRemaining}/{unit.unitType.movement}";
+		attackDefenseMovement.Text = $"{unit.unitType.attack}{bombardText}.{unit.unitType.defense} {movementPointsRemaining}/{unit.MaxMovementPoints}";
 
 		suggestion.Visible = false;
 

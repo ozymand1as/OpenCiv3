@@ -36,7 +36,9 @@ namespace C7Engine.Pathing {
 				}
 
 				float tileMovementCost = TilePath.GetMovementCost(unit.owner, node, direction, neighbor, unit);
-				float unitMovementPoints = unit.unitType.movement;
+				// An army's per-turn budget is its fastest member's plus one point,
+				// not its own prototype's rate (11_movement.md §2.2).
+				float unitMovementPoints = unit.MaxMovementPoints;
 
 				// If this tile would consume all of the movement points of this
 				// unit, it has a cost of 1 turn. Otherwise we use the fraction
