@@ -178,6 +178,13 @@ public class MapBase {
 	protected TerrainImprovement road = new("road", TerrainImprovement.Layer.Roads, movementCost: 1);
 	protected TerrainImprovement railroad = new("railroad", TerrainImprovement.Layer.Roads, movementCost: 0);
 
+	// The shipped conquests.biq's TERR.RoadsBonus, the terrain record field at
+	// +0x54: 1 on the ten land terrains and 0 on volcano, coast, sea and ocean.
+	// Founding a city sets the tile's road flag only when this value is non-zero
+	// (Tile.BuildCityCallback), so the hand-built terrains below have to carry
+	// the shipped values the way ruleset.json and the BIQ import do.
+	protected const int ShippedRoadBonus = 1;
+
 	protected Tile MakeMountainTile() {
 		return MakeWheeledImpassableTile("mountains");
 	}
@@ -194,12 +201,15 @@ public class MapBase {
 			"volcano" => 3,
 			_ => throw new System.ArgumentException($"not a terrain that is impassable to wheeled units: {key}"),
 		};
+		// Volcano is the one of the four with no road bonus in the shipped BIQ.
+		int roadsBonus = key == "volcano" ? 0 : ShippedRoadBonus;
 
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = key },
 			overlayTerrainType = new() {
 				Key = key,
 				movementCost = movementCost,
+				roadsBonus = roadsBonus,
 				impassableTo = new() { [SaveUnitPrototype.Flag.Wheeled] = ["road", "railroad"] }
 			}
 		};
@@ -207,31 +217,42 @@ public class MapBase {
 	protected Tile MakeHillTile() {
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = "hills" },
-			overlayTerrainType = new() { Key = "hills", movementCost = 2 }
+			overlayTerrainType = new() { Key = "hills", movementCost = 2, roadsBonus = ShippedRoadBonus }
 		};
 	}
 	protected Tile MakePlainsTile() {
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = "plains" },
-			overlayTerrainType = new() { Key = "plains", movementCost = 1 }
+			overlayTerrainType = new() { Key = "plains", movementCost = 1, roadsBonus = ShippedRoadBonus }
+		};
+	}
+
+	// A plains tile whose terrain has no road bonus, which the shipped rules
+	// cannot produce: every terrain the shipped rules allow a city on carries a
+	// road bonus of 1. A rules set that zeroes one is the only way to reach the
+	// "a founded city gets no road" case (Tile.BuildCityCallback).
+	protected Tile MakeNoRoadBonusTile() {
+		return new(ID.None("")) {
+			baseTerrainType = new() { Key = "plains" },
+			overlayTerrainType = new() { Key = "plains", movementCost = 1, roadsBonus = 0 }
 		};
 	}
 	protected Tile MakeDesertTile() {
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = "desert" },
-			overlayTerrainType = new() { Key = "desert", movementCost = 1 }
+			overlayTerrainType = new() { Key = "desert", movementCost = 1, roadsBonus = ShippedRoadBonus }
 		};
 	}
 	protected Tile MakeImpassableDesertTile() {
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = "desert" },
-			overlayTerrainType = new() { Key = "desert", movementCost = 1, impassable = true }
+			overlayTerrainType = new() { Key = "desert", movementCost = 1, impassable = true, roadsBonus = ShippedRoadBonus }
 		};
 	}
 	protected Tile MakeFloodPlainTile() {
 		return new(ID.None("")) {
 			baseTerrainType = new() { Key = "flood plain" },
-			overlayTerrainType = new() { Key = "flood plain", movementCost = 1 }
+			overlayTerrainType = new() { Key = "flood plain", movementCost = 1, roadsBonus = ShippedRoadBonus }
 		};
 	}
 	protected Tile MakeCoastTile() {
