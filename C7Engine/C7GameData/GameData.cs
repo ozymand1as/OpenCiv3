@@ -120,7 +120,7 @@ namespace C7GameData {
 		// field either: the Maps outcome reveals only the hut's neighbourhood
 		// (section 4.5), while the loader flag means "every tile is revealed".
 		//
-		// The decompiled image contains no reader of the Civ3 byte: its consumer
+		// The original contains no reader of the Civ3 byte: its consumer
 		// is the map/minimap redraw, so the engine keeps the flag as the record of
 		// the reveal without deriving anything from it.
 		public bool mapHasBeenRevealed = false;

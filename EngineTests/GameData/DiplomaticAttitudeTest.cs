@@ -111,7 +111,7 @@ public class DiplomaticAttitudeTest {
 
 	// Each entry of the reputation record has its own weight and cap. The
 	// expected total below is the sum of section 3.1's table applied to the raw
-	// counters, including index 0's *uncapped* weight (the disassembly at
+	// counters, including index 0's *uncapped* weight (the routine at
 	// 0x440135 scales it by four without the clamp the next field has).
 	[Fact]
 	public void ReputationContributionUsesTheSpecifiedWeightAndCapPerField() {
