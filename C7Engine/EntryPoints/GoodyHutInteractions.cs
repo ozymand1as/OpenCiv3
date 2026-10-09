@@ -377,22 +377,38 @@ namespace C7Engine {
 		}
 
 		/// <summary>
-		/// The mercenary picker accepts a type that is available to the
-		/// player's civilization, matches the hut tile's land/water domain,
-		/// needs no technology or only one of the player's current era, and
-		/// is buildable-or-owned by every living player. Civ3 steps through the
-		/// catalogue with a modulus-3 twist rather than one type at a time; that
-		/// particular stride is not modelled, but the random starting point is.
+		/// The mercenary picker accepts a type that is not wheeled, is available
+		/// to the player's civilization, matches the hut tile's land/water
+		/// domain, needs no technology or only one of the player's current era,
+		/// and is buildable-or-owned by every living player. Civ3 steps through
+		/// the catalogue with a modulus-3 twist rather than one type at a time;
+		/// that particular stride is not modelled, but the random starting point
+		/// is.
+		///
+		/// Two further tests the binary makes are not modelled. It also requires
+		/// the type to be available to the barbarian civilization (bit 0 of the
+		/// same per-race mask), a test spec section 4.5's list of preconditions
+		/// omits, so it is recorded here rather than added to a picker tier 2
+		/// already verified. And the "buildable-or-owned by every living player"
+		/// sweep includes the popping player in the binary, where "buildable"
+		/// means the engine's full build-eligibility test (Leader_can_build_unit:
+		/// the required technology known, resources, government, no hidden
+		/// nationality) rather than the per-race mask used here for every player.
 		/// </summary>
 		private static bool IsMercenaryCandidate(GameData gameData, Player player, Tile tile, UnitPrototype proto) {
+			// The picker's first screen: a wheeled type is never handed over,
+			// whatever else qualifies it (spec section 4.5). The flag is the
+			// imported PRTO Wheeled bit, not a hardcoded unit name.
+			if (proto.wheeled) {
+				return false;
+			}
+
 			// A type nobody can ever build is not a mercenary. Civ3 checks the
 			// "unproducible" flag as part of its buildable-by-everyone test.
 			if (proto.unproducible) {
 				return false;
 			}
 
-			// Civ3 first rejects wheeled unit types. OpenCiv3 does not import
-			// the wheeled flag, so that condition is missing.
 			if (!proto.producibleBy.Contains(player.civilization)) {
 				return false;
 			}

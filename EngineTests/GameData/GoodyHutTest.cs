@@ -580,6 +580,112 @@ public class GoodyHutTest {
 		Assert.Equal("Warrior", Assert.Single(player.units).unitType.name);
 	}
 
+	/// <summary>
+	/// Civ3's first screen rejects a wheeled unit type (spec section 4.5), so a
+	/// type that passes every other precondition is still passed over. The two
+	/// catalogue entries are otherwise identical, so only the imported Wheeled
+	/// flag separates them.
+	/// </summary>
+	[Fact]
+	public void MercenariesSkipWheeledTypes() {
+		C7GameData.GameData gd = SetupHut(out Player player, out Tile tile);
+		UnitPrototype wheeled = MercenaryCandidate("Chariot", player.civilization);
+		wheeled.wheeled = true;
+		gd.unitPrototypes.Add(wheeled);
+		gd.unitPrototypes.Add(MercenaryCandidate("Warrior", player.civilization));
+
+		// Seed 1 starts the walk on the wheeled entry.
+		C7GameData.GameData.rng = new Random(1);
+
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Warrior", Assert.Single(player.units).unitType.name);
+	}
+
+	/// <summary>
+	/// The land/water domain must match the hut's tile (spec section 4.5), so a
+	/// boat is not handed out on land and a foot unit is not handed out at sea.
+	/// </summary>
+	[Fact]
+	public void MercenariesMatchTheHutTilesDomain() {
+		C7GameData.GameData gd = SetupHut(out Player player, out Tile tile);
+		UnitPrototype boat = MercenaryCandidate("Galley", player.civilization);
+		boat.categories.Remove("Land");
+		boat.categories.Add("Sea");
+		gd.unitPrototypes.Add(boat);
+		gd.unitPrototypes.Add(MercenaryCandidate("Warrior", player.civilization));
+
+		C7GameData.GameData.rng = new Random(1);
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Warrior", Assert.Single(player.units).unitType.name);
+
+		// The same catalogue on a water hut hands over the boat, not the foot
+		// unit, so the domain test is what excluded it above.
+		player.units.Clear();
+		tile.baseTerrainType = Coast();
+		tile.overlayTerrainType = Coast();
+		C7GameData.GameData.rng = new Random(1);
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Galley", Assert.Single(player.units).unitType.name);
+	}
+
+	/// <summary>
+	/// A mercenary may need a technology, but only one of the player's own era
+	/// (spec section 4.5); a later-era type is passed over even though the walk
+	/// reaches it first.
+	/// </summary>
+	[Fact]
+	public void MercenariesSkipTypesWhoseTechnologyIsFromAnotherEra() {
+		C7GameData.GameData gd = SetupHut(out Player player, out Tile tile);
+		player.eraCivilopediaName = EraUtils.ANCIENT_TIMES_CVLPD;
+
+		Tech laterEra = new() { id = gd.ids.CreateID("tech"), Name = "Feudalism", EraCivilopediaName = EraUtils.MIDDLE_AGES_CVLPD };
+		gd.techs.Add(laterEra);
+
+		UnitPrototype tooLate = MercenaryCandidate("Knight", player.civilization);
+		tooLate.requiredTech = laterEra;
+		gd.unitPrototypes.Add(tooLate);
+		gd.unitPrototypes.Add(MercenaryCandidate("Warrior", player.civilization));
+
+		C7GameData.GameData.rng = new Random(1);
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Warrior", Assert.Single(player.units).unitType.name);
+	}
+
+	/// <summary>
+	/// A type another living player can neither build nor has ever fielded is not
+	/// offered (spec section 4.5), so one civilization's unique unit does not
+	/// become a rival's mercenary.
+	/// </summary>
+	[Fact]
+	public void MercenariesSkipTypesAnotherLivingPlayerCannotField() {
+		C7GameData.GameData gd = SetupHut(out Player player, out Tile tile);
+		Player rival = new() {
+			civilization = new Civilization("Rival"),
+			government = new Government(),
+		};
+		rival.rules = gd.rules;
+		gd.players.Add(rival);
+
+		gd.unitPrototypes.Add(MercenaryCandidate("Legionary", player.civilization));
+		UnitPrototype shared = MercenaryCandidate("Warrior", player.civilization);
+		shared.producibleBy.Add(rival.civilization);
+		gd.unitPrototypes.Add(shared);
+
+		// Seed 1 starts the walk on the unique unit.
+		C7GameData.GameData.rng = new Random(1);
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Warrior", Assert.Single(player.units).unitType.name);
+
+		// Owning one satisfies the same precondition, so the unique unit is
+		// handed over once the rival has captured or inherited one.
+		MapUnit rivalUnit = PlaceUnit(rival, gd.map.tileAt(6, 6));
+		rivalUnit.unitType = gd.unitPrototypes[0];
+		player.units.Clear();
+		C7GameData.GameData.rng = new Random(1);
+		Assert.Equal(GoodyHutOutcome.Mercenaries, GoodyHutInteractions.Apply(gd, player, tile, GoodyHutOutcome.Mercenaries));
+		Assert.Equal("Legionary", Assert.Single(player.units).unitType.name);
+	}
+
 	[Fact]
 	public void BarbariansNeverSpawnMoreThanThreeUnits() {
 		int most = 0;
