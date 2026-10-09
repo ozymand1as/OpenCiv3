@@ -311,11 +311,39 @@ namespace C7GameData {
 			}
 		}
 
+		/// <summary>
+		/// Eliminates a player outright: the instant-elimination and regicide
+		/// endings (spec 25 section 4, which the original decides in the
+		/// city-loss path). The player's remaining cities are destroyed, its
+		/// units are removed and its relationships are cleared - the same
+		/// teardown the ordinary "no cities and no settlers" destruction
+		/// performs, but without waiting for the player to run out of
+		/// cities.
+		/// </summary>
+		public void EliminatePlayer(Player loser) {
+			if (loser == null || loser.defeated) {
+				return;
+			}
+			// Mark defeated first so the per-city loss checks inside the
+			// destruction loop cannot re-enter elimination.
+			loser.defeated = true;
+			foreach (City city in loser.cities.ToList()) {
+				CityInteractions.DestroyCity(city.location);
+			}
+			CivDestructionCallback(loser);
+			new MsgCivilizationDestroyed(loser.civilization).send();
+		}
+
 		private bool CheckForCivDestruction(Player player) {
 			// TODO: Implement the full set of conditions for destroying a civ;
 			// handling cases like 1 city elimination, regicide, settlers that
 			// are still alive, etc.
 			if (player.isBarbarians) {
+				return false;
+			}
+			// Already eliminated (e.g. by instant elimination), so the units
+			// and relationships are gone and the notification has been sent.
+			if (player.defeated) {
 				return false;
 			}
 			if (player.RemainingCities() > 0) {

@@ -63,7 +63,9 @@ public partial class MapUnit {
 					new MsgShowMilitaryAdvisorPopup($"Barbarians have stolen {goldTaken} gold from our cities!\nWe need a stronger military.", happy: false).send();
 				}
 			} else {
-				CityInteractions.DestroyCity(tile);
+				// Destination resolution of an enemy city: capture it
+				// (spec 11 section 5, step 11), rather than destroying it.
+				CityInteractions.CaptureCity(tile.cityAtTile, owner);
 			}
 		}
 

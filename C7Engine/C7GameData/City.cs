@@ -374,6 +374,10 @@ namespace C7GameData {
 			if (foodStored < 0) {
 				RemoveLastCitizen();
 				foodStored = 0;
+				// A city whose size reaches 0 is razed (spec 13 section 5).
+				if (residents.Count == 0) {
+					RazeIfEmpty();
+				}
 				return;
 			}
 
@@ -546,6 +550,12 @@ namespace C7GameData {
 		public CommerceBreakdown CurrentCommerceYieldRaw(bool respectCivilDisorder = true) {
 			int uncorruptedCommerce = location.CommerceYield(this).yield;
 			foreach (CityResident r in residents) {
+				// Resisting citizens are excluded from the city's commerce
+				// (spec 17 section 7: City_recompute_commerce only counts
+				// citizens without the resistance flag).
+				if (r.isResisting) {
+					continue;
+				}
 				uncorruptedCommerce += r.tileWorked.CommerceYield(this).yield;
 			}
 
@@ -579,6 +589,12 @@ namespace C7GameData {
 			result.taxes = commerce.useful - sliderBeakers - result.happiness;
 
 			foreach (CityResident cr in residents) {
+				// Resisting citizens contribute no specialist output either
+				// (spec 14 section 4.3: only citizens whose flag is 0 are
+				// counted).
+				if (cr.isResisting) {
+					continue;
+				}
 				result.beakers += cr.citizenType.Research;
 				result.happiness += cr.citizenType.Luxuries;
 				result.taxes += cr.citizenType.Taxes;
@@ -700,6 +716,23 @@ namespace C7GameData {
 					Log.Warning("Trying to remove last citizen from " + name);
 					break;
 				}
+			}
+			// Population loss through this path (a pop-rush sacrifice or a
+			// completed settler/worker) razes the city when it empties it
+			// (spec 13 section 5); the starvation step checks for itself.
+			// The reassignment paths that empty a city on purpose go through
+			// RemoveAllCitizens, which does not take this check.
+			if (residents.Count == 0) {
+				RazeIfEmpty();
+			}
+		}
+
+		// Destroys the city by the size-zero rule (spec 13 section 5), but
+		// only while the city is still registered on its tile: the
+		// reassignment flows empty a city temporarily and refill it.
+		private void RazeIfEmpty() {
+			if (location != null && location.cityAtTile == this) {
+				CityInteractions.DestroyCity(this);
 			}
 		}
 

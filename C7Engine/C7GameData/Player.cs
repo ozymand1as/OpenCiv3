@@ -218,6 +218,12 @@ namespace C7GameData {
 		// have the victory-point group turned on.
 		public int victoryPoints = 0;
 
+		// How many cities this player has lost to capture or destruction. The
+		// CityElimination rule compares it against CityEliminationCount in the
+		// city-loss path (spec 25 section 4). Persisted so the count survives
+		// a save round trip.
+		public int citiesLost = 0;
+
 		public int EraIndex() {
 			return GetEraIndex(eraCivilopediaName);
 		}
@@ -951,6 +957,11 @@ namespace C7GameData {
 
 		public void HandleCityUpdates(GameData gameData) {
 			foreach (City c in cities) {
+				// The garrison quels resistance before the city's growth and
+				// production resolve (spec 17 section 7: the quelling pass runs
+				// inside the per-city turn body before the yields are computed).
+				c.QuellResistance(gameData);
+
 				// Ensure borders expand before we assign the new citizen, so that
 				// the new citizen can go on one of our new tiles.
 				if (c.UpdateCultureAndCheckForExpansion()) {
@@ -1428,6 +1439,32 @@ namespace C7GameData {
 			}
 
 			AddVictoryPoints(VictoryPoints.ForGreatWonder(wonder, gameData.victoryConditions));
+		}
+
+		/// Awards the victory points for capturing a city (spec 25 section 4:
+		/// `city_population x CityConquestPopulation`). The population is the
+		/// city's at the moment of capture, and barbarian slot-0 captures
+		/// award nothing, matching the unit-kill award.
+		public void AwardVictoryPointsForCityCapture(GameData gameData, City city) {
+			if (gameData is null || !gameData.VictoryPointsEnabled || city is null || isBarbarians) {
+				return;
+			}
+
+			AddVictoryPoints(VictoryPoints.ForCityCapture(city.residents.Count, gameData.victoryConditions));
+		}
+
+		/// The civ-wide accumulated culture this player controls: the sum over
+		/// its cities of the culture the city holds for it. Civ3 keeps one
+		/// such total per leader (spec 17 section 8); the per-city
+		/// per-player design of OpenCiv3's culture array means the sum is the
+		/// same quantity, and a captured city keeps the entries of every
+		/// player that ever held it.
+		public int TotalAccumulatedCulture() {
+			int total = 0;
+			foreach (City city in cities) {
+				total += city.GetCultureFor(this);
+			}
+			return total;
 		}
 
 		private void AddVictoryPoints(int amount) {
