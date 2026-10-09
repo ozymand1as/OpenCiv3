@@ -225,7 +225,14 @@ public partial class MapUnit {
 		// Trigger combat if the tile we're moving into has an enemy  Or if this unit can't fight, do nothing.
 		MapUnit defender = newLoc.FindTopDefender(this);
 		if (defender != MapUnit.NONE && !owner.IsAtPeaceWith(defender.owner)) {
-			if (unitType.attack <= 0) {
+			// A unit with no attack strength cannot fight. The test asks the
+			// *unit* for its strength, not its type: an army's own attack field
+			// is 0 and its strength is the aggregation of its members'
+			// (12_combat.md §3.1, 23_leaders_armies_golden_age.md §6.6), so
+			// reading the prototype would refuse every army the attack the Blitz
+			// rule below exists to allow.
+			if (AttackStrength() <= 0) {
+				AbandonRefusedAttack();
 				return true;
 			}
 
@@ -235,6 +242,7 @@ public partial class MapUnit {
 			// turn is refused another attack unless its type has the Blitz
 			// ability (23_leaders_armies_golden_age.md §6.8).
 			if (!CanAttack()) {
+				AbandonRefusedAttack();
 				return true;
 			}
 
@@ -246,6 +254,7 @@ public partial class MapUnit {
 				return false;
 			}
 			if (combatResult == CombatResult.Impossible) {
+				AbandonRefusedAttack();
 				return true;
 			}
 
@@ -305,15 +314,32 @@ public partial class MapUnit {
 		return true;
 	}
 
+	// An ordered attack that cannot happen leaves the unit with its movement
+	// points and its path, so every caller that drives movement in a loop — the
+	// AI's UnitAI.PlayTurn and the goto path's MoveAlongPath — would re-issue
+	// the same refused attack for as long as the unit has movement left. Clear
+	// the path and spend the movement so the ordered move ends here for this
+	// turn; the unit itself is untouched and stays alive. Only the refusal
+	// paths call this, never a fight that happened.
+	private void AbandonRefusedAttack() {
+		this.path = TilePath.NONE;
+		movementPoints.onConsumeAll();
+	}
+
 	public async Task<CombatResult> Fight(MapUnit defender) {
 		var attacker = this;
 
-		// The first step of the round loop: starting a fight marks the attacker
-		// as having used its attack this turn (Civ3's USF_USED_ATTACK status
-		// bit). The attack-availability test in Move reads it to refuse a second
-		// attack unless the type can blitz (12_combat.md §6.2,
-		// 23_leaders_armies_golden_age.md §6.8).
-		hasUsedAttack = true;
+		// The used-attack status bit (Civ3's USF_USED_ATTACK) is raised below,
+		// once this attack's odds are fixed, and not at entry. The bit means
+		// "has already attacked this turn" (12_combat.md §2.1), so raising it
+		// first would deny the +25% amphibious assault bonus to the first attack
+		// of the turn — the only attack a non-Blitz type ever gets
+		// (12_combat.md §2.1.2). The odds computed here are the pre-fight
+		// estimate that the round loop reuses until the army member in front
+		// changes (§6.2 step 2.2), so they are the right odds to compute with the
+		// bit still clear. Raising the bit once they are fixed keeps the gate on
+		// the next attack in Move, and a Blitz type escapes the bit there and
+		// keeps the bonus (23_leaders_armies_golden_age.md §6.8).
 
 		// Set combat animation facing. We'll restore the defender's original facing direction at the end of the battle.
 		TileDirection attackerAttackDirection = attacker.location.DirectionTo(defender.location);
@@ -345,6 +371,12 @@ public partial class MapUnit {
 		// rand_int(1024) and a roll below the odds means the defender wins the
 		// round (12_combat.md §2, §6.2).
 		int defenderOdds = DefenderCombatOdds(attacker, defender, attackerAttackDirection);
+
+		// This attack's odds are fixed: the attacker has now used its attack this
+		// turn. Everything from here on — the defensive bombard and the rounds
+		// themselves — runs with the bit set, as in the binary (12_combat.md §6.2
+		// step 1).
+		hasUsedAttack = true;
 
 		// Defensive bombard
 		MapUnit defensiveBombarder = MapUnit.NONE;

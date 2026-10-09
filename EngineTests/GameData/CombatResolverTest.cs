@@ -310,9 +310,8 @@ public class CombatResolverTest : IClassFixture<SaveGameFixture> {
 
 	// The bonus reads the attacker's used-attack status bit: a unit that has
 	// already attacked this turn loses it unless its type can Blitz
-	// (12_combat.md §2.1.2). A fight sets that bit at entry (§6.2 step 1), so
-	// the clear-bit branch is the pre-fight estimate the AI and the UI compute
-	// and the in-fight bonus reaches a real fight only for a Blitz type.
+	// (12_combat.md §2.1.2). This is the helper-level view; the two tests below
+	// drive a real Fight and show that the bit is raised only after the odds.
 	[Fact]
 	public void TheAmphibiousBonusReadsTheUsedAttackBitUnlessTheTypeCanBlitz() {
 		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), MakeFlatTile());
@@ -331,6 +330,63 @@ public class CombatResolverTest : IClassFixture<SaveGameFixture> {
 		blitz.hasUsedAttack = true;
 		Assert.True(blitz.GetsAmphibiousAssaultBonus(defender));
 		Assert.Equal(500, MapUnit.EffectiveCombatStrengths(blitz, defender, null).attackerEffective);
+	}
+
+	// The same, but water, so an attacker standing on it is attacking from the
+	// sea (12_combat.md §2.1.2).
+	private Tile CleanWaterMapTile(int x, int y) {
+		Tile tile = CleanMapTile(x, y);
+		tile.overlayTerrainType = new TerrainType { Key = "sea" };
+		tile.baseTerrainType = tile.overlayTerrainType;
+		return tile;
+	}
+
+	// The +25% belongs to the FIRST attack's odds. A fight marks the attacker as
+	// having used its attack (12_combat.md §6.2 step 1), so if that mark were
+	// raised before the odds were computed the bonus could never reach a real
+	// attack at all: a non-Blitz type gets exactly one attack per turn and would
+	// find its own used-attack bit already set while computing it.
+	//
+	// The boundary is sharp. Attack 4 with the bonus is 500 against defence 400,
+	// so the defender's odds are 455 and a round roll of 500 goes to the
+	// attacker; without the bonus the odds are 512 and the same roll kills the
+	// attacker. Both units start at one hit point, so that one roll decides.
+	[Fact]
+	public void TheAmphibiousAssaultBonusBelongsToTheFirstRealAttack() {
+		Tile attackerTile = CleanWaterMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		MapUnit attacker = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), attackerTile);
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), defenderTile);
+		attacker.hitPointsRemaining = 1;
+		defender.hitPointsRemaining = 1;
+
+		Assert.False(attacker.hasUsedAttack);
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.fallback = 500;
+
+		Assert.Equal(CombatResult.DefenderKilled, attacker.Fight(defender).Result);
+		Assert.True(attacker.hasUsedAttack);
+	}
+
+	// The bit is still the gate it was: an attack made while it is already set
+	// gets no bonus unless the type can Blitz (12_combat.md §2.1.2). Production
+	// refuses that second attack in Move; Fight is called directly here to
+	// exercise the odds it would have used.
+	[Fact]
+	public void AnAmphibiousUnitThatAlreadyAttackedLosesTheBonusInTheOdds() {
+		Tile attackerTile = CleanWaterMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		MapUnit attacker = MakeUnit(MakePlayer(), MakeAmphibiousPrototype(4, 0), attackerTile);
+		MapUnit defender = MakeUnit(MakePlayer(), MakePrototype(0, 4), defenderTile);
+		attacker.hitPointsRemaining = 1;
+		defender.hitPointsRemaining = 1;
+		attacker.hasUsedAttack = true;
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.fallback = 500;
+
+		// Odds 512 without the bonus, so the roll of 500 loses the round.
+		Assert.Equal(CombatResult.AttackerKilled, attacker.Fight(defender).Result);
 	}
 
 	// ---------- the anti-barbarian bonus ----------

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using C7Engine;
+using C7Engine.Lua;
 using C7GameData;
 using C7GameData.Save;
 using EngineTests.Utils;
@@ -639,6 +641,59 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(9.0, unit.BaseStrength(CombatRole.Defense));
 	}
 
+	// The shipped Army's own attack and defence fields are both 0 — its strength
+	// is the aggregation of its members' (12_combat.md §3.1,
+	// 23_leaders_armies_golden_age.md §6.6). Both gates the attack order passes
+	// must therefore ask the unit, not its prototype, or an army can never start
+	// a fight and §6.8's "an army may attack repeatedly in one turn" is
+	// unreachable. The order goes through MapUnit.Move, the branch the human's
+	// MsgMoveUnit handler and the AI's CombatAI both use.
+	[Fact]
+	public void AnArmyWithMembersAttacksThroughTheNormalMovePath() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit army = MakeUnit(player, armyType, attackerTile, experience: "Regular");
+		for (int i = 0; i < 2; ++i) {
+			MapUnit member = MakeUnit(player, MakeLandPrototype(4, 0), attackerTile, experience: "Regular");
+			Assert.True(member.LoadIntoArmy(army));
+		}
+
+		// Two members: (2/2 + 4 + 4) / 2 = 4, from a prototype that reads 0.
+		Assert.Equal(0, army.unitType.attack);
+		Assert.Equal(0, army.unitType.defense);
+		Assert.Equal(4, army.AttackStrength());
+		Assert.True(army.unitType.isBlitz);
+
+		MapUnit defender = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1; // the attacker wins every round
+
+		Assert.True(army.Move(TileDirection.EAST).Result);
+		Assert.True(army.hasUsedAttack);
+		Assert.DoesNotContain(defender, gd.mapUnits);
+		Assert.Same(defenderTile, army.location);
+	}
+
+	// An army's combat capability is its members', so the combat-unit predicate
+	// the move order consults must see a loaded army as armed. Without this an
+	// army is refused even earlier than the attack gate: its tile intent is
+	// "notice the unit", not "fight".
+	[Fact]
+	public void AnArmyWithMembersIsACombatUnit() {
+		var (player, army) = SetupArmy();
+		Assert.False(army.IsCombatUnit());
+
+		MapUnit member = MakeUnit(player, MakeLandPrototype(4, 0), army.location, experience: "Regular");
+		Assert.True(member.LoadIntoArmy(army));
+		Assert.True(army.IsCombatUnit());
+
+		// The members' strength, not the prototype's, is what makes it one.
+		Assert.Equal(0, army.unitType.attack);
+		Assert.Equal(0, army.unitType.defense);
+		Assert.Equal(4, army.AttackStrength());
+	}
+
 	// ---------- the golden age ----------
 
 	private (Player player, MapUnit winner, MapUnit defeated) SetupGoldenAgeVictory() {
@@ -877,6 +932,45 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 			gd.unitPrototypes.Where(p => p.isBlitz).Select(p => p.name).OrderBy(n => n).ToArray());
 	}
 
+	// The names carrying a flag in one of the ruleset file's collections.
+	private static List<string> NamesWithFlag(JsonElement collection, string flag) {
+		List<string> result = new();
+		foreach (JsonElement entry in collection.EnumerateArray()) {
+			if (!entry.TryGetProperty("flags", out JsonElement flags)) {
+				continue;
+			}
+			if (flags.EnumerateArray().Any(f => f.GetString() == flag)) {
+				result.Add(entry.GetProperty("name").GetString());
+			}
+		}
+		result.Sort();
+		return result;
+	}
+
+	// C7/Lua/civ3/ruleset.json is a second carrier for the ability flags: a game
+	// generated from the ruleset never reads the BIQ importer, so a flag that
+	// exists only there is dead in play. This test reads the ruleset file itself
+	// and holds it to the same carrier sets measured from the shipped
+	// conquests.biq, so dropping a flag fails here rather than silently in a
+	// generated game.
+	[Fact]
+	public void TheRulesetGivesBlitzAndAmphibiousToTheShippedBiqCarriers() {
+		using JsonDocument ruleset = JsonUtils.LoadBaseRuleset();
+		JsonElement prototypes = ruleset.RootElement.GetProperty("unitPrototypes");
+
+		Assert.Equal(new List<string> { "Army", "Cossack", "Modern Armor", "Panzer", "Tank" },
+			NamesWithFlag(prototypes, "blitz"));
+		Assert.Equal(new List<string> { "Berserk", "Marine" },
+			NamesWithFlag(prototypes, "amphibious"));
+
+		// The loaded ruleset agrees with the file it was read from, which is the
+		// same set the flags above name.
+		Assert.Equal(new[] { "Army", "Cossack", "Modern Armor", "Panzer", "Tank" },
+			gd.unitPrototypes.Where(p => p.isBlitz).Select(p => p.name).OrderBy(n => n).ToArray());
+		Assert.Equal(new[] { "Berserk", "Marine" },
+			gd.unitPrototypes.Where(p => p.isAmphibious).Select(p => p.name).OrderBy(n => n).ToArray());
+	}
+
 	[Fact]
 	public void TheAmphibiousCarriersAreTheMarineAndTheBerserk() {
 		// Measured from the shipped conquests.biq: PRTO 4 Marine and 68 Berserk
@@ -940,9 +1034,10 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 	}
 
 	// The Blitz and Amphibious flags are what the attack-availability gate and
-	// the amphibious assault bonus read, so the checked-in ruleset is held to
-	// the shipped BIQ itself. The importer de-dupes the BIQ's 141 PRTO entries
-	// by name, hence the name-set comparison.
+	// the amphibious assault bonus read, so both carriers — the shipped BIQ and
+	// the checked-in ruleset a generated game is built from — are held to each
+	// other. The importer de-dupes the BIQ's 141 PRTO entries by name, hence the
+	// name-set comparison.
 	[SkippableFact]
 	public void BlitzAndAmphibiousUnitFlagsMatchTheShippedBiq() {
 		Skip.If(Civ3TestData.ShouldSkipCiv3DependentTests(), "No Civ3 install found.");
@@ -954,6 +1049,16 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		Assert.Equal(
 			biq.Prto.Where(p => p.Amphibious).Select(p => p.Name).Distinct().OrderBy(n => n).ToArray(),
 			gd.unitPrototypes.Where(p => p.isAmphibious).Select(p => p.name).OrderBy(n => n).ToArray());
+
+		// And the ruleset file itself, not just the ruleset-loaded prototypes.
+		using JsonDocument ruleset = JsonUtils.LoadBaseRuleset();
+		JsonElement prototypes = ruleset.RootElement.GetProperty("unitPrototypes");
+		Assert.Equal(
+			biq.Prto.Where(p => p.Blitz).Select(p => p.Name).Distinct().OrderBy(n => n).ToArray(),
+			NamesWithFlag(prototypes, "blitz").ToArray());
+		Assert.Equal(
+			biq.Prto.Where(p => p.Amphibious).Select(p => p.Name).Distinct().OrderBy(n => n).ToArray(),
+			NamesWithFlag(prototypes, "amphibious").ToArray());
 	}
 
 	// The PRTO booleans the importer maps onto SaveUnitPrototype.Flag.
@@ -1262,6 +1367,47 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 
 		// The refused unit still has all its movement points.
 		Assert.True(plain.movementPoints.canMove);
+	}
+
+	// A refused attack must not leave the ordered move pending. Both movement
+	// drivers re-issue the move while the unit has movement points left — the
+	// AI's UnitAI.PlayTurn loop and the goto path's MoveAlongPath — so a refusal
+	// that spends nothing and keeps the path would spin on the same tile for as
+	// long as the unit can move. The loop here is a bounded copy of the AI's, so
+	// a regression fails the assertions instead of hanging the suite.
+	[Fact]
+	public void ARefusedAttackEndsTheOrderedMoveInsteadOfSpinning() {
+		Tile attackerTile = CleanMapTile(50, 50);
+		Tile defenderTile = CleanMapTile(52, 50);
+		Player player = MakePlayer();
+		MapUnit attacker = MakeUnit(player, MakeLandPrototype(100, 0, movement: 3), attackerTile);
+		MapUnit first = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+		MapUnit second = MakeUnit(MakePlayer(barbarian: true), MakeLandPrototype(0, 0), defenderTile);
+
+		ScriptedRandom rng = UseScriptedRandom();
+		rng.nextIntResult = MapUnit.CombatOddsScale - 1;
+
+		// The first attack kills the first defender and leaves the second one on
+		// the tile, so the unit still has movement points to spare.
+		Assert.True(attacker.Move(TileDirection.EAST).Result);
+		Assert.DoesNotContain(first, gd.mapUnits);
+		Assert.True(attacker.movementPoints.canMove);
+
+		// The ordered move is still aiming at that tile.
+		attacker.path = new TilePath(defenderTile, new Queue<Tile>([defenderTile]));
+
+		int attempts = 0;
+		while (attacker.movementPoints.canMove && attempts < 5) {
+			++attempts;
+			Assert.True(attacker.Move(TileDirection.EAST).Result);
+		}
+
+		// One refusal and the loop is done: no movement left and no path left.
+		Assert.Equal(1, attempts);
+		Assert.False(attacker.movementPoints.canMove);
+		Assert.Equal(TilePath.NONE, attacker.path);
+		Assert.Contains(second, gd.mapUnits);
+		Assert.Same(attackerTile, attacker.location);
 	}
 
 	// The state is per turn: the per-turn unit update clears it with the

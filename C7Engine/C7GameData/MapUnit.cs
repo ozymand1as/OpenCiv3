@@ -104,7 +104,13 @@ namespace C7GameData {
 		}
 
 		public bool IsCombatUnit() {
-			return this.unitType.attack > 0 || this.unitType.defense > 0;
+			// An army's own attack and defence fields are 0: its strength is the
+			// aggregation of its members' (12_combat.md §3.1,
+			// 23_leaders_armies_golden_age.md §6.6), so a loaded army is a combat
+			// unit even though its prototype looks unarmed. An empty army has no
+			// strength and is not one.
+			return this.unitType.attack > 0 || this.unitType.defense > 0
+				|| (IsArmy && (AttackStrength() > 0 || DefenseStrength() > 0));
 		}
 
 		public bool CanBeActive() {

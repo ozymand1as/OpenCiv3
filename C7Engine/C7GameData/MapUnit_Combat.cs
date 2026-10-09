@@ -43,10 +43,10 @@ namespace C7GameData {
 		// against `defender` (12_combat.md §2.1.2): an Amphibious land type with
 		// a positive attack strength, attacking from a water tile onto a
 		// non-water tile, and either not having used its attack this turn or
-		// being able to blitz. The binary reads the used-attack status bit here;
-		// because a fight sets that bit at entry (§6.2 step 1) the bonus reaches
-		// a real fight only for a Blitz type — the clear-bit branch is the
-		// pre-fight estimate the AI and the UI compute.
+		// being able to blitz. The binary reads the used-attack status bit here.
+		// Fight raises that bit only after the attack's odds are computed, so a
+		// real first attack still sees it clear; a Blitz type keeps the bonus on
+		// its later attacks through the escape.
 		public bool GetsAmphibiousAssaultBonus(MapUnit defender) {
 			if (!unitType.isAmphibious || !unitType.IsLandUnit() || AttackStrength() <= 0) {
 				return false;
