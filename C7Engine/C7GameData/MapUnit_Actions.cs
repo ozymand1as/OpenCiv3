@@ -284,6 +284,15 @@ public partial class MapUnit {
 		facingDirection = dir;
 		float movementCost = TilePath.GetMovementCost(this.owner, location, dir, newLoc, this);
 
+		// An amphibious assault is a land-classed unit stepping from water onto
+		// land. The original decides it from the two tiles' water flags, which it
+		// reads once at the top of the step and then uses again for the
+		// zone-of-control gate, so the decision cannot change during the step
+		// (0x5b9416-0x5b9434 read the flags, 0x5b94b4 and 0x5b94bf test them).
+		// `location` is still the source tile here; the position write below
+		// replaces it, which is why this is read before that block.
+		bool amphibiousAssault = IsAmphibiousAssaultStep(location, newLoc);
+
 		// Leave old tile
 		if (!location.unitsOnTile.Remove(this))
 			throw new System.Exception("Failed to remove unit from tile it's supposed to be on");
@@ -317,7 +326,37 @@ public partial class MapUnit {
 
 		movementPoints.onUnitMove(movementCost);
 
+		// Step 9: the amphibious assault override. The original stores the charge
+		// first (0x5b94b2-0x5b94ba) and then overwrites the spent field with the
+		// unit's maximum (0x5b94e9), so a unit that had already spent movement
+		// still ends with nothing left - it is a SET, not a second add, and the
+		// step-8 charge above is superseded. Civ3's Unit.Moves counts movement
+		// spent and Unit_get_max_move_points @ 0x5be470 is its maximum; C7 stores
+		// the remainder instead, so "spent equals the maximum" is "no remainder
+		// left". The rule is only reached on a step whose charge was paid: the
+		// refusals of step 6 (0x5b9467-0x5b9478) and the earlier ones return
+		// before the charge, so a refused step never lands here. Nothing about
+		// it survives the turn: OnBeginTurn resets the movement points to
+		// MaxMovementPoints and the spent field is gone (11_movement.md §5 step
+		// 9, §7).
+		if (amphibiousAssault)
+			movementPoints.onConsumeAll();
+
 		return true;
+	}
+
+	// The three conditions of the amphibious assault step-cost rule
+	// (11_movement.md §5 step 9): the source tile is water, the destination is
+	// not water, and the unit is land-classed. The original reads a single
+	// "is water" tile predicate twice and the unit type's class field
+	// (unit-type +0x9c) once (0x5b94b4-0x5b94e0); `IsLandUnit` is that class
+	// test as C7 carries it. Neither a city nor a colony on the destination has
+	// its own branch - the tile's water flag is the whole destination test, so a
+	// landfall onto a city or a colony counts as land and fires the rule. The
+	// class test is the mover's own type, which for an army is the Army type
+	// (land-classed), not the type of any member.
+	internal bool IsAmphibiousAssaultStep(Tile from, Tile to) {
+		return from.IsWater() && !to.IsWater() && IsLandUnit();
 	}
 
 	// An ordered attack that cannot happen leaves the unit with its movement

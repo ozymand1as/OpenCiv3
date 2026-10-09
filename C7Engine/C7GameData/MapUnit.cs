@@ -718,7 +718,8 @@ namespace C7GameData {
 		}
 
 		// TODO: Transport chaining
-		// TODO: Amphibious assault
+		// The amphibious assault movement-cost override is implemented in the step
+		// executor (MapUnit_Actions.Move, 11_movement.md §5 step 9).
 
 		private bool CanUnloadToTile(Tile tile) {
 			// An army's members are never disembarked; they are lost with it.

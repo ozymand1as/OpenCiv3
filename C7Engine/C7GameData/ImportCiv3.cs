@@ -1682,17 +1682,23 @@ namespace C7GameData {
 			return availableToCivs;
 		}
 
+		// The one field the domain/class rules read: PRTO.Type (+0x9C in the
+		// runtime unit-type record), mapping land/sea/air to the category the
+		// running engine tests with `categories.Contains(...)` - including the
+		// amphibious assault step rule's land test (11_movement.md §5 step 9) and
+		// the passability and embarkation rules. internal rather than private so
+		// EngineTests can pin the mapping against the shipped conquests.biq.
+		internal static IEnumerable<string> GetUnitCategories(PRTO prto) {
+			if (prto.Type == PRTO.TYPE_SEA) yield return "Sea";
+			else if (prto.Type == PRTO.TYPE_LAND) yield return "Land";
+			else if (prto.Type == PRTO.TYPE_AIR) yield return "Air";
+		}
+
 		private void ImportUnitPrototypes() {
 			PRTO[] Prto = biq.Prto ?? defaultBiq.Prto;
 			foreach (PRTO prto in Prto) {
 				SaveUnitPrototype prototype = new();
-				if (prto.Type == PRTO.TYPE_SEA) {
-					prototype.categories.Add("Sea");
-				} else if (prto.Type == PRTO.TYPE_LAND) {
-					prototype.categories.Add("Land");
-				} else if (prto.Type == PRTO.TYPE_AIR) {
-					prototype.categories.Add("Air");
-				}
+				prototype.categories.UnionWith(GetUnitCategories(prto));
 
 				prototype.name = prto.Name;
 
