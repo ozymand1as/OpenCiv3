@@ -81,6 +81,12 @@ namespace C7GameData {
 
 		public bool hasBarbarianCamp = false;
 
+		// The barbarian camp's tribe: a slot in the global tribe table
+		// (spec 22 section 2, the 16-bit field at tile +0x1a). -1 when the tile
+		// carries no camp. The camp's name in every hut and camp message is this
+		// slot's name, and a unit spawned by the camp carries the same id.
+		public int barbarianTribeId = BarbarianTribes.None;
+
 		// A goody hut ("tribal village"). A unit entering the tile consumes it
 		// and resolves one outcome from the goody-hut table.
 		public bool hasGoodyHut = false;

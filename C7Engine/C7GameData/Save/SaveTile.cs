@@ -37,6 +37,13 @@ namespace C7GameData.Save {
 			if (tile.hasBarbarianCamp) {
 				features.Add("barbarianCamp");
 			}
+			// Only written when the tile has a tribe, so a tile without a camp
+			// adds no field to the save at all (the same reason the features list
+			// carries the camp bit as a string). A camp with no tribe is a BIQ
+			// import whose tile carried no tribe id, and round-trips as absent.
+			if (BarbarianTribes.IsValidSlot(tile.barbarianTribeId)) {
+				barbarianTribeId = tile.barbarianTribeId;
+			}
 			if (tile.hasGoodyHut) {
 				features.Add("goodyHut");
 			}
@@ -58,6 +65,7 @@ namespace C7GameData.Save {
 				baseTerrainType = terrainTypes.Find(tt => tt.Key == baseTerrain),
 				overlayTerrainType = terrainTypes.Find(tt => tt.Key == overlayTerrain),
 				hasBarbarianCamp = features.Contains("barbarianCamp"),
+				barbarianTribeId = barbarianTribeId ?? BarbarianTribes.None,
 				hasGoodyHut = features.Contains("goodyHut"),
 				hasHadForestCleared = features.Contains("hasHadForestCleared"),
 				// TODO: load working tile
@@ -91,6 +99,11 @@ namespace C7GameData.Save {
 		public string baseTerrain;
 		public string overlayTerrain;
 		public string resource;
+
+		// The camp's tribe slot (spec 22 section 2), absent for every tile that
+		// carries no camp.
+		public int? barbarianTribeId;
+
 		public List<string> features = new List<string>();
 		public List<string> overlays = new List<string>();
 	}

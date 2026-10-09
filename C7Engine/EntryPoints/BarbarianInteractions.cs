@@ -28,12 +28,13 @@ public class BarbarianInteractions {
 			.Select(i => gameData.map.barbarianCamps[i])
 			.Take(barbariansToSpawn);
 
-		// Spawn a unit
+		// Spawn a unit, carrying the camp's tribe (spec 22 section 6.1 step 4:
+		// "spawns one unit ... at the camp, with the camp's tribe").
 		foreach (Tile camp in spawningCamps) {
 			UnitPrototype unitType = SelectBarbarianUnitType(gameData.barbarianInfo, camp);
 			Tile tile = SelectSpawnTile(barbPlayer, camp, unitType);
 			if (tile != null) {
-				gameData.SpawnUnit(barbPlayer, unitType, tile);
+				gameData.SpawnUnit(barbPlayer, unitType, tile, camp.barbarianTribeId);
 			}
 		}
 

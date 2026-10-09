@@ -160,8 +160,16 @@ namespace C7GameData {
 					baseTerrain = save.TerrainTypes[civ3Tile.BaseTerrain].Key,
 					overlayTerrain = save.TerrainTypes[civ3Tile.OverlayTerrain].Key,
 				};
-				if (civ3Tile.BarbarianCamp >= 0) {
+				if (civ3Tile.BarbarianCampFlag) {
 					tile.features.Add(BARBARIAN_CAMP);
+				}
+				// The SAV tile's 16-bit BarbarianCamp field is the camp's tribe id,
+				// not the camp bit (spec 22 section 2; the bit is bit 7 of the same
+				// flag word the goody hut is read from). Measured on every cached
+				// save fixture: the flag and the id are set together on exactly the
+				// same tiles, 0 and 7 of them respectively.
+				if (civ3Tile.BarbarianCamp >= 0) {
+					tile.barbarianTribeId = civ3Tile.BarbarianCamp;
 				}
 				if (civ3Tile.GoodyHut) {
 					tile.features.Add(GOODY_HUT);
@@ -354,6 +362,12 @@ namespace C7GameData {
 				};
 				if (civ3Tile.BarbarianCamp) {
 					tile.features.Add(BARBARIAN_CAMP);
+				}
+				// The BIQ keeps the camp bit and the tribe id in separate fields.
+				// Measured on the shipped "4 Middle Ages.biq": 7 camp tiles, all
+				// with the bit, carrying tribe ids 0, 1 and 2.
+				if (civ3Tile.BarbarianTribe >= 0) {
+					tile.barbarianTribeId = civ3Tile.BarbarianTribe;
 				}
 				if (civ3Tile.GoodyHut) {
 					tile.features.Add(GOODY_HUT);
@@ -1290,6 +1304,11 @@ namespace C7GameData {
 					experience = experience.key,
 					hitPointsRemaining = experience.baseHitPoints,
 					movePointsRemaining = prototype.Movement,
+					// The SAV unit record carries the unit's barbarian tribe; every
+					// non-barbarian unit in every cached save has -1 there and every
+					// barbarian one has a slot (measured: the Middle Ages scenario
+					// save's 16 barbarian units carry 0, 1 and 2).
+					barbarianTribeId = BarbarianTribes.IsValidSlot(unit.BarbTribe) ? unit.BarbTribe : (int?)null,
 					WorkerProgressTowardsJob = unit.WorkerProgressTowardsJob,
 					WorkerJob = (unit.WorkerJob==-1) ? null: save.TerraForms[unit.WorkerJob].Id,
 					isAutomated = unit.IsAutomated,

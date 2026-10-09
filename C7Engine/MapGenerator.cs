@@ -1361,10 +1361,23 @@ namespace C7Engine {
 
 			int totalPossibleBarbCamps = DeriveTotalPossibleBarbCamps(wc, landTiles);
 
+			// The tribes the camps already placed here hold. Civ3 never places
+			// camps at map generation, so its rule - the band of the culture group
+			// of the nearest city's owner - has no input on a generated map: there
+			// is no city yet. The band is therefore drawn uniformly, which keeps
+			// every shipped tribe name reachable and, more importantly, gives every
+			// generated camp a real slot so its dispersal can free it and its
+			// messages can name it.
+			List<int> heldSlots = new();
+
 			int numCamps = 0;
 			for (int i = 0; i < tileIndicies.Count && numCamps < totalPossibleBarbCamps; ++i) {
 				Tile t = m.tiles[tileIndicies[i]];
 				if (IsValidForBarbarianCamp(wc, m, t)) {
+					int cultureGroup = rand.Next(BarbarianTribes.CultureGroupCount);
+					t.barbarianTribeId = BarbarianTribes.PickTribeSlot(
+						cultureGroup, heldSlots, rand.Next(BarbarianTribes.SlotsPerCultureGroup));
+					heldSlots.Add(t.barbarianTribeId);
 					m.barbarianCamps.Add(t);
 					t.hasBarbarianCamp = true;
 					++numCamps;

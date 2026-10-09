@@ -45,14 +45,24 @@ public partial class MapUnit {
 
 		// Disperse barb camp
 		if (tile.hasBarbarianCamp && !owner.isBarbarians) {
+			// Spec 22 section 6.3: the camp is removed, its tribe slot is freed
+			// and the tile's tribe id is cleared before the message is shown, so
+			// the freed slot is available to the next tribe in that band and no
+			// tile keeps pointing at a tribe that no longer exists.
+			string tribe = EngineStorage.gameData.BarbarianTribeName(tile.barbarianTribeId);
 			EngineStorage.gameData.map.barbarianCamps.Remove(tile);
 			tile.hasBarbarianCamp = false;
+			tile.barbarianTribeId = BarbarianTribes.None;
 			animate(MapUnit.AnimatedAction.VICTORY);
 
 			// TODO: make this configurable
 			owner.gold += 25;
 			if (owner.isHuman) {
-				new MsgShowMilitaryAdvisorPopup($"We cleared a barbarian encampment and earned 25 gold!", happy: true).send();
+				new MsgShowMilitaryAdvisorPopup(
+					tribe == null
+						? $"We cleared a barbarian encampment and earned 25 gold!"
+						: $"We dispersed a {tribe} encampment and took 25 gold!",
+					happy: true).send();
 			}
 		}
 

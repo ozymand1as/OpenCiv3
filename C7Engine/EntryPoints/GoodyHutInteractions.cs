@@ -94,7 +94,7 @@ namespace C7Engine {
 				}
 			}
 
-			return NothingMessage(player);
+			return NothingMessage(gameData, player);
 		}
 
 		/// <summary>
@@ -123,7 +123,7 @@ namespace C7Engine {
 				case GoodyHutOutcome.Barbarians:
 					return ApplyBarbarians(gameData, player, tile) ? GoodyHutOutcome.Barbarians : GoodyHutOutcome.Nothing;
 				default:
-					return NothingMessage(player);
+					return NothingMessage(gameData, player);
 			}
 		}
 
@@ -165,7 +165,7 @@ namespace C7Engine {
 				AddCitizen(gameData, city);
 			}
 
-			Notify(player, $"An advanced village has joined us! {city.name} is ours.", happy: true);
+			Notify(player, $"An advanced {TribeFor(gameData, player)} village has joined us! {city.name} is ours.", happy: true);
 			return true;
 		}
 
@@ -234,7 +234,7 @@ namespace C7Engine {
 			}
 
 			player.GrantTech(gameData, granted);
-			Notify(player, $"The tribe has taught us {granted.Name}.", happy: true);
+			Notify(player, $"The {TribeFor(gameData, player)} tribe has taught us {granted.Name}.", happy: true);
 			return true;
 		}
 
@@ -276,7 +276,7 @@ namespace C7Engine {
 			// literally.
 			int amount = gameData.turn >= LateGameTurn ? 50 : 25;
 			player.gold += amount;
-			Notify(player, $"We got {amount} gold from the village.", happy: true);
+			Notify(player, $"We got {amount} gold from the {TribeFor(gameData, player)} tribe's village.", happy: true);
 
 			// Civ3 also writes RULE.DefaultMoneyResource onto the tile when the
 			// rules define one. That field is not imported, and the shipped
@@ -309,7 +309,7 @@ namespace C7Engine {
 			}
 
 			gameData.SpawnUnit(player, settler, tile);
-			Notify(player, $"A friendly tribe wants to join our government. We gained a {settler.name}.", happy: true);
+			Notify(player, $"A friendly {TribeFor(gameData, player)} {settler.name} wants to join our government.", happy: true);
 			return true;
 		}
 
@@ -345,7 +345,7 @@ namespace C7Engine {
 			gameData.mapHasBeenRevealed = true;
 
 			player.tileKnowledge.RecomputeActiveTiles();
-			Notify(player, "The friendly tribe gave us maps of their region.", happy: true);
+			Notify(player, $"The friendly {TribeFor(gameData, player)} tribe gave us maps of their region.", happy: true);
 		}
 
 		/// <summary>
@@ -369,7 +369,7 @@ namespace C7Engine {
 				}
 
 				gameData.SpawnUnit(player, candidate, tile);
-				Notify(player, $"This friendly village gave us a skilled {candidate.name}.", happy: true);
+				Notify(player, $"This friendly {TribeFor(gameData, player)} village gave us a skilled {candidate.name}.", happy: true);
 				return true;
 			}
 
@@ -450,6 +450,12 @@ namespace C7Engine {
 				return false;
 			}
 
+			// The tribe this spawn belongs to: the first free slot of the popping
+			// player's culture-group band. The binary draws the slot here, before
+			// its neighbour walk, and marks nothing in use (only a camp holds a
+			// slot), so one hut pop can reuse a name another pop just used.
+			int tribeSlot = gameData.PickBarbarianTribeSlot(BarbarianTribes.CultureGroupIndex(player.civilization));
+
 			// Civ3 rotates the eight neighbouring directions by the turn
 			// number, skips water and occupied tiles, and gives the first,
 			// second and third successful spawn a 3/4, 2/3 and 1/2 chance. A
@@ -477,14 +483,14 @@ namespace C7Engine {
 					continue;
 				}
 
-				gameData.SpawnUnit(barbarians, basic, neighbor);
+				gameData.SpawnUnit(barbarians, basic, neighbor, tribeSlot);
 				++spawned;
 			}
 
 			// The guards above passed, so the outcome took effect even when
 			// every chance roll failed; in that case Civ3 records no message.
 			if (spawned > 0) {
-				Notify(player, $"We have disturbed an angry tribe. {spawned} barbarians appeared!", happy: false);
+				Notify(player, $"We have disturbed an angry {BarbarianTribes.TribeNameOrUnnamed(gameData, tribeSlot)} {basic.name} - {spawned} barbarians appeared!", happy: false);
 			}
 			return true;
 		}
@@ -502,9 +508,27 @@ namespace C7Engine {
 			return player.cities.Count <= gameData.cities.Count / (livingPlayers - 1);
 		}
 
-		private static GoodyHutOutcome NothingMessage(Player player) {
-			Notify(player, "This village is deserted.", happy: true);
+		private static GoodyHutOutcome NothingMessage(GameData gameData, Player player) {
+			Notify(player, $"This {TribeFor(gameData, player)} village is deserted.", happy: true);
 			return GoodyHutOutcome.Nothing;
+		}
+
+		/// <summary>
+		/// The tribe whose name goes into an outcome's message. Civ3 draws a slot
+		/// from the popping player's culture-group band for <em>every</em>
+		/// outcome's message, including the friendly ones and the deserted
+		/// village, with the same picker that the hut barbarians and the camps
+		/// use (spec 22 sections 2 and 8.2; every case of the binary's outcome
+		/// resolver passes a slot to the message builder). Nothing is marked in
+		/// use: the message path only reads a free slot, so a name can repeat
+		/// until a camp holds the slot.
+		///
+		/// The draw happens last, after the outcome's own sub-rolls, which is
+		/// where the binary draws it for every outcome except the barbarian one.
+		/// </summary>
+		private static string TribeFor(GameData gameData, Player player) {
+			int slot = gameData.PickBarbarianTribeSlot(BarbarianTribes.CultureGroupIndex(player.civilization));
+			return gameData.BarbarianTribeName(slot) ?? BarbarianTribes.UnnamedTribe;
 		}
 
 		private static void Notify(Player player, string message, bool happy) {
