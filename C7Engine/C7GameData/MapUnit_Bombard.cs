@@ -242,33 +242,67 @@ namespace C7GameData {
 			TriggerPopUp(hitCount, tile, destroyMsg);
 		}
 
+		// The fixed defence a bombardment rolls against, before the target
+		// tile's percentages scale it (12_combat.md §6.3).
+		private const int BombardTargetBaseDefense = 16;
+
+		// The defence a bombardment rolls against on a tile: the tile's terrain
+		// and city/improvement defence percentages scale a fixed defence of 16.
+		// The river term and the per-civ tile-mask term never apply to a
+		// bombardment (12_combat.md §6.3).
+		public int BombardTargetDefense(Tile tile) {
+			int percent = (int)Math.Round(100.0 * tile.overlayTerrainType.defenseBonus.amount);
+			foreach (StrengthBonus bonus in tile.overlays.GetDefenseBonuses())
+				percent += (int)Math.Round(100.0 * bonus.amount);
+			if (tile.HasCity()) {
+				foreach (StrengthBonus bonus in tile.cityAtTile.GetDefenseBonuses())
+					percent += (int)Math.Round(100.0 * bonus.amount);
+			}
+			return (100 + percent) * BombardTargetBaseDefense / 100;
+		}
+
+		// The defender's odds in a bombardment, on the same 1/1024 scale as a
+		// fight round and clamped to [1, 1023] (12_combat.md §6.3). The
+		// bombarding unit then rolls RateOfFire times and the bombardment
+		// succeeds as soon as one roll is at least the odds.
+		public int DefenderOddsAgainstBombard(Tile tile) {
+			int target = BombardTargetDefense(tile);
+			int bombard = unitType.bombard;
+			if (bombard + target <= 0)
+				return MinCombatOdds;
+			return Math.Clamp(target * CombatOddsScale / (bombard + target), MinCombatOdds, MaxCombatOdds);
+		}
+
 		private async Task BombardTileImprovements(Tile tile) {
-			// Anecdotal: "arty seems to wipe out improvement on 75% or more of the shots"
-			// ==> Artillery.bombard : 12 --> TileImprovement.Defense : 3
-			// TODO: Make configurable
-
-			const int tileImprovementDefence = 3;
-
-			var hitCount = 0;
-
 			var improvement = tile.overlays.GetManMadeImprovements()
 				.OrderBy(x => GameData.rng.Next()).FirstOrDefault();
 
-			// Anecdotal, just by observing the game; I think rate of fire doesn't apply to improvements
-			double bombardStrength  = StrengthVersus(null, CombatRole.Bombard, facingDirection);
-			double defenderStrength = tileImprovementDefence;
-			double attackerOdds = bombardStrength / (bombardStrength + defenderStrength);
-			if (Double.IsNaN(attackerOdds))
-				return;
+			// Every shot rolls independently against the defender's odds and
+			// the bombardment succeeds as soon as one shot hits; RateOfFire is
+			// what makes bigger artillery better at tearing down improvements
+			// (12_combat.md §6.3).
+			int odds = DefenderOddsAgainstBombard(tile);
+			var hitCount = 0;
+			for (int shot = 0; shot < unitType.rateOfFire; ++shot) {
+				if (GameData.rng.Next(CombatOddsScale) >= odds) {
+					hitCount = 1;
+					break;
+				}
+			}
 
-			await RunAnimatedBombard(tile, attackerOdds, () => {
-				hitCount += 1;
+			await animateAsync(AnimatedAction.ATTACK1);
+			movementPoints.onUnitMove(1);
+
+			if (hitCount > 0) {
+				await tile.AnimateAsync(this.hitList[GameData.rng.Next(0, hitList.Count)]);
 				// Remove top improvement
 				tile.overlays.Remove(improvement);
 				// "Replace" with downgraded improvement if it exists
 				tile.overlays.Add(improvement?.upgradesFrom);
 				// TODO: Re-target?
-			});
+			} else {
+				await tile.AnimateAsync(tile.IsWater() ? AnimatedEffect.WaterMiss : AnimatedEffect.Miss);
+			}
 
 			TriggerPopUp(hitCount, tile, $"Artillery bombardment successful! Destroyed {improvement?.key}.");
 		}

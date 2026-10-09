@@ -136,6 +136,11 @@ namespace C7GameData {
 		// owner's Golden Age.
 		public bool startsGoldenAge => flags.Contains(SaveUnitPrototype.Flag.StartsGoldenAge);
 
+		// The unit type carries the King ability — the ruler unit of
+		// regicide-style scenarios. The binary's defender picker prefers a King
+		// unit over a non-King unit (12_combat.md §6.3).
+		public bool isKing => flags.Contains(SaveUnitPrototype.Flag.King);
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];

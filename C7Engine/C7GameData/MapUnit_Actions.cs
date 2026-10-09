@@ -302,10 +302,10 @@ public partial class MapUnit {
 		IEnumerable<StrengthBonus> attackBonuses  = attacker.ListStrengthBonusesVersus(defender, CombatRole.Attack , attackerAttackDirection),
 								   defenseBonuses = defender.ListStrengthBonusesVersus(attacker, CombatRole.Defense, attackerAttackDirection);
 
-		double attackerStrength = attacker.BaseStrength(CombatRole.Attack) * StrengthBonus.ListToMultiplier(attackBonuses),
-			   defenderStrength = defender.BaseStrength(CombatRole.Defense) * StrengthBonus.ListToMultiplier(defenseBonuses);
+		var (attackerEffective, defenderEffective) =
+			EffectiveCombatStrengths(attacker, defender, attackerAttackDirection);
 
-		log.Information($"Combat log: {attacker} ({attackerStrength}) attacking {defender} ({defenderStrength})");
+		log.Information($"Combat log: {attacker} ({attackerEffective / 100.0}) attacking {defender} ({defenderEffective / 100.0})");
 		log.Information($"\tAttacker: {attacker.unitType.name}, base strength {attacker.BaseStrength(CombatRole.Attack)}");
 		foreach (StrengthBonus bonus in attackBonuses)
 			log.Information($"\t\t+{100.0 * bonus.amount}%\t{bonus.description}");
@@ -315,9 +315,13 @@ public partial class MapUnit {
 
 		CombatResult result = CombatResult.Impossible;
 
-		double attackerOdds = attackerStrength / (attackerStrength + defenderStrength);
-		if (Double.IsNaN(attackerOdds))
+		if (attackerEffective + defenderEffective <= 0)
 			return result;
+
+		// The defender's win probability in units of 1/1024: every round rolls
+		// rand_int(1024) and a roll below the odds means the defender wins the
+		// round (12_combat.md §2, §6.2).
+		int defenderOdds = DefenderCombatOdds(attacker, defender, attackerAttackDirection);
 
 		// Defensive bombard
 		MapUnit defensiveBombarder = MapUnit.NONE;
@@ -347,40 +351,61 @@ public partial class MapUnit {
 			defensiveBombarder.facingDirection = dBOriginalDirection;
 		}
 
-		bool defenderEligibleToRetreat = defender.hitPointsRemaining > 1 && ! defender.location.HasCity();
+		// Retreat permission (12_combat.md §6.1): a unit type may retreat only
+		// when it moves faster than one tile per turn; when both sides may
+		// retreat neither does, and the defender additionally loses its
+		// permission on a tile that holds a city.
+		bool attackerMayRetreat = attacker.CanRetreat();
+		bool defenderMayRetreat = defender.CanRetreat();
+		if (attackerMayRetreat && defenderMayRetreat) {
+			attackerMayRetreat = false;
+			defenderMayRetreat = false;
+		}
+		if (defender.location.HasCity())
+			defenderMayRetreat = false;
 
-		// Do combat rounds
+		// Do combat rounds. Every round removes exactly one hit point from the
+		// loser of the round and the fight ends as soon as either side reaches
+		// zero; RateOfFire takes no part here, it is bombard-only
+		// (12_combat.md §5, §6.2).
 		while (true) {
 			defender.animate(MapUnit.AnimatedAction.ATTACK1);
 			await attacker.animateAsync(MapUnit.AnimatedAction.ATTACK1);
-			if (GameData.rng.NextDouble() < attackerOdds) {
-				if (defenderEligibleToRetreat &&
-					defender.hitPointsRemaining == 1 &&
-					GameData.rng.NextDouble() < defender.RetreatChance(attacker, false)) {
-					// TODO: Defender retreat behavior requires some more work. There's an issue for it here:
-					// https://github.com/C7-Game/Prototype/issues/274
-					Tile retreatDestination = defender.location.neighbors[attackerAttackDirection];
-					if ((retreatDestination != Tile.NONE) && defender.CanEnter(retreatDestination)) {
-						await defender.Move(attackerAttackDirection, true);
-						result = CombatResult.DefenderRetreated;
-						break;
-					}
+			if (GameData.rng.Next(CombatOddsScale) < defenderOdds) {
+				// The defender wins the round; the attacker loses a hit point.
+				attacker.hitPointsRemaining -= 1;
+				if (attacker.hitPointsRemaining <= 0) {
+					result = CombatResult.AttackerKilled;
+					break;
 				}
+				// A losing attacker escapes only at exactly one remaining hit
+				// point, only against an opponent above one, never as the
+				// barbarians, and only with its type's retreat permission:
+				// rand_int(defenderBonus + 50) < attackerBonus.
+				if (attacker.hitPointsRemaining == 1 && attackerMayRetreat &&
+					!attacker.owner.isBarbarians && defender.hitPointsRemaining > 1 &&
+					GameData.rng.Next(defender.experienceLevel.retreatBonus + RetreatChanceDenominatorOffset) < attacker.experienceLevel.retreatBonus) {
+					result = CombatResult.AttackerRetreated;
+					break;
+				}
+			} else {
+				// The attacker wins the round; the defender loses a hit point.
 				defender.hitPointsRemaining -= 1;
 				if (defender.hitPointsRemaining <= 0) {
 					result = CombatResult.DefenderKilled;
 					break;
 				}
-			} else {
-				if (attacker.hitPointsRemaining == 1 &&
-					GameData.rng.NextDouble() < attacker.RetreatChance(defender, true)) {
-					result = CombatResult.AttackerRetreated;
-					break;
-				}
-				attacker.hitPointsRemaining -= 1;
-				if (attacker.hitPointsRemaining <= 0) {
-					result = CombatResult.AttackerKilled;
-					break;
+				if (defender.hitPointsRemaining == 1 && defenderMayRetreat &&
+					!defender.owner.isBarbarians && attacker.hitPointsRemaining > 1) {
+					// TODO: Defender retreat behavior requires some more work. There's an issue for it here:
+					// https://github.com/C7-Game/Prototype/issues/274
+					Tile retreatDestination = defender.location.neighbors[attackerAttackDirection];
+					if ((retreatDestination != Tile.NONE) && defender.CanEnter(retreatDestination) &&
+						GameData.rng.Next(attacker.experienceLevel.retreatBonus + RetreatChanceDenominatorOffset) < defender.experienceLevel.retreatBonus) {
+						await defender.Move(attackerAttackDirection, true);
+						result = CombatResult.DefenderRetreated;
+						break;
+					}
 				}
 			}
 		}

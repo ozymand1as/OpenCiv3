@@ -6289,6 +6289,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6329,6 +6332,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6369,6 +6375,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6409,6 +6418,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6449,6 +6461,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6489,6 +6504,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6529,6 +6547,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6569,6 +6590,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6609,6 +6633,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6649,6 +6676,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6689,6 +6719,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6729,6 +6762,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6769,6 +6805,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6809,6 +6848,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6849,6 +6891,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6889,6 +6934,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6929,6 +6977,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -6969,6 +7020,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7009,6 +7063,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7049,6 +7106,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7089,6 +7149,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7129,6 +7192,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7169,6 +7235,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7209,6 +7278,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7353,6 +7425,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7393,6 +7468,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7433,6 +7511,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7579,6 +7660,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7698,6 +7782,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7738,6 +7825,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -7778,6 +7868,9 @@
       "capacity": 0,
       "hpBonus": 0,
       "unproducible": true,
+      "flags": [
+        "king"
+      ],
       "aiStrategies": [
         "king"
       ],
@@ -9177,6 +9270,9 @@
       "maintenanceCost": 0,
       "iconRowIndex": 36,
       "renderedObsoleteBy": "tech-39",
+      "flags": [
+        "doubleCombatVsBarbarians"
+      ],
       "traits": [
         "militaristic",
         "industrious"

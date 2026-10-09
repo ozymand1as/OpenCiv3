@@ -354,7 +354,9 @@ namespace C7GameData {
 		// Answers the question: if "opponent" is attacking the tile that this unit is standing on, does this unit defend instead of "otherDefender"?
 		// Note that otherDefender does not necessarily belong to the same civ as this  Under standard Civ 3 rules you can't have units belonging
 		// to two different civs on the same tile, but we don't want to assume that. In that case, whoever is an enemy of "opponent" should get
-		// priority. Otherwise it's just whoever is stronger on defense.
+		// priority. Otherwise the binary's picker decides (12_combat.md §6.3): the higher (100 + entrenchment%) * defence * remainingHP / 100
+		// score wins, a King unit is preferred over a non-King unit outright, and equal scores keep the less valuable unit for later rounds —
+		// first by carrying fewer contained units, then by lower attack strength, lower bombard strength and lower maximum hit points.
 		public bool HasPriorityAsDefender(MapUnit otherDefender, MapUnit opponent) {
 			Player opponentPlayer = opponent.owner;
 			bool weAreEnemy           = !opponentPlayer?.IsAtPeaceWith(owner) ?? false;
@@ -365,9 +367,49 @@ namespace C7GameData {
 			if (otherDefenderIsEnemy && !weAreEnemy)
 				return false;
 
-			double ourTotalStrength = StrengthVersus(opponent, CombatRole.Defense, null) * hitPointsRemaining;
-			double theirTotalStrength = otherDefender.StrengthVersus(opponent, CombatRole.Defense, null) * otherDefender.hitPointsRemaining;
-			return ourTotalStrength > theirTotalStrength;
+			if (unitType.isKing != otherDefender.unitType.isKing)
+				return unitType.isKing;
+
+			long ourScore = DefenderPickerScore();
+			long theirScore = otherDefender.DefenderPickerScore();
+			if (ourScore != theirScore)
+				return ourScore > theirScore;
+
+			int ourCarried = CarriedUnitCount();
+			int theirCarried = otherDefender.CarriedUnitCount();
+			if (ourCarried != theirCarried)
+				return ourCarried < theirCarried;
+			if (unitType.attack != otherDefender.unitType.attack)
+				return unitType.attack < otherDefender.unitType.attack;
+			if (unitType.bombard != otherDefender.unitType.bombard)
+				return unitType.bombard < otherDefender.unitType.bombard;
+			return MaxHitPointsForComparison() < otherDefender.MaxHitPointsForComparison();
+		}
+
+		// The binary's defender-picking score (12_combat.md §6.3):
+		// (100 + entrenchment%) * defenceStrength * remainingHP / 100.
+		// Entrenchment is the fortify bonus; the terrain, river, city and
+		// improvement percentages are not part of this score.
+		internal long DefenderPickerScore() {
+			int entrenchmentPercent = isFortified
+				? (int)Math.Round(100.0 * EngineStorage.gameData.fortificationBonus.amount)
+				: 0;
+			return (100 + entrenchmentPercent) * (long)DefenseStrength() * hitPointsRemaining / 100;
+		}
+
+		// The number of units carried by this unit (an army's members, a
+		// transport's passengers), for the equal-score tie-break.
+		private int CarriedUnitCount() {
+			if (location == null) {
+				return 0;
+			}
+			return location.unitsOnTile.Count(u => u.loadedOnUnitId == id);
+		}
+
+		// Maximum hit points for the tie-break, without requiring an experience
+		// level to be set (the picker's tests construct bare units).
+		private int MaxHitPointsForComparison() {
+			return (experienceLevel?.baseHitPoints ?? 0) + unitType.hpBonus;
 		}
 
 
@@ -395,10 +437,6 @@ namespace C7GameData {
 				experienceLevel = nextLevel;
 				hitPointsRemaining++;
 			}
-		}
-
-		public double RetreatChance(MapUnit opponent, bool isAttacking) {
-			return ((unitType.movement > 1) && (opponent.unitType.movement <= 1)) ? experienceLevel.retreatChance : 0.0;
 		}
 
 		internal TileDirection GetAttackAnimationDirection(TileDirection attackDirection) {

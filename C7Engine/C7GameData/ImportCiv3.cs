@@ -1613,6 +1613,7 @@ namespace C7GameData {
 				if (prto.Army) prototype.flags.Add(SaveUnitPrototype.Flag.Army);
 				if (prto.Leader) prototype.flags.Add(SaveUnitPrototype.Flag.Leader);
 				if (prto.StartsGoldenAge) prototype.flags.Add(SaveUnitPrototype.Flag.StartsGoldenAge);
+				if (prto.King) prototype.flags.Add(SaveUnitPrototype.Flag.King);
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
@@ -1882,6 +1883,7 @@ namespace C7GameData {
 				(bldg.AllowsWaterTrade, SaveBuilding.Flag.AllowsWaterTrade),
 				(bldg.AllowsAirTrade, SaveBuilding.Flag.AllowsAirTrade),
 				(bldg.SafeSeaTravel, SaveBuilding.Flag.SafeSeaTravel),
+				(bldg.DoubleCombatVsBarbarians, SaveBuilding.Flag.DoubleCombatVsBarbarians),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);

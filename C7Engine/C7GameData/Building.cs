@@ -91,6 +91,13 @@ namespace C7GameData {
 		// enter Sea tiles without the relevant advance (the Great Lighthouse).
 		public bool safeSeaTravel;
 
+		// Whether the owner's units fight barbarians with a doubled strength:
+		// in the binary, a non-barbarian side adds a flat +100% on top of the
+		// difficulty's AttackBonusAgainstBarbarians while it owns a wonder
+		// with this flag (the Great Wall in the shipped rules; 12_combat.md
+		// §2.2).
+		public bool doublesCombatVsBarbarians;
+
 		// The traits this building has. For a Great Wonder this is the set of
 		// civ traits the wonder is associated with, which is what the Golden Age
 		// wonder trigger checks.
@@ -194,6 +201,7 @@ namespace C7GameData {
 			allowsWaterTrade = building.flags.Contains(SaveBuilding.Flag.AllowsWaterTrade);
 			allowsAirTrade = building.flags.Contains(SaveBuilding.Flag.AllowsAirTrade);
 			safeSeaTravel = building.flags.Contains(SaveBuilding.Flag.SafeSeaTravel);
+			doublesCombatVsBarbarians = building.flags.Contains(SaveBuilding.Flag.DoubleCombatVsBarbarians);
 			traits = new HashSet<Civilization.Trait>(building.traits);
 
 			if (building.greatWonderProperties != null) {

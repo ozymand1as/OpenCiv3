@@ -1,4 +1,6 @@
 namespace C7GameData {
+	using System;
+	using System.Text.Json.Serialization;
 	using QueryCiv3.Biq;
 
 	public class ExperienceLevel {
@@ -7,6 +9,15 @@ namespace C7GameData {
 		public int baseHitPoints;
 		public double retreatChance;
 		public double promotionChance;
+
+		// The retreat bonus as the binary uses it: EXPR.RetreatBonus, an
+		// integer. The retreat chance in a fight is
+		// ownRetreatBonus / (opponentRetreatBonus + 50), not this value as a
+		// probability (12_combat.md §6.2). It is derived from the fractional
+		// retreatChance so saves and the Lua ruleset, which carry that
+		// fraction, need no new field.
+		[JsonIgnore]
+		public int retreatBonus => (int)Math.Round(100.0 * retreatChance);
 
 		public ExperienceLevel(string key, string displayName, int baseHitPoints, double retreatChance, double promotionChance) {
 			this.key = key;

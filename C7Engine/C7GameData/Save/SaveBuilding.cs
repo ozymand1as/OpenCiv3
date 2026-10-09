@@ -35,6 +35,9 @@ namespace C7GameData.Save {
 			AllowsWaterTrade,
 			AllowsAirTrade,
 			SafeSeaTravel,
+			// Doubles combat strength against barbarians for the owning civ
+			// (The Great Wall in the shipped rules; 12_combat.md §2.2).
+			DoubleCombatVsBarbarians,
 		}
 
 		public class GreatWonderProperties {

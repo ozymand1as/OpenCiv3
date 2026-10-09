@@ -14,6 +14,10 @@ namespace C7GameData.Save {
 			Army,
 			Leader,
 			StartsGoldenAge,
+			// The King ability (PRTO Flags1[3] bit 5): the ruler unit of
+			// regicide-style scenarios. The binary's defender picker prefers a
+			// King unit when choosing who defends a tile (12_combat.md §6.3).
+			King,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The
