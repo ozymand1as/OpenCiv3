@@ -331,10 +331,15 @@ namespace C7GameData {
 				if (civ3Tile.BarbarianCamp) {
 					tile.features.Add(BARBARIAN_CAMP);
 				}
-				// The BIQ keeps the camp bit and the tribe id in separate fields.
-				// Measured on the shipped "4 Middle Ages.biq": 7 camp tiles, all
-				// with the bit, carrying tribe ids 0, 1 and 2.
-				if (civ3Tile.BarbarianTribe >= 0) {
+				// The BIQ keeps the camp bit and the tribe id in separate fields, and
+				// the bit is the presence test: the id alone does not mean there is a
+				// camp there. Measured on the shipped "6 Age of Discovery.biq": 29
+				// tiles carry both, and 37 carry a tribe id (all the slot-75
+				// fallback) with no camp bit. On "4 Middle Ages.biq": 7 camp tiles,
+				// all with the bit, carrying tribe ids 0, 1 and 2, and none without
+				// the bit. The SAV is the other way round - its BarbarianCamp field
+				// is the id, with -1 meaning no camp - which ImportSav reads.
+				if (civ3Tile.BarbarianCamp && civ3Tile.BarbarianTribe >= 0) {
 					tile.barbarianTribeId = civ3Tile.BarbarianTribe;
 				}
 				if (civ3Tile.GoodyHut) {
