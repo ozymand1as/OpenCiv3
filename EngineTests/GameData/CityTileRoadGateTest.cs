@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using C7Engine;
 using C7Engine.Lua;
+using C7Engine.Pathing;
 using C7GameData;
 using C7GameData.Save;
 using EngineTests.Utils;
@@ -188,7 +189,6 @@ public sealed class CityTileRoadGateTest : MapBase {
 	// ------------------------------------------------------------------
 	// Founding a city.
 	// ------------------------------------------------------------------
-
 	[Fact]
 	private void FoundingACitySetsTheRoadFlag() {
 		EngineStorage.gameData.terrainImprovements.Add(road);
@@ -233,6 +233,42 @@ public sealed class CityTileRoadGateTest : MapBase {
 
 		Assert.Equal(2.0,
 			TilePath.GetMovementCost(player, startTile, TileDirection.NORTH, destination), Tolerance);
+	}
+
+	// ------------------------------------------------------------------
+	// The cached trade network.
+	// ------------------------------------------------------------------
+
+	[Fact]
+	private void LearningACityTileGateTechnologyInvalidatesTheTradeNetwork() {
+		// City-tile participation is part of the road network, and the network
+		// is cached, so learning a gate technology has to drop the cache.
+		EngineStorage.gameData.rules = new Rules { CityRoadRequiredTech = RoadTech };
+		Tech tech = new() { id = RoadTech, Name = "Synthetic Roads" };
+		EngineStorage.gameData.techs = [tech];
+
+		Player player = MakePlayer();
+		TradeNetwork before = EngineStorage.gameData.GetTradeNetwork();
+
+		player.GrantTech(EngineStorage.gameData, tech);
+
+		Assert.Contains(RoadTech, player.knownTechs);
+		Assert.NotSame(before, EngineStorage.gameData.GetTradeNetwork());
+	}
+
+	[Fact]
+	private void LearningAnUnrelatedTechnologyKeepsTheTradeNetwork() {
+		EngineStorage.gameData.rules = new Rules { CityRoadRequiredTech = RoadTech };
+		Tech other = new() { id = ID.FromString("tech-998"), Name = "Unrelated" };
+		EngineStorage.gameData.techs = [other];
+
+		Player player = MakePlayer();
+		TradeNetwork before = EngineStorage.gameData.GetTradeNetwork();
+
+		player.GrantTech(EngineStorage.gameData, other);
+
+		Assert.Contains(other.id, player.knownTechs);
+		Assert.Same(before, EngineStorage.gameData.GetTradeNetwork());
 	}
 }
 

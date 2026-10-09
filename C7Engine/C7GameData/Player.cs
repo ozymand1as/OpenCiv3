@@ -1058,6 +1058,8 @@ namespace C7GameData {
 
 			knownTechs.Add(tech.id);
 
+			InvalidateTradeNetworkIfCityTileGateTech(gameData, tech);
+
 			AwardVictoryPointsForAdvance(gameData, tech);
 
 			// A trade advance can open (or, once the Great Lighthouse is obsolete,
@@ -1096,6 +1098,8 @@ namespace C7GameData {
 
 			knownTechs.Add(tech.id);
 
+			InvalidateTradeNetworkIfCityTileGateTech(gameData, tech);
+
 			AwardVictoryPointsForAdvance(gameData, tech);
 
 			if (CanAdvanceToNextEra(gameData)) {
@@ -1112,6 +1116,24 @@ namespace C7GameData {
 			string nextEra = EraUtils.GetNextEraNameByIndex(gameData.eras, EraUtils.GetEraIndex(gameData.eras, eraCivilopediaName));
 			if (nextEra != null) {
 				eraCivilopediaName = nextEra;
+			}
+		}
+
+		// Learning a technology that a city or colony tile must know before it
+		// participates in the road or railroad network can change that network,
+		// so the cached trade network is no longer valid (11_movement.md section
+		// 4.2). The shipped road gate is -1 (inert) and the shipped railroad gate
+		// does not change connectivity, because a gated-off railroad still
+		// participates as a road; a rules set that requires a road technology can
+		// make this matter.
+		private static void InvalidateTradeNetworkIfCityTileGateTech(GameData gameData, Tech tech) {
+			Rules rules = gameData?.rules;
+			if (rules == null) {
+				return;
+			}
+
+			if (rules.CityRoadRequiredTech == tech.id || rules.CityRailroadRequiredTech == tech.id) {
+				gameData.InvalidateCachedTradeNetwork();
 			}
 		}
 
