@@ -3031,6 +3031,10 @@
     },
     {
       "name": "Tactical Nuke",
+      "flags": [
+        "nuclearWeapon",
+        "tacticalMissile"
+      ],
       "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
@@ -3113,6 +3117,8 @@
     {
       "name": "ICBM",
       "flags": [
+        "nuclearWeapon",
+        "icbm",
         "immobile"
       ],
       "ignoreMovementCost": ["sea"],
@@ -9110,7 +9116,8 @@
       "maintenanceCost": 3,
       "iconRowIndex": 18,
       "flags": [
-        "replacesOtherBuildings"
+        "replacesOtherBuildings",
+        "canMeltdown"
       ],
       "requiredResources": [
         "Uranium"
@@ -9930,6 +9937,9 @@
       "iconRowIndex": 61,
       "traits": [
         "militaristic"
+      ],
+      "flags": [
+        "decreasesMissileSuccess"
       ]
     },
     {

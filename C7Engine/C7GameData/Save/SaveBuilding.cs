@@ -67,6 +67,18 @@ namespace C7GameData.Save {
 			// the Caracol Observatory, the last of which carries both bits).
 			PlusOneShipMovement,
 			PlusTwoShipMovement,
+			// The Strategic Missile Defense flag (BLDG Flags[8] bit 6, read at the
+			// record's +0xf4 word with mask 0x40). A living civ that owns one has a
+			// 3-in-4 chance to intercept a nuke aimed into its territory
+			// (26_nuclear_weapons.md §4.2, read at 0x55aa68). The shipped rules put
+			// it on the Strategic Missile Defense small wonder alone.
+			DecreasesMissileSuccess,
+			// The meltdown flag (BLDG Flags[2] bit 0, read at the record's +0xec word
+			// with mask 0x10000). A city owning one rolls each turn for a nuclear
+			// plant meltdown, which adds one to the same incident counter a launch
+			// increments (26_nuclear_weapons.md §6, read at 0x4b49d7). The shipped
+			// rules put it on the Nuclear Plant alone.
+			CanMeltdown,
 		}
 
 		// The building's contribution to the naval power of the city that has it

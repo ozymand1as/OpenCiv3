@@ -34,6 +34,22 @@ namespace C7GameData {
 		public bool CanBombardTile(Tile tile, out BombardTarget bombardTarget) {
 			bombardTarget = BombardTarget.None;
 
+			// A nuclear weapon's target validity is the launch gate
+			// (26_nuclear_weapons.md sections 3.3 and 4.3): the type's BombardRange
+			// by the Civ3 distance metric (unlimited for an ICBM), never its own
+			// city or unit, and never a city or unit of a civ it is at peace with.
+			// The zero-bombard-strength test below does not apply - a nuclear type
+			// carries no bombard strength but still fires.
+			if (unitType.isNuclearWeapon) {
+				if (tile.HasCity() && tile.cityAtTile.owner == this.owner) return false;
+				if (tile.HasCity() && AreAtPeace(this.owner, tile.cityAtTile.owner)) return false;
+				MapUnit occupant = tile.unitsOnTile.FirstOrDefault(u => u != NONE);
+				if (occupant != null && occupant.owner == this.owner) return false;
+				if (occupant != null && AreAtPeace(this.owner, occupant.owner)) return false;
+				bombardTarget = tile.HasCity() ? BombardTarget.City : BombardTarget.None;
+				return CanLaunchNuclearWeaponAt(tile);
+			}
+
 			if (this.location.DistanceTo(tile) > this.unitType.bombardRange)
 				return false;
 
@@ -93,6 +109,17 @@ namespace C7GameData {
 		}
 
 		public async Task Bombard(Tile tile) {
+			// A nuclear weapon does not take the ordinary bombard path at all
+			// (26_nuclear_weapons.md section 2.1): the dispatch sends a type with
+			// the ability-16 gate to the launch routine and stops, skipping the
+			// bombard odds, animation and movement bookkeeping below. The launch
+			// routine's human range limit is enforced at target selection
+			// (CanLaunchNuclearWeaponAt), not here.
+			if (unitType.isNuclearWeapon) {
+				LaunchNuclearWeapon(tile);
+				return;
+			}
+
 			// Could check canBombardTile(..) again, but no need really
 
 			MapUnit target = tile.FindTopDefenderForBombard(this);

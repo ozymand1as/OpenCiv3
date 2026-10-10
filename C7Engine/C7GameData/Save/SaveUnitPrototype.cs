@@ -46,6 +46,29 @@ namespace C7GameData.Save {
 			// cannot take a step at all. The shipped rules set it on every air unit,
 			// on the ICBM and on the regicide Princess (11_movement.md §5 step 1).
 			Immobile,
+			// The nuclear-launch gate (ability id 16, Flags1[2] bit 0). A type that
+			// carries it is a nuclear weapon: the bombard dispatch diverts it to the
+			// launch routine instead of the ordinary bombard, and a nuke survives
+			// another nuke's blast. This is the unit-type ABILITY word, which the
+			// binary reads at record +0x88 bit 16 (0x5c0e4d); it is NOT the
+			// AI-strategy word at +0x8c, a different field of the same record
+			// (26_nuclear_weapons.md §2).
+			NuclearWeapon,
+			// The ICBM ability (ability id 20, Flags1[2] bit 4). A nuclear weapon
+			// that carries it is exempt from the human launch range limit and so
+			// may be aimed at any tile (26_nuclear_weapons.md §4.3, read at
+			// 0x4d963d).
+			ICBM,
+			// The tactical-missile ability (ability id 23, Flags1[2] bit 7). It gates
+			// loading into a carrier and is the second half of the tactical/ICBM
+			// split; the launch path itself never tests it, so a nuclear type
+			// without it still launches (26_nuclear_weapons.md §2, §10).
+			TacticalMissile,
+			// The hidden-nationality ability (ability id 17, Flags1[2] bit 1). A
+			// strike from a type that carries it is a privateer-style raid and does
+			// not open a war declaration (26_nuclear_weapons.md §8.2, read at
+			// 0x5b562c).
+			HiddenNationality,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The

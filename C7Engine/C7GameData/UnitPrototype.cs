@@ -192,6 +192,24 @@ namespace C7GameData {
 		// 1, 0x5b900a-0x5b9077).
 		public bool immobile => flags.Contains(SaveUnitPrototype.Flag.Immobile);
 
+		// The nuclear-launch gate (ability id 16, the ABILITY word at PRTO +0x88
+		// bit 16, not the AI-strategy word at +0x8c). A type that carries it
+		// diverts the bombard dispatch to the nuclear launch routine
+		// (26_nuclear_weapons.md §2).
+		public bool isNuclearWeapon => flags.Contains(SaveUnitPrototype.Flag.NuclearWeapon);
+
+		// The ICBM ability (ability id 20): a nuclear weapon exempt from the
+		// human launch range limit (26_nuclear_weapons.md §4.3).
+		public bool isICBM => flags.Contains(SaveUnitPrototype.Flag.ICBM);
+
+		// The tactical-missile ability (ability id 23): gates loading into a
+		// carrier; the launch path never tests it (26_nuclear_weapons.md §2).
+		public bool isTacticalMissile => flags.Contains(SaveUnitPrototype.Flag.TacticalMissile);
+
+		// The hidden-nationality ability (ability id 17): a strike from this type
+		// does not open a war declaration (26_nuclear_weapons.md §8.2).
+		public bool hasHiddenNationality => flags.Contains(SaveUnitPrototype.Flag.HiddenNationality);
+
 		public HashSet<string> categories = new HashSet<string>();
 
 		public HashSet<UnitAction> actions = [];

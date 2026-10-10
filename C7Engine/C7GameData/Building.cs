@@ -152,6 +152,17 @@ namespace C7GameData {
 		public bool removesPopulationPollution;
 		public bool reducesBuildingPollution;
 
+		// Whether the Strategic Missile Defense flag (BLDG Flags[8] bit 6) is
+		// set: a civ owning this building can intercept an incoming nuclear
+		// launch with a 3-in-4 chance (26_nuclear_weapons.md §4.2).
+		public bool decreasesMissileSuccess;
+
+		// Whether the nuclear-plant meltdown flag (BLDG Flags[2] bit 0) is set.
+		// No path reads it yet - the per-turn meltdown roll is a separate item -
+		// but it is imported so the flag exists on both data paths
+		// (26_nuclear_weapons.md §6, §10).
+		public bool canMeltdown;
+
 		public int contentFacesInCity = 0;
 
 		// The number of unhappy faces that become content in the city with this
@@ -230,6 +241,8 @@ namespace C7GameData {
 			treasuryEarnsInterest = building.flags.Contains(SaveBuilding.Flag.TreasuryEarnsInterest);
 			removesPopulationPollution = building.flags.Contains(SaveBuilding.Flag.RemovesPopulationPollution);
 			reducesBuildingPollution = building.flags.Contains(SaveBuilding.Flag.ReducesBuildingPollution);
+			decreasesMissileSuccess = building.flags.Contains(SaveBuilding.Flag.DecreasesMissileSuccess);
+			canMeltdown = building.flags.Contains(SaveBuilding.Flag.CanMeltdown);
 			plus50PercentResearch = building.flags.Contains(SaveBuilding.Flag.Plus50PercentResearch);
 			doublesResearchOutput = building.flags.Contains(SaveBuilding.Flag.DoublesResearchOutput);
 			plus50PercentLuxury = building.flags.Contains(SaveBuilding.Flag.Plus50PercentLuxury);

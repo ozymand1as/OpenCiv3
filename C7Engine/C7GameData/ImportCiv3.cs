@@ -1671,6 +1671,20 @@ namespace C7GameData {
 			return availableTo.Length == 0 || prto.ShieldCost < 1 || prto.Leader;
 		}
 
+		// The four unit-type abilities the nuclear subsystem reads from the unit
+		// type (26_nuclear_weapons.md §2, §10): the launch gate (ability 16), the
+		// range-exemption distinction (ability 20), the tactical carrier split
+		// (ability 23) and the war-declaration escape (ability 17). They are read
+		// from the ability word at record +0x88, NOT the AI-strategy word at
+		// +0x8c. internal rather than private so EngineTests can pin the mapping
+		// against the shipped conquests.biq, like GetZoneOfControlFlags.
+		internal static IEnumerable<SaveUnitPrototype.Flag> GetNuclearWeaponFlags(PRTO prto) {
+			if (prto.NuclearWeapon) yield return SaveUnitPrototype.Flag.NuclearWeapon;
+			if (prto.ICBM) yield return SaveUnitPrototype.Flag.ICBM;
+			if (prto.TacticalMissile) yield return SaveUnitPrototype.Flag.TacticalMissile;
+			if (prto.HiddenNationality) yield return SaveUnitPrototype.Flag.HiddenNationality;
+		}
+
 		private HashSet<string> ImportUnitAvailability(PRTO prto) {
 			HashSet<string> availableToCivs = [];
 			int[] availableTo = prto.AvailableTo.GetAvailableCivIndexes().ToArray();
@@ -1741,6 +1755,9 @@ namespace C7GameData {
 				// an ability bit; the cruise-missile ability zeroes a candidate's
 				// bombard term in the zone-of-control scan (11_movement.md §6).
 				prototype.flags.UnionWith(GetZoneOfControlFlags(prto));
+				// The nuclear-weapon abilities (§10): the launch gate and the
+				// tactical/ICBM split and the hidden-nationality raid escape.
+				prototype.flags.UnionWith(GetNuclearWeaponFlags(prto));
 
 				prototype.actions.UnionWith(GetUnitActions(prto));
 				prototype.terraformActions.UnionWith(GetUnitTerraforms(prto).Select(tfKey => terraformIdByCiv3Key[tfKey]));
@@ -2025,6 +2042,8 @@ namespace C7GameData {
 				(bldg.IncreasedShipMovement, SaveBuilding.Flag.PlusOneShipMovement),
 				(bldg.PlusTwoShipMovement, SaveBuilding.Flag.PlusTwoShipMovement),
 				(bldg.DoubleCombatVsBarbarians, SaveBuilding.Flag.DoubleCombatVsBarbarians),
+				(bldg.DecreasesMissileSuccess, SaveBuilding.Flag.DecreasesMissileSuccess),
+				(bldg.CanMeltdown, SaveBuilding.Flag.CanMeltdown),
 			}
 			.Where(t => t.Item1)
 			.Select(t => t.Item2);
