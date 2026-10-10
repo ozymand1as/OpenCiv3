@@ -1868,19 +1868,17 @@ namespace C7Engine {
 		// body over the first two thirds of its tile walk, and the other two
 		// passes always ask for it (`0x5f337b`-`0x5f3398`).
 		//
-		// The original also asks the plot's slot-27 helper (`0x5ea930`, which
-		// reads the kind-2 flag word through `plot+0xac` and reports bits 16 and
-		// 24) and refuses the tile when it reports the potential shield bonus.
-		// Nothing has set that mark by the time this predicate runs, in either
-		// implementation: the pass that sets it runs after resources in the
-		// original - `Map_impl_generate` @ `0x5eb580` calls the resource pass
-		// before the dense-feature pass at `0x5f2090`, which is what sets the
-		// bit - and this fork's equivalent, MapGenerator.AddBonusGrasslands,
-		// likewise runs after resources. The refusal is therefore inert on a
-		// generated map, but testing it keeps this predicate a faithful port for
-		// a map whose tiles arrive with the mark already set: an imported
-		// scenario map, where the mark comes from the BIQ's per-tile
-		// bonus-grassland flag (C7Engine.C7GameData.ImportCiv3).
+		// The original's predicate also asks the tile for the potential shield
+		// bonus (`0x5ea930`) and refuses the tile when that mark is set. The
+		// refusal is not reproduced here because it cannot fire: the only pass
+		// that sets the mark is the dense-feature pass (`0x5f2090`), and the
+		// driver (`0x5eb580`) runs the resource pass (`0x5f22a0`) before it, so
+		// the mark is unset whenever resources are placed. This fork's
+		// equivalent, MapGenerator.AddBonusGrasslands, runs after AddResources
+		// for the same reason, so a port of the test would be unreachable code.
+		// The rule it serves - no tile carries both a resource and the mark - is
+		// still live, in the bonus-grassland pass skipping tiles that already
+		// carry a resource.
 		//
 		// The terrain and resource record lookups the original performs first
 		// only cache, so they have no counterpart here.
@@ -1888,11 +1886,6 @@ namespace C7Engine {
 			// A tile that already carries a resource is never a candidate
 			// (`0x5f341c`).
 			if (HasResource(t)) {
-				return false;
-			}
-
-			// Nor is a tile marked with the potential shield bonus (`+0x6c`).
-			if (t.isBonusShield) {
 				return false;
 			}
 

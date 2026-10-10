@@ -484,31 +484,45 @@ public class ResourceGenerationTest {
 
 	// -------------------------------------------------- the shield-bonus mark
 
-	// The predicate refuses a tile marked with the potential shield bonus
-	// (`+0x6c`). Nothing sets that mark before resources, in either
-	// implementation, so the refusal cannot change a generated map; it is kept
-	// because it is part of the predicate, and it decides for a map whose tiles
-	// arrive marked.
+	// The predicate no longer carries the original's refusal of a tile marked
+	// with the potential shield bonus. The mark cannot be set when resources are
+	// placed - only the bonus-grassland pass sets it, and that runs after
+	// AddResources, exactly as the dense-feature pass runs after the resource
+	// pass in the original - so the refusal was unreachable code. What is left is
+	// the stronger claim: the mark plays no part in this pass at all, and a map
+	// whose tiles arrive marked is placed exactly like one that arrives clean.
 	[Fact]
-	public void ATileMarkedWithThePotentialShieldBonusIsRefused() {
+	public void ThePotentialShieldBonusMarkDoesNotChangeResourcePlacement() {
 		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
-		Resource horses = MakeResource("Horses", ResourceCategory.STRATEGIC, 160);
-		Allow(terrainTypes, horses);
+		Resource gems = MakeResource("Gems", ResourceCategory.LUXURY, 120);
+		Resource wheat = MakeResource("Wheat", ResourceCategory.BONUS, 100);
+		Allow(terrainTypes, gems);
+		Allow(terrainTypes, wheat);
 
-		GameMap m = MakeMap(20, 16, terrainTypes[0]);
-		Tile centre = Centre(m);
-		MakeGrassland(terrainTypes, centre);
-		WorldCharacteristics wc = MakeWc(m, terrainTypes, [horses], seed: 20260214);
+		GameMap Place(bool marked) {
+			GameMap m = MakeMap(40, 32, terrainTypes[11]);
+			WorldCharacteristics wc = MakeWc(m, terrainTypes, [gems, wheat], seed: 20260214);
+			if (marked) {
+				foreach (Tile t in m.tiles) {
+					t.isBonusShield = true;
+				}
+			}
+			MapGenerator.AddResources(wc, m);
+			return m;
+		}
 
-		Assert.True(MapGenerator.CanPlaceResource(wc, m, horses, centre, true));
+		GameMap clean = Place(marked: false);
+		GameMap premarked = Place(marked: true);
 
-		centre.isBonusShield = true;
-		Assert.False(MapGenerator.CanPlaceResource(wc, m, horses, centre, true),
-			"the potential shield bonus mark refuses the tile");
+		// Both maps must place something, or the comparison is vacuous.
+		Assert.Contains(clean.tiles, t => t.Resource == gems);
+		Assert.Contains(clean.tiles, t => t.Resource == wheat);
+
+		Assert.Equal(ResourceSignature(clean), ResourceSignature(premarked));
 	}
 
-	// The observable the refusal and the mark's setter produce between them: no
-	// tile carries both a resource and the shield mark. The original gets that
+	// The observable the mark and the bonus-grassland pass produce between them:
+	// no tile carries both a resource and the shield mark. The original gets that
 	// by refusing the marked tile and then skipping resource tiles in the pass
 	// that sets the mark; this fork gets it from the other order plus the same
 	// skip, because its mark is not set when resources are placed.
