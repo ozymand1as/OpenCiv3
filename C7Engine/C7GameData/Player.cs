@@ -939,7 +939,13 @@ namespace C7GameData {
 		}
 
 		public void HandleCityUpdates(GameData gameData) {
-			foreach (City c in cities) {
+			// The border sweep in the body below can found a city: a hut on a tile
+			// the expansion just claimed is forced to the City outcome (spec 17
+			// section 5.1; spec 22 section 4.6), which appends to this player's
+			// city list. Walk a snapshot, so the walk cannot fail on that append
+			// and the city founded mid-body is not also grown and paid for in the
+			// interturn that founded it.
+			foreach (City c in cities.ToList()) {
 				// The garrison quels resistance before the city's growth and
 				// production resolve (spec 17 section 7: the quelling pass runs
 				// inside the per-city turn body before the yields are computed).

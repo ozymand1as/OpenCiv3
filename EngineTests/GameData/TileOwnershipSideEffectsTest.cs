@@ -235,6 +235,46 @@ public class TileOwnershipSideEffectsTest {
 		Assert.Single(gd.cities);
 	}
 
+	// ------------------------------------------------------ the interturn walk
+
+	/// <summary>
+	/// The border sweep runs inside Player.HandleCityUpdates, which walks the
+	/// player's own city list (spec 17 section 5.1). A hut the sweep converts
+	/// founds a city, so it appends to the very list being walked, and the walk
+	/// must not observe the append: the new city is founded after this
+	/// interturn's per-city body has begun, so it is not also grown and paid for
+	/// in the same pass. Before the walk took its snapshot this threw
+	/// InvalidOperationException - and because the turn loop was entered from a
+	/// message whose failure cannot be observed, the throw did not fail the
+	/// test: it stopped the turn loop and left the suite spinning forever.
+	/// </summary>
+	[Fact]
+	public void AHutConvertedByBorderExpansionDoesNotBreakTheInterturnWalk() {
+		C7GameData.GameData gd = NewGame(out Player claimer, out _);
+		// The culture-per-turn path reads the calendar, which a bare test game
+		// does not set up.
+		gd.timeOptions = new TimeOptions();
+		claimer.civilization.traits.Add(Civilization.Trait.Expansionist);
+		City city = CityCaptureTest.Game.AddCity(gd, claimer, gd.map.tileAt(4, 4), population: 1, cultureForOwner: 9);
+		city.AddBuilding(new Building(new SaveBuilding { name = "Temple", culturePerTurn = 1 }, gd));
+
+		// The hut sits one ring outside the level-1 border and inside the
+		// level-2 border, so it is the expansion itself that claims it - which
+		// is what makes the sweep convert it during the walk.
+		gd.UpdateTileOwners();
+		Tile hut = gd.map.tileAt(7, 5);
+		Assert.Equal(2, hut.RankDistanceTo(city.location));
+		Assert.DoesNotContain(hut, city.GetTilesWithinBorders());
+		Assert.Null(hut.owningCity);
+		hut.hasGoodyHut = true;
+
+		claimer.HandleCityUpdates(gd);
+
+		Assert.True(hut.HasCity());
+		Assert.Equal(claimer, hut.cityAtTile.owner);
+		Assert.Equal(2, claimer.cities.Count);
+	}
+
 	// ------------------------------------------------------ the movement path
 
 	/// <summary>
