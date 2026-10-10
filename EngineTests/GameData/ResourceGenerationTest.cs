@@ -370,6 +370,165 @@ public class ResourceGenerationTest {
 		Assert.Equal(dieSides, MapGenerator.BonusDieSides(weight));
 	}
 
+	// -------------------------------------------------- the class order
+
+	// The class order is part of the rule: luxuries are placed first, then the
+	// strategic resources, then everything that is neither. One tile on the map
+	// can carry either resource, and the strategic record is deliberately listed
+	// first, so a pass that walked the records without the class split would
+	// place the strategic one and fail here.
+	[Fact]
+	public void LuxuriesArePlacedBeforeStrategicResources() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource gems = MakeResource("Gems", ResourceCategory.LUXURY, 160);
+		Resource horses = MakeResource("Horses", ResourceCategory.STRATEGIC, 160);
+		Allow(terrainTypes, gems);
+		Allow(terrainTypes, horses);
+
+		GameMap m = MakeMap(20, 16, terrainTypes[0]);
+		Tile onlySpot = Centre(m);
+		MakeGrassland(terrainTypes, onlySpot);
+
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [horses, gems], seed: 20260214);
+		MapGenerator.AddResources(wc, m);
+
+		Assert.Same(gems, onlySpot.Resource);
+		Assert.Equal(0, m.tiles.Count(t => t.Resource == horses));
+	}
+
+	// And the strategic pass runs before the bonus one.
+	[Fact]
+	public void StrategicResourcesArePlacedBeforeBonusResources() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource wheat = MakeResource("Wheat", ResourceCategory.BONUS, 160);
+		Resource horses = MakeResource("Horses", ResourceCategory.STRATEGIC, 160);
+		Allow(terrainTypes, wheat);
+		Allow(terrainTypes, horses);
+
+		GameMap m = MakeMap(20, 16, terrainTypes[0]);
+		Tile onlySpot = Centre(m);
+		MakeGrassland(terrainTypes, onlySpot);
+
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [wheat, horses], seed: 20260214);
+		MapGenerator.AddResources(wc, m);
+
+		Assert.Same(horses, onlySpot.Resource);
+		Assert.Equal(0, m.tiles.Count(t => t.Resource == wheat));
+	}
+
+	// -------------------------------------------------- the walk order
+
+	// The tile order is one seeded shuffle of the whole tile list, made before
+	// the first pass and reused by all three. With exactly one placement
+	// possible the resource lands on the first tile of that order - not on tile
+	// zero, which is what walking the list in index order would give, and not on
+	// the first tile of a second shuffle.
+	[Fact]
+	public void TheTileWalkIsOneSeededShuffleOfTheTileList() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource horses = MakeResource("Horses", ResourceCategory.STRATEGIC, 25);
+		// One eligible terrain before index ten, so the weight is one and the
+		// target is (8 * 25 / 100) / 2 = 1.
+		terrainTypes[3].allowedResources.Add(horses.Key);
+
+		GameMap m = MakeMap(20, 16, terrainTypes[3]);
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [horses], seed: 20260214);
+		Assert.Equal(1, MapGenerator.GetAppearance(wc, new Random(1), horses, MapGenerator.TerrainWeight(wc, horses)));
+
+		int[] expectedOrder = Enumerable.Range(0, m.tiles.Count).ToArray();
+		new Random(20260214 + MapGenerator.RESOURCE_SEED_OFFSET).Shuffle<int>(expectedOrder.AsSpan());
+		Assert.NotEqual(0, expectedOrder[0]);
+
+		MapGenerator.AddResources(wc, m);
+
+		Assert.Same(horses, m.tiles[expectedOrder[0]].Resource);
+		Assert.Equal(1, m.tiles.Count(t => t.Resource == horses));
+	}
+
+	// ------------------------------------------------------ the clump step
+
+	// The clump step asks for the first of the origin's eight neighbours, in the
+	// original's spiral order, that the guard and the predicate both accept. The
+	// neighbour at the first spiral position is made ineligible here, so a helper
+	// that took the neighbours in any other order - or that ignored the
+	// predicate - returns the wrong tile.
+	[Fact]
+	public void TheClumpStepTakesTheFirstAcceptedNeighbourInSpiralOrder() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource gems = MakeResource("Gems", ResourceCategory.LUXURY, 160);
+		Allow(terrainTypes, gems);
+
+		GameMap m = MakeMap(20, 16, terrainTypes[0]);
+		Tile origin = Centre(m);
+		MakeGrassland(terrainTypes, origin);
+		PutResource(origin, gems);
+
+		(int dx1, int dy1) = MapGenerator.Civ3SpiralOffset(1);
+		(int dx2, int dy2) = MapGenerator.Civ3SpiralOffset(2);
+		Tile first = At(m, origin.XCoordinate + dx1, origin.YCoordinate + dy1);
+		Tile second = At(m, origin.XCoordinate + dx2, origin.YCoordinate + dy2);
+		Assert.NotSame(first, second);
+		MakeGrassland(terrainTypes, second);
+
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [gems], seed: 20260214);
+
+		// The first spiral position cannot carry this resource, so the step
+		// moves on to the second.
+		first.overlayTerrainType = terrainTypes[0];
+		Assert.Same(second, MapGenerator.FindClumpNeighbour(wc, m, gems, origin, false));
+
+		// Make it eligible and it is the one taken.
+		MakeGrassland(terrainTypes, first);
+		Assert.Same(first, MapGenerator.FindClumpNeighbour(wc, m, gems, origin, false));
+	}
+
+	// -------------------------------------------------- the shield-bonus mark
+
+	// The predicate refuses a tile marked with the potential shield bonus
+	// (`+0x6c`). Nothing sets that mark before resources, in either
+	// implementation, so the refusal cannot change a generated map; it is kept
+	// because it is part of the predicate, and it decides for a map whose tiles
+	// arrive marked.
+	[Fact]
+	public void ATileMarkedWithThePotentialShieldBonusIsRefused() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource horses = MakeResource("Horses", ResourceCategory.STRATEGIC, 160);
+		Allow(terrainTypes, horses);
+
+		GameMap m = MakeMap(20, 16, terrainTypes[0]);
+		Tile centre = Centre(m);
+		MakeGrassland(terrainTypes, centre);
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [horses], seed: 20260214);
+
+		Assert.True(MapGenerator.CanPlaceResource(wc, m, horses, centre, true));
+
+		centre.isBonusShield = true;
+		Assert.False(MapGenerator.CanPlaceResource(wc, m, horses, centre, true),
+			"the potential shield bonus mark refuses the tile");
+	}
+
+	// The observable the refusal and the mark's setter produce between them: no
+	// tile carries both a resource and the shield mark. The original gets that
+	// by refusing the marked tile and then skipping resource tiles in the pass
+	// that sets the mark; this fork gets it from the other order plus the same
+	// skip, because its mark is not set when resources are placed.
+	[Fact]
+	public void NoTileEndsUpWithBothAResourceAndTheShieldMark() {
+		List<TerrainType> terrainTypes = TerrainTypes(exoticIndex: 11);
+		Resource wheat = MakeResource("Wheat", ResourceCategory.BONUS, 1000);
+		Allow(terrainTypes, wheat);
+
+		GameMap m = MakeMap(40, 32, terrainTypes[11]);
+		WorldCharacteristics wc = MakeWc(m, terrainTypes, [wheat], seed: 20260214);
+
+		MapGenerator.AddResources(wc, m);
+		MapGenerator.AddBonusGrasslands(wc, m);
+
+		Assert.Contains(m.tiles, t => t.Resource == wheat);
+		Assert.Contains(m.tiles, t => t.isBonusShield);
+		Assert.DoesNotContain(m.tiles, t => t.Resource == wheat && t.isBonusShield);
+	}
+
 	// ------------------------------------------------------------- determinism
 
 	// The pass is a pure function of the seed.

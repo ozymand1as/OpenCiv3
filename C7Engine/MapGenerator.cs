@@ -85,6 +85,12 @@ namespace C7Engine {
 
 		private const int MIN_TILES_PER_PLAYER_ISLAND = 81;
 
+		// The offset this fork seeds the resource pass' own stream with. The
+		// original has no such offset (see AddResources), so the value only has
+		// to be stable for a seed to reproduce a map; it is named so the test
+		// that pins the walk order can reproduce the shuffle.
+		internal const int RESOURCE_SEED_OFFSET = 0x7171;
+
 		// The entry point to the overall map generation process.
 		public static GameMap GenerateMap(WorldCharacteristics wc) {
 			if (wc.mapSeed == -1) {
@@ -1729,8 +1735,19 @@ namespace C7Engine {
 		//     then everything that is neither - the bonus resources;
 		//   * every candidate goes through the world vtable slot at `+0x44`,
 		//     `Map_can_spawn_resource_at` @ `0x5f3320`.
+		//
+		// The stream this pass draws from is its own, seeded from the world seed.
+		// That is an approximation, not the original's behaviour: the original
+		// takes every one of these numbers from the generator's single
+		// recurrence (`next_float` @ `0x60ba80`, wrapped by `rand_int` @
+		// `0x60bab0`), whose state the whole generator advances and which the
+		// passes that run earlier have already drawn from many times. Matching it
+		// would mean reproducing every earlier pass' draw count, which is a port
+		// of the whole generator's draw history rather than of this pass. It is
+		// recorded as an approximation in re/notes/openciv3_generator_gaps.md
+		// G5 and in section 2.11 of the generator spec.
 		internal static void AddResources(WorldCharacteristics wc, GameMap m) {
-			Random rand = new(wc.mapSeed + 0x7171);
+			Random rand = new(wc.mapSeed + RESOURCE_SEED_OFFSET);
 
 			List<int> tileIndicies = Enumerable.Range(0, m.tiles.Count).ToList();
 			rand.Shuffle<int>(CollectionsMarshal.AsSpan(tileIndicies));
@@ -1851,20 +1868,31 @@ namespace C7Engine {
 		// body over the first two thirds of its tile walk, and the other two
 		// passes always ask for it (`0x5f337b`-`0x5f3398`).
 		//
-		// Two things the original checks have no counterpart here:
+		// The original also asks the plot's slot-27 helper (`0x5ea930`, which
+		// reads the kind-2 flag word through `plot+0xac` and reports bits 16 and
+		// 24) and refuses the tile when it reports the potential shield bonus.
+		// Nothing has set that mark by the time this predicate runs, in either
+		// implementation: the pass that sets it runs after resources in the
+		// original - `Map_impl_generate` @ `0x5eb580` calls the resource pass
+		// before the dense-feature pass at `0x5f2090`, which is what sets the
+		// bit - and this fork's equivalent, MapGenerator.AddBonusGrasslands,
+		// likewise runs after resources. The refusal is therefore inert on a
+		// generated map, but testing it keeps this predicate a faithful port for
+		// a map whose tiles arrive with the mark already set: an imported
+		// scenario map, where the mark comes from the BIQ's per-tile
+		// bonus-grassland flag (C7Engine.C7GameData.ImportCiv3).
 		//
-		//   * the tile's "potential shield bonus" flag (tile vtable slot 27,
-		//     `+0x6c`, bit 16 of the kind-2 flag word), because this fork places
-		//     its bonus grasslands in a later pass
-		//     (MapGenerator.AddBonusGrasslands) rather than before resources;
-		//   * the terrain and resource record lookups the original performs
-		//     first, which only cache.
-		//
-		// Both are recorded in re/notes/openciv3_generator_gaps.md under G5.
+		// The terrain and resource record lookups the original performs first
+		// only cache, so they have no counterpart here.
 		internal static bool CanPlaceResource(WorldCharacteristics wc, GameMap m, Resource r, Tile t, bool doubleMinBodySize) {
 			// A tile that already carries a resource is never a candidate
 			// (`0x5f341c`).
 			if (HasResource(t)) {
+				return false;
+			}
+
+			// Nor is a tile marked with the potential shield bonus (`+0x6c`).
+			if (t.isBonusShield) {
 				return false;
 			}
 
