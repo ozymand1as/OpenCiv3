@@ -1868,17 +1868,24 @@ namespace C7Engine {
 		// body over the first two thirds of its tile walk, and the other two
 		// passes always ask for it (`0x5f337b`-`0x5f3398`).
 		//
-		// The original's predicate also asks the tile for the potential shield
-		// bonus (`0x5ea930`) and refuses the tile when that mark is set. The
-		// refusal is not reproduced here because it cannot fire: the only pass
-		// that sets the mark is the dense-feature pass (`0x5f2090`), and the
-		// driver (`0x5eb580`) runs the resource pass (`0x5f22a0`) before it, so
-		// the mark is unset whenever resources are placed. This fork's
-		// equivalent, MapGenerator.AddBonusGrasslands, runs after AddResources
-		// for the same reason, so a port of the test would be unreachable code.
-		// The rule it serves - no tile carries both a resource and the mark - is
-		// still live, in the bonus-grassland pass skipping tiles that already
-		// carry a resource.
+		// The predicate also refuses a tile that carries the potential shield
+		// bonus (`0x5f3445`-`0x5f344a`): it asks the tile's slot at +0x6c and
+		// rejects the tile when the answer is set. That answer is one bit - the
+		// kind-2 flag word at tile +0x30, shifted down sixteen and cut to its
+		// lowest bit (`0x5ea930`) - and not the whole high byte of the word it
+		// was read from. Bit 29 of that word is the landmark flag (`0x5ea980`,
+		// set by `0x5ea990`) and the predicate does not mind it.
+		//
+		// A generated map never reaches this refusal already set: the pass that
+		// sets the bit is the dense-feature pass (`0x5f2090`, the bonus-grassland
+		// pass here), and both the driver (`0x5eb580`, which runs it at
+		// `0x5eb783`, after the resource pass at `0x5eb763`) and this fork's
+		// GenerateMap put it after resources. The refusal is not inert in the
+		// original, though, because the same predicate is asked again by the
+		// resource-upkeep path (`0x4f4cb0` at `0x4f4e6a`, then `0x5d5d00` at
+		// `0x5d6262`) over a map whose tiles kept the mark from generation. That
+		// path has no counterpart here, so what this fork carries is the
+		// predicate's rule at the predicate's own consultation.
 		//
 		// The terrain and resource record lookups the original performs first
 		// only cache, so they have no counterpart here.
@@ -1886,6 +1893,11 @@ namespace C7Engine {
 			// A tile that already carries a resource is never a candidate
 			// (`0x5f341c`).
 			if (HasResource(t)) {
+				return false;
+			}
+
+			// Nor a tile marked with the potential shield bonus (`0x5f3445`).
+			if (t.isBonusShield) {
 				return false;
 			}
 
