@@ -365,7 +365,7 @@ namespace C7Engine {
 			return true;
 		}
 
-		private static void AddHillsAndMountains(WorldCharacteristics wc, GameMap m) {
+		internal static void AddHillsAndMountains(WorldCharacteristics wc, GameMap m) {
 			// Generate a new height map that has lots of smaller blobs, to avoid
 			// having one giant mountain range.
 			HeightMap hm = new(seed: wc.mapSeed + 0xfeed, width:wc.worldSize.width, height:wc.worldSize.height, scale:.2);
@@ -375,11 +375,31 @@ namespace C7Engine {
 			TerrainType mountains = wc.terrainTypes.Find(x => x.Key == "mountains");
 			TerrainType volcano = wc.terrainTypes.Find(x => x.Key == "volcano");
 
-			// Figure out the height bands for hills and mountains. We use bands
-			// so that we can have "elevated grasslands" and so that we don't
-			// get large chunks of the map just being hills/mountains, which
-			// isn't useful for cities.
-			int hillLowerBound, hillUpperBound;
+			// The bands are the original's, read out of the stage of the Civ3
+			// generator that writes the base terrain (the climate pass, at
+			// 0x5edb70). That stage builds its own fractal height field, cuts it
+			// into percentile bands and writes hills, mountains and volcanoes from
+			// them, keyed to the resolved world age - 3 Billion is age 0, 4 Billion
+			// age 1 and 5 Billion age 2. The band edges below are those
+			// percentiles, and `FindSeaLevel` answers the same question the
+			// original's threshold helper does: the value under which that share
+			// of the field lies.
+			//
+			//   age     hills                    mountains and volcanoes
+			//   3 By    18-28 and 55-65          65-77
+			//   4 By    20-25 and 63-70          70-77
+			//   5 By    21-24 and 66-70          70-74
+			//
+			// Two things are worth saying out loud. The volcano is not its own
+			// band: it shares the mountain band, and the split between them is a
+			// single roll against an age-dependent probability (6% at 3 By, 4% at
+			// 4 By, 2% at 5 By - the pass rolls a mountain 94/96/98 times in a
+			// hundred and writes a volcano on the rest). So a young map is
+			// volcanic and an old one is eroded flat, which is what the age option
+			// has always meant in this game. The edges also leave the top of the
+			// field alone: above 77% the pass writes nothing, so the highest
+			// ground stays open land rather than becoming mountains.
+			int hillLowerBound, hillUpperBound, hillUpperBandLowerBound, hillUpperBandUpperBound;
 			int mountainLowerBound, mountainUpperBound;
 
 			// The percentage of mountains that will become volcanos.
@@ -387,25 +407,31 @@ namespace C7Engine {
 
 			switch (wc.age) {
 				case WorldCharacteristics.Age.Billion_3:
-					hillLowerBound = hm.FindSeaLevel(15);
-					hillUpperBound = hm.FindSeaLevel(30);
-					mountainLowerBound = hm.FindSeaLevel(60);
-					mountainUpperBound = hm.FindSeaLevel(75);
-					volcanoPercent = 5;
+					hillLowerBound = hm.FindSeaLevel(18);
+					hillUpperBound = hm.FindSeaLevel(28);
+					hillUpperBandLowerBound = hm.FindSeaLevel(55);
+					hillUpperBandUpperBound = hm.FindSeaLevel(65);
+					mountainLowerBound = hm.FindSeaLevel(65);
+					mountainUpperBound = hm.FindSeaLevel(77);
+					volcanoPercent = 6;
 					break;
 				case WorldCharacteristics.Age.Billion_4:
 					hillLowerBound = hm.FindSeaLevel(20);
-					hillUpperBound = hm.FindSeaLevel(30);
-					mountainLowerBound = hm.FindSeaLevel(65);
-					mountainUpperBound = hm.FindSeaLevel(75);
-					volcanoPercent = 3;
+					hillUpperBound = hm.FindSeaLevel(25);
+					hillUpperBandLowerBound = hm.FindSeaLevel(63);
+					hillUpperBandUpperBound = hm.FindSeaLevel(70);
+					mountainLowerBound = hm.FindSeaLevel(70);
+					mountainUpperBound = hm.FindSeaLevel(77);
+					volcanoPercent = 4;
 					break;
 				case WorldCharacteristics.Age.Billion_5:
-					hillLowerBound = hm.FindSeaLevel(23);
-					hillUpperBound = hm.FindSeaLevel(30);
-					mountainLowerBound = hm.FindSeaLevel(68);
-					mountainUpperBound = hm.FindSeaLevel(75);
-					volcanoPercent = 1;
+					hillLowerBound = hm.FindSeaLevel(21);
+					hillUpperBound = hm.FindSeaLevel(24);
+					hillUpperBandLowerBound = hm.FindSeaLevel(66);
+					hillUpperBandUpperBound = hm.FindSeaLevel(70);
+					mountainLowerBound = hm.FindSeaLevel(70);
+					mountainUpperBound = hm.FindSeaLevel(74);
+					volcanoPercent = 2;
 					break;
 				default:
 					throw new Exception($"Unknown age: {wc.age}");
@@ -417,7 +443,8 @@ namespace C7Engine {
 				}
 
 				int height = hm.GetHeight(t.XCoordinate, t.YCoordinate);
-				if (height >= hillLowerBound && height < hillUpperBound) {
+				if ((height >= hillLowerBound && height < hillUpperBound) ||
+					(height >= hillUpperBandLowerBound && height < hillUpperBandUpperBound)) {
 					t.overlayTerrainType = hills;
 					continue;
 				}
@@ -2206,9 +2233,39 @@ namespace C7Engine {
 		}
 
 		/// <summary>
-		/// Apply barbarian activity level to barbarian camp spawn rate. Currently NOT based on Civ3 values.
-		/// TODO: Make configurable
-		/// TODO: Determine what these values are in Civ3 
+		/// The number of barbarian camps this map is allowed to carry.
+		///
+		/// This is a FORK TUNING CURVE, and it is deliberate that it stays one.
+		/// The original's map generator creates no barbarian camps at all, so
+		/// there is no Civ3 rate here to compare against:
+		///
+		///  * its camp-placing routine (0x55f9f0) has exactly two callers, the
+		///    per-turn barbarian phase (0x560833) and the era-change reseed
+		///    (0x55fd72). Neither is any stage of the generator driver (0x5eb580),
+		///    whose last three stages are the resource pass, the sparse-feature
+		///    pass and the start placement;
+		///  * the sparse-feature pass (0x5f21b0), which the gap note named as the
+		///    camp candidate, places goody huts and nothing else. It asks the
+		///    world predicate held at vtable slot 0x48 - the hut predicate
+		///    0x5f2c60 - and writes kind-0 bit 0x20. The camp predicate
+		///    (0x5f2df0) is the neighbouring slot 0x40, and the only call to it in
+		///    the image is from the camp-placing routine;
+		///  * the camp-placing routine could not place a camp on a fresh map even
+		///    if it were called during generation: it requires a city on the
+		///    candidate's continent, and a generated map has no cities.
+		///
+		/// What the original does measure is an in-play target: the barbarian
+		/// phase tops the camp count up to one less than the number of living
+		/// civilisations, creating at most one camp per turn out of a budget of
+		/// tileCount >> 4 attempts per creation, and the era-change reseed brings
+		/// the count to the same target. That is a gameplay pass, not a generator
+		/// one, and this engine has no counterpart of it, so its generator is the
+		/// only source of camps on a new map. The curve below is therefore kept
+		/// so a generated game still has camps to play against, and the TODO that
+		/// used to sit here ("determine what these values are in Civ3") is answered
+		/// rather than left open: there are no such values. If this engine ever
+		/// grows the in-play pass, this budget should be revisited - the original
+		/// would start a game with zero camps.
 		/// </summary>
 		private static int DeriveTotalPossibleBarbCamps(WorldCharacteristics wc, int landTiles) {
 			var totalCampsBaseline = landTiles / 100;
@@ -2322,6 +2379,19 @@ namespace C7Engine {
 			List<int> tileIndicies = Enumerable.Range(0, m.tiles.Count).ToList();
 			rand.Shuffle<int>(CollectionsMarshal.AsSpan(tileIndicies));
 
+			// This pass is the fork's counterpart of the original's dense-feature
+			// pass (0x5f2090), which runs after the resource pass and touches the
+			// same mark the resource candidacy predicate refuses: the potential
+			// shield bonus, a tile flag whose only job is to keep a resource off a
+			// tile the generator has already marked. The original asks for one
+			// thing here - the tile's terrain class equals 2 - and rolls a one in
+			// three chance on the tiles that carry no resource. Class 2 is the
+			// open-ground class, so the original's eligible set is wider than the
+			// fork's: it also covers forest, jungle, marsh, hills, mountains and
+			// volcano, where a mark is not observable in this engine. The fork
+			// therefore keeps its own narrower rule (grassland, no hill overlay, no
+			// resource) and carries the original's RATE, which is the part that
+			// changes a map: one tile in three, not one in four.
 			foreach (int index in tileIndicies) {
 				Tile t = m.tiles[index];
 
@@ -2331,8 +2401,8 @@ namespace C7Engine {
 					continue;
 				}
 
-				// Each grassland tile has a 25% chance.
-				if (rand.Next(100) >= 25) {
+				// Each eligible grassland tile has a one in three chance.
+				if (rand.Next(3) != 0) {
 					continue;
 				}
 
