@@ -16,8 +16,8 @@ namespace EngineTests.GameData;
 /// take, the unit is charged its WHOLE MAXIMUM movement.
 ///
 /// The original's cost function reports an illegal step with the all-bits-set
-/// sentinel -1, the executor tests for it (`cmpl $-0x1, %eax` at 0x5b9467) and
-/// asks Unit_can_move_to_adjacent_tile at 0x5b9471: a refusal returns 1 from
+/// sentinel -1, the executor compares the cost against that sentinel at 0x5b9467
+/// and asks Unit_can_move_to_adjacent_tile at 0x5b9471: a refusal returns 1 from
 /// 0x5b9478 and the step never happens, otherwise the charge becomes
 /// Unit_get_max_move_points at 0x5b9480. The charge is added to the spent field
 /// at 0x5b94b2 (step 8), and step 9's amphibious override overwrites it with the
@@ -28,6 +28,19 @@ namespace EngineTests.GameData;
 /// destination, a direction index outside 1-8 and a non-adjacent pair can
 /// produce it. The end-to-end test below uses the direction route, which is the
 /// only one reachable through MapUnit.Move.
+///
+/// The direction route's reachable case is a same-tile step, and its legality is
+/// settled rather than assumed: the executor hands Unit_can_move_to_adjacent_tile
+/// the step's own direction index, index 0 included, and for index 0 that
+/// predicate examines the unit's own tile - where the occupier is the mover's
+/// own civ, so both occupancy blocks are skipped, the own tile passes the
+/// between-tiles test, and the tail's "occupied by a civ the mover is not at war
+/// with" check sees the mover's own civ and answers 0 (allowed). The original
+/// therefore takes the step and charges the whole maximum, which is what the
+/// fork does. The route itself is defensive in the fork: no engine caller can
+/// build a TileDirection.INVALID step, because every derived direction comes
+/// from Tile.DirectionTo, which answers a compass direction for the own tile
+/// too.
 /// </summary>
 public sealed class IllegalStepCostTest : IClassFixture<SaveGameFixture> {
 	private const double Tolerance = 0.0001;
@@ -183,10 +196,23 @@ public sealed class IllegalStepCostTest : IClassFixture<SaveGameFixture> {
 
 	// The one route to the sentinel a step issued through MapUnit.Move can take:
 	// a direction outside the eight the cost function accepts. The original's
-	// direction gate rejects index 0 at 0x57f40f (`testl %eax,%eax` /
-	// `jle 0x57fe05`), which is the only reason this step is illegal at all -
-	// the destination it resolves to is the unit's own tile. TileDirection.INVALID
-	// is the fork's index 0.
+	// direction gate at 0x57f40f refuses any index below 1 (and any index above 8
+	// at 0x57f407), and the destination a zero index resolves to is the unit's own
+	// tile: the direction-to-delta table at 0x5e6e50 maps index 0 to a zero
+	// offset. TileDirection.INVALID is the fork's way of asking for that same-tile
+	// step - its direction-to-delta conversion is the zero offset too - and the
+	// step's own tile is not adjacent to itself, which is how the fork's cost
+	// function refuses the step.
+	//
+	// The original takes this step, which is what makes the whole-maximum charge
+	// correct rather than merely defensive. In the cost-illegal branch the
+	// executor pushes the step's direction index as Unit_can_move_to_adjacent_tile's
+	// neighbour index (0x5b946c-0x5b9471, and the index is the same one the cost
+	// function was given), so index 0 sends that predicate to the unit's own tile.
+	// The tile's occupier there is the mover's own civ, so the routine skips both
+	// occupancy blocks, the own tile passes the between-tiles test, and the tail's
+	// "occupied by a civ the mover is not at war with" check sees the mover's own
+	// civ and answers 0 (allowed). The executor then charges the whole maximum.
 	//
 	// A charge-only implementation leaves 2 of the 3 points (the tile costs 1);
 	// the whole-maximum charge leaves none.
@@ -196,6 +222,11 @@ public sealed class IllegalStepCostTest : IClassFixture<SaveGameFixture> {
 		MapUnit unit = MakeUnit(MakePlayer(), MakeLandPrototype("Mover", movement: 3), source);
 		Assert.Equal(3.0, unit.movementPoints.remaining, Tolerance);
 
+		// The fork's shape of the original's index-0 answer: the legality predicate
+		// allows the step onto the tile the unit already stands on, which is what
+		// makes the charge below the whole maximum rather than a refusal.
+		Assert.True(unit.CanEnter(source, source));
+
 		Assert.True(await unit.Move(TileDirection.INVALID));
 
 		Assert.Equal(0.0, unit.movementPoints.remaining, Tolerance);
@@ -204,6 +235,28 @@ public sealed class IllegalStepCostTest : IClassFixture<SaveGameFixture> {
 		// The step is not an amphibious assault, so step 9's override is not what
 		// emptied the budget.
 		Assert.False(unit.IsAmphibiousAssaultStep(source, source));
+	}
+
+	// The same-tile step is a defensive path in the fork, not one the game can
+	// reach: every direction an engine caller derives comes from Tile.DirectionTo,
+	// and that answers a compass direction for the unit's own tile as well (the
+	// zero angle lands on EAST), so no caller ever hands MapUnit.Move the INVALID
+	// direction. Only an explicit TileDirection.INVALID argument reaches the route
+	// the test above pins - which is why the route's faithfulness rests on the
+	// original's index-0 answer, established in the comment above, rather than on
+	// gameplay evidence.
+	[Fact]
+	public void DirectionToAlwaysAnswersACompassDirection() {
+		Tile source = PrepareCleanStep(destinationMovementCost: 1);
+
+		// The unit's own tile: a zero delta, which is not INVALID.
+		Assert.Equal(TileDirection.EAST, source.DirectionTo(source));
+
+		// And every real neighbour resolves to one of the eight compass
+		// directions, so the sentinel direction is never derived from geometry.
+		foreach (TileDirection dir in TileDirectionExtensions.All) {
+			Assert.Contains(source.DirectionTo(source.neighbors[dir]), TileDirectionExtensions.All);
+		}
 	}
 
 	// Step 6's whole-maximum charge and step 9's amphibious override both leave

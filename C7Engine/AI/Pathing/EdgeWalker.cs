@@ -37,10 +37,10 @@ namespace C7Engine.Pathing {
 
 				float tileMovementCost = TilePath.GetMovementCost(unit.owner, node, direction, neighbor, unit);
 				// An illegal step has no edge at all: the original's pathfinder
-				// rejects the cost function's -1 sentinel (`testl %edi,%edi` /
-				// `jl` at 0x580b34-0x580b36, jumping out of the neighbour's
-				// update), and treating it as a number here would give the edge a
-				// negative weight.
+				// rejects the cost function's -1 sentinel at 0x580b34-0x580b36,
+				// where a sign test on the returned cost leaves the neighbour's
+				// update before it is applied, and treating the sentinel as a
+				// number here would give the edge a negative weight.
 				if (tileMovementCost == TilePath.IllegalStepCost) {
 					continue;
 				}

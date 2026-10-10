@@ -311,8 +311,8 @@ public class IgnoreMovementCostTest : IClassFixture<SaveGameFixture> {
 /// road/railroad discount was ruled out (11_movement.md §3.6).
 ///
 /// The value is measured, not read off the spec's prose: the original loads
-/// RULE.MovementAlongRoads into the cost register for this branch
-/// (`movl 0x9c72c8,%edi` at 0x58036f), the same register value the air branch
+/// RULE.MovementAlongRoads into the cost value for this branch at 0x58036f, the
+/// same value the air branch
 /// loads at that address and the sea-into-a-city branch loads at 0x580336. It is
 /// NOT the raw constant 1 the road branch (0x580282) and the
 /// all-terrain-as-roads branch (0x5802a9, 0x5802e7) load. An earlier revision of
@@ -441,7 +441,7 @@ public sealed class IgnoreMovementCostMovementTest : MapBase {
 	}
 
 	// The lead-member lookup yields nothing for an army with mixed members
-	// (FUN_005bc6d0 returns -1 as soon as two members' type ids differ,
+	// (the lookup at 0x5bc6d0 returns -1 as soon as two members' type ids differ,
 	// 0x5bc7d3), and the caller then reads the army's own record only. So a mixed
 	// army keeps its own type's flags - which here means it pays the mountain's
 	// full cost.

@@ -32,9 +32,10 @@ public partial class MapUnit {
 		hasUsedAttack = false;
 
 		// The pending-promotion status bit is cleared at the same point in the
-		// original: Unit_begin_turn's `andb $-0x48, %al` at 0x5c7e7e masks off
-		// bits 0x1, 0x2, 0x4 and 0x40 together with the `Unit.Moves := 0` store at
-		// 0x5c7e77, so a failed promotion roll is only remembered for the rest of
+		// original: Unit_begin_turn's byte-wide AND against the complement of 0x48
+		// at 0x5c7e7e masks off bits 0x1, 0x2, 0x4 and 0x40 together with the
+		// `Unit.Moves := 0` store at 0x5c7e77, so a failed promotion roll is only
+		// remembered for the rest of
 		// the unit's own turn (11_movement.md §7 and §10.1).
 		promotionPending = false;
 
@@ -382,8 +383,8 @@ public partial class MapUnit {
 	// noted at the end of this comment).
 	//
 	// Trade_Net_get_movement_cost reports a step it considers illegal with the
-	// all-bits-set sentinel -1. The executor tests for it at 0x5b9467
-	// (`cmpl $-0x1, %eax`) and, when it sees it, consults
+	// all-bits-set sentinel -1. The executor compares the returned cost against
+	// that sentinel at 0x5b9467 and, when it matches, consults
 	// Unit_can_move_to_adjacent_tile (0x5b9471): a refusal returns 1 from
 	// 0x5b9478 and the step never happens, while an allowed step falls through to
 	// Unit_get_max_move_points at 0x5b9480 and is charged the unit's WHOLE

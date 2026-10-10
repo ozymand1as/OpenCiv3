@@ -207,7 +207,8 @@ public sealed class ImmobileStepTest : IClassFixture<SaveGameFixture> {
 	}
 
 	// The lead-member lookup yields nothing when the members' types differ
-	// (FUN_005bc6d0 returns -1 at 0x5bc81a as soon as two members' type ids
+	// (the lookup at 0x5bc6d0 returns -1 at 0x5bc81a as soon as two members' type
+	// ids
 	// differ), and the caller then reads only the army's own record - so a mixed
 	// army is not immobile.
 	[Fact]

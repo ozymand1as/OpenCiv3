@@ -14,17 +14,20 @@ namespace EngineTests.GameData;
 /// bit (11_movement.md §10.1, parity row G18).
 ///
 /// The bit is "a battlefield-promotion roll has already failed for this unit
-/// this turn". Unit_score_kill @ 0x5bef00 tests it before rolling
-/// (`testb $0x2, 0x48(%esi)` at 0x5bf08b, `jne` straight to the promotion at
-/// 0x5bf0db), sets it when the roll fails in an offline game (load the status
-/// word, `orb $0x2`, store back: 0x5bf0d1-0x5bf0d6 and 0x5bf7b3), and never
+/// this turn". Unit_score_kill @ 0x5bef00 reads the status word before rolling
+/// (the read at 0x5bf08b, whose hit jumps straight to the promotion at
+/// 0x5bf0db), sets the bit when the roll fails in an offline game (the status
+/// word is loaded, bit 0x2 is ORed into its low byte and the word is stored
+/// back: 0x5bf0d1-0x5bf0d6 and 0x5bf7b3), and never
 /// clears it on the promotion path. Unit_begin_turn @ 0x5c7700 clears it with
-/// the other per-turn status bits (`andb $-0x48, %al` at 0x5c7e7e, which masks
+/// the other per-turn status bits (a byte-wide AND against the complement of
+/// 0x48 at 0x5c7e7e, which masks
 /// off 0x1, 0x2, 0x4 and 0x40 next to the `Unit.Moves := 0` store at 0x5c7e77).
 ///
 /// Those three sites are the bit's whole life: a scan of the live image finds
-/// exactly one reader (`testb $0x2, 0x48(reg)` at 0x5bf08b) and exactly one
-/// writer (`orb $0x2` at 0x5bf0d4) of a unit's status bit 2. So it gates
+/// exactly one reader of a unit's status bit 2 (the read at 0x5bf08b) and exactly
+/// one
+/// writer of it (the OR at 0x5bf0d4). So it gates
 /// behaviour, and the fork did not model it: a failed roll was simply forgotten.
 /// </summary>
 public sealed class PromotionPendingTest : IClassFixture<SaveGameFixture> {

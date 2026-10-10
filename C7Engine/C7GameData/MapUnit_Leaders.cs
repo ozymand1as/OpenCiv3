@@ -51,7 +51,7 @@ public partial class MapUnit {
 		return location.unitsOnTile.Where(u => u.loadedOnUnitId == id).ToList();
 	}
 
-	// Civ3's "lead member type" lookup (FUN_005bc6d0 @ 0x5bc6d0). It walks the
+	// Civ3's "lead member type" lookup (0x5bc6d0). It walks the
 	// units whose container (unit object +0x60) is this army and keeps the first
 	// member's unit type, but returns -1 as soon as it meets a member of a
 	// different type (0x5bc7d3 compares the candidate's type id at +0x40 against

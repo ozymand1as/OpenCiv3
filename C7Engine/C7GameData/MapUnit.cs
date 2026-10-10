@@ -62,12 +62,13 @@ namespace C7GameData {
 		// Civ3's `Unit.Status` bit 0x2: a battlefield-promotion roll has already
 		// failed for this unit this turn, so the next victory promotes it
 		// regardless of the roll. Unit_score_kill sets the bit when the roll fails
-		// and the game is not online (0x5bf0d1-0x5bf0d6: `movl 0x48(%unit),%eax` /
-		// `orb $0x2,%al` / store at 0x5bf7b3), reads it before the roll at
-		// 0x5bf08b (`testb $0x2, 0x48(%esi)`), and Unit_begin_turn clears it with
-		// the other per-turn status bits at 0x5c7e7e (`andb $-0x48,%al`, which
-		// masks off 0x1, 0x2, 0x4 and 0x40). The bit is a within-turn credit: it
-		// is not cleared by the promotion it forces, so a Blitz unit that has
+		// and the game is not online: it reads the unit's status word at +0x48,
+		// ORs bit 0x2 into its low byte at 0x5bf0d1-0x5bf0d6, and stores the word
+		// back at 0x5bf7b3. It reads that same status word before the roll at
+		// 0x5bf08b, and Unit_begin_turn clears the bit with the other per-turn
+		// status bits at 0x5c7e7e through a byte-wide AND against the complement of
+		// 0x48, which masks off 0x1, 0x2, 0x4 and 0x40. The bit is a within-turn
+		// credit: it is not cleared by the promotion it forces, so a Blitz unit that has
 		// already failed one roll promotes on every later victory that turn until
 		// it reaches the elite level (11_movement.md §10.1).
 		public bool promotionPending { get; set; }
@@ -495,9 +496,9 @@ namespace C7GameData {
 				promotionChance *= 2;
 
 			// The pending-promotion status bit forces the promotion whatever the
-			// roll says: Unit_score_kill tests it before rolling
-			// (`testb $0x2, 0x48(%esi)` at 0x5bf08b, jumping straight to the
-			// promotion at 0x5bf0db). The bit is not cleared by the promotion it
+			// roll says: Unit_score_kill reads the status word at 0x5bf08b and, when
+			// the bit is set, jumps straight to the promotion at 0x5bf0db. The bit is
+			// not cleared by the promotion it
 			// forces, so once a unit has failed one roll in a turn every later
 			// victory that turn promotes it, until it reaches the elite level where
 			// the great-leader branch takes over.
@@ -508,9 +509,10 @@ namespace C7GameData {
 			}
 
 			// The roll failed. Offline, the original records that so the unit's next
-			// victory this turn promotes it regardless (0x5bf0d1-0x5bf0d6: load the
-			// status word at unit+0x48, `orb $0x2`, store it back at 0x5bf7b3).
-			// OnBeginTurn clears the bit with the other per-turn status bits.
+			// victory this turn promotes it regardless: at 0x5bf0d1-0x5bf0d6 it
+			// loads the status word at unit+0x48, ORs bit 0x2 into it and stores it
+			// back at 0x5bf7b3. OnBeginTurn clears the bit with the other per-turn
+			// status bits.
 			promotionPending = true;
 		}
 
