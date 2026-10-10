@@ -1716,27 +1716,32 @@ namespace C7Engine {
 			}
 		}
 
-		private static void AddResources(WorldCharacteristics wc, GameMap m) {
+		// The resource pass at `0x5f22a0`. The rules, the addresses they were
+		// read from and what the fork used to get wrong are written up in
+		// re/notes/civ3_map_generator_spec.md section 2.11.
+		//
+		// Structure of the original, which this mirrors:
+		//   * the tile index array is shuffled once, before the first pass, and
+		//     the same array is reused by all three passes; the resource
+		//     records are walked in record order and are NOT shuffled
+		//     (`0x5f23ae`, `0x5f2860`, `0x5f2a7a`);
+		//   * three class passes: luxuries first, then strategic resources,
+		//     then everything that is neither - the bonus resources;
+		//   * every candidate goes through the world vtable slot at `+0x44`,
+		//     `Map_can_spawn_resource_at` @ `0x5f3320`.
+		internal static void AddResources(WorldCharacteristics wc, GameMap m) {
 			Random rand = new(wc.mapSeed + 0x7171);
-
-			// Randomize the order resources are placed and the order we go
-			// through tiles.
-			List<Resource> resourcesToPlace = new();
-			foreach (Resource r in wc.resources) {
-				log.Information(r.Key);
-				resourcesToPlace.Add(r);
-			}
-			rand.Shuffle<Resource>(CollectionsMarshal.AsSpan(resourcesToPlace));
 
 			List<int> tileIndicies = Enumerable.Range(0, m.tiles.Count).ToList();
 			rand.Shuffle<int>(CollectionsMarshal.AsSpan(tileIndicies));
 
-			// Luxury resources.
+			// Luxury resources: pass 1, whose class test at `0x5e3720` is true
+			// for a record whose `+0x3c` is one.
 			//
 			// Keep track of which continent a luxury resource is first placed
 			// to ensure they don't get spread over multiple continents.
 			Dictionary<Resource, int> resourceToContinentPlacement = new();
-			foreach (Resource r in resourcesToPlace) {
+			foreach (Resource r in wc.resources) {
 				if (r.Category != ResourceCategory.LUXURY) {
 					continue;
 				}
@@ -1744,8 +1749,9 @@ namespace C7Engine {
 				PlaceLuxuryResourceType(rand, wc, m, r, tileIndicies, resourceToContinentPlacement);
 			}
 
-			// Strategic resources.
-			foreach (Resource r in resourcesToPlace) {
+			// Strategic resources: pass 2, whose class test at `0x5e3730` is
+			// true for `+0x3c` of two.
+			foreach (Resource r in wc.resources) {
 				if (r.Category != ResourceCategory.STRATEGIC) {
 					continue;
 				}
@@ -1753,120 +1759,165 @@ namespace C7Engine {
 				PlaceStrategicResourceType(rand, wc, m, r, tileIndicies);
 			}
 
-			// Bonus resources.
-			PlaceBonusResources(rand, wc, m, resourcesToPlace.Where(x => x.Category == ResourceCategory.BONUS).ToList(), tileIndicies);
+			// Bonus resources: pass 3. The original keeps a resource whose
+			// record is neither of the two classes above (the either-class test
+			// at `0x5e3700` is false for both, `0x5f2a93`), which in the shipped
+			// rules is the bonus category.
+			List<Resource> bonusResources = wc.resources
+				.Where(x => x.Category != ResourceCategory.LUXURY && x.Category != ResourceCategory.STRATEGIC)
+				.ToList();
+			PlaceBonusResources(rand, wc, m, bonusResources, tileIndicies);
 		}
 
-		// Determine the rate of appearance for a given resource. The rate of
-		// appearance seems to have a default of 100 for civ3, but if it isn't
-		// specified (like for luxuries) it is some random value less than 100
-		// but always larger than 50.
-		private static int GetAppearance(WorldCharacteristics wc, Random rand, Resource r, int minCount) {
-			// The the appearance ratio, with a random number between 50 and
-			// 100 if it isn't specified. Use multiple random calls to roughly
-			// simulate a normal distribution using uniform random samples.
+		// How much room a resource has, as the original counts it: one for each
+		// terrain before index eleven that may carry it, five for each terrain
+		// from index eleven on (`0x5f2447`-`0x5f249f`; the same loop appears in
+		// all three passes). The field it reads is the resource-vs-terrain mask
+		// of the terrain records, which in the shipped rules makes the terrains
+		// past index ten exactly the water ones.
+		internal static int TerrainWeight(WorldCharacteristics wc, Resource r) {
+			int weight = 0;
+			for (int i = 0; i < wc.terrainTypes.Count; ++i) {
+				if (wc.terrainTypes[i].allowedResources.Contains(r.Key)) {
+					weight += (i > 10) ? 5 : 1;
+				}
+			}
+			return weight;
+		}
+
+		// The count a resource is placed up to. The original draws
+		// 50 + rand_int(26) + rand_int(26) when the record states no appearance
+		// ratio (`0x5f23e3`-`0x5f2407`), scales by the number of civs over one
+		// hundred (`0x5f2411`-`0x5f242a`), then scales again by the eligible
+		// terrain weight - halved for a weight of one, three quarters for a
+		// weight of two or three, untouched for four or more - and floors the
+		// result at one, or at two when the weight is four or more
+		// (`0x5f24ae`-`0x5f24f1`). The bonus pass uses only the weight, not the
+		// count.
+		internal static int GetAppearance(WorldCharacteristics wc, Random rand, Resource r, int terrainWeight) {
 			int baseCount = r.AppearanceRatio;
 			if (baseCount == 0) {
-				baseCount = 50 + rand.Next(11) + rand.Next(11) + rand.Next(11) + rand.Next(11) + rand.Next(11);
+				baseCount = DrawDefaultAppearanceRatio(rand);
 			}
 
-			// Scale the appearance based on the number of civs in the game.
 			int targetCount = (wc.worldSize.numberOfCivs * baseCount) / 100;
-			targetCount = Math.Max(minCount, targetCount);
-			return targetCount;
-		}
-
-		private static void PlaceLuxuryResourceType(Random rand, WorldCharacteristics wc, GameMap m, Resource r, List<int> tileIndicies, Dictionary<Resource, int> resourceToContinentPlacement) {
-			int targetCount = GetAppearance(wc, rand, r, minCount:1);
-			int placed = 0;
-			resourceToContinentPlacement[r] = -1;
-
-			for (int i = 0; placed < targetCount && i < tileIndicies.Count; ++i) {
-				Tile t = m.tiles[tileIndicies[i]];
-
-				// Skip tiles where we can't place this resource.
-				if (!t.overlayTerrainType.allowedResources.Contains(r.Key)) {
-					continue;
-				}
-
-				// Skip tiles that are already next to a resource.
-				if (IsNextToExistingResource(t)) {
-					continue;
-				}
-
-				// If we have a continent for this luxury and this tile isn't
-				// on that continent, skip it.
-				if (resourceToContinentPlacement[r] != -1 && resourceToContinentPlacement[r] != t.continent) {
-					continue;
-				}
-
-				// Skip tiles that don't need the luxury-specific criteria.
-				if (!IsValidForLuxuryPlacement(wc, m, r, t)) {
-					continue;
-				}
-
-				// Place the resource.
-				++placed;
-				t.Resource = r;
-				t.ResourceKey = r.Key;
-				resourceToContinentPlacement[r] = t.continent;
-
-				// Give ourselves the chance to place additional instances of
-				// this luxury in a clump.
-				for (int clusterAttempt = 0; clusterAttempt < 4 && placed < targetCount && rand.Next(100) < 50; ++clusterAttempt) {
-					Tile neighbor = t.neighbors.Values
-						.Where(x => x != Tile.NONE
-									&& x.overlayTerrainType.allowedResources.Contains(r.Key)
-									&& x.continent == t.continent)
-						.OrderBy(x => rand.Next()) // Shuffle the neighbors
-						.FirstOrDefault(Tile.NONE);
-
-					if (neighbor == Tile.NONE) {
-						break;
-					}
-					++placed;
-					neighbor.Resource = r;
-					neighbor.ResourceKey = r.Key;
-				}
+			if (terrainWeight < 2) {
+				targetCount = targetCount / 2;
+			} else if (terrainWeight < 4) {
+				targetCount = (targetCount * 3) / 4;
 			}
 
-			if (placed < targetCount) {
-				log.Information($"Only placed {placed} of {targetCount} {r.Key}");
-			}
+			int minCount = (terrainWeight >= 4) ? 2 : 1;
+			return Math.Max(minCount, targetCount);
 		}
 
-		private static bool IsNextToExistingResource(Tile t) {
-			foreach (Tile neighbor in t.neighbors.Values) {
-				if (neighbor.Resource != null && neighbor.Resource != Resource.NONE) {
-					return true;
-				}
-			}
-			return false;
+		// 50 plus two uniform draws over 0..25, so a triangular 50..100
+		// (`0x5f23e3`-`0x5f2407`). The fork used to add five draws over 0..10,
+		// which is the same range with a different and higher-biased shape.
+		internal static int DrawDefaultAppearanceRatio(Random rand) {
+			return 50 + rand.Next(26) + rand.Next(26);
 		}
 
-		private static bool IsValidForLuxuryPlacement(WorldCharacteristics wc, GameMap m, Resource r, Tile t) {
-			HashSet<Tile> continent = m.continents.First(x => x.Contains(t));
+		// The rank distance the candidacy predicate's spacing loop covers. The
+		// original's loop bound is nine - the eight neighbours - for anything
+		// that is neither a luxury nor a strategic resource, and the square of
+		// `min(2 * ((width + height) / 100) + 5, 13)` otherwise (`0x5f3450`-
+		// `0x5f34e0` and `0x5f34ca`). A bound of n^2 is exactly the first
+		// (n - 1) / 2 rings of the spiral, so the rank is (n - 1) / 2:
+		// (width + height) / 100 + 2, capped at six.
+		internal static int ResourceSpacingRank(GameMap m, Resource r) {
+			if (r.Category != ResourceCategory.LUXURY && r.Category != ResourceCategory.STRATEGIC) {
+				return 1;
+			}
+			return Math.Min((m.numTilesWide + m.numTilesTall) / 100 + 2, 6);
+		}
 
-			// Don't put luxuries on islands too small for players.
-			if (continent.Count < MIN_TILES_PER_PLAYER_ISLAND) {
+		// The die the bonus pass rolls per resource per round: six sides for a
+		// terrain weight of one, four for two or three, two for four or more,
+		// with a placement attempted when the roll is zero or one, so the
+		// probability is two over the number of sides (`0x5f2b32`-`0x5f2b66`).
+		internal static int BonusDieSides(int terrainWeight) {
+			if (terrainWeight < 2) {
+				return 6;
+			} else if (terrainWeight < 4) {
+				return 4;
+			}
+			return 2;
+		}
+
+		// The candidacy predicate, `Map_can_spawn_resource_at` @ `0x5f3320`,
+		// reached through the world's vtable slot at +0x44. `doubleMinBodySize`
+		// is the caller's fourth argument: the luxury pass asks for the larger
+		// body over the first two thirds of its tile walk, and the other two
+		// passes always ask for it (`0x5f337b`-`0x5f3398`).
+		//
+		// Two things the original checks have no counterpart here:
+		//
+		//   * the tile's "potential shield bonus" flag (tile vtable slot 27,
+		//     `+0x6c`, bit 16 of the kind-2 flag word), because this fork places
+		//     its bonus grasslands in a later pass
+		//     (MapGenerator.AddBonusGrasslands) rather than before resources;
+		//   * the terrain and resource record lookups the original performs
+		//     first, which only cache.
+		//
+		// Both are recorded in re/notes/openciv3_generator_gaps.md under G5.
+		internal static bool CanPlaceResource(WorldCharacteristics wc, GameMap m, Resource r, Tile t, bool doubleMinBodySize) {
+			// A tile that already carries a resource is never a candidate
+			// (`0x5f341c`).
+			if (HasResource(t)) {
 				return false;
 			}
 
-			int minLuxurySpacing = (m.numTilesTall + m.numTilesWide) / 40;
-			minLuxurySpacing = Math.Max(2, minLuxurySpacing);
-			minLuxurySpacing = Math.Min(minLuxurySpacing, 10);
+			// The resource must be legal on the tile's terrain (`0x5f33da`-
+			// `0x5f3416`).
+			if (!t.overlayTerrainType.allowedResources.Contains(r.Key)) {
+				return false;
+			}
 
-			foreach (Tile x in t.GetTilesWithinRankDistance(minLuxurySpacing)) {
-				if (x.Resource != null
-					&& x.Resource != Resource.NONE
-					&& x.Resource.Category == ResourceCategory.LUXURY
-					&& x.Resource.Key != r.Key) {
+			// A luxury needs a large enough body: 37 tiles, or 75 when the
+			// caller doubled the minimum (`0x5f3367`-`0x5f3398`). The body is
+			// the original's "continent id", which covers water as well as
+			// land.
+			if (r.Category == ResourceCategory.LUXURY) {
+				int minBodySize = doubleMinBodySize ? 75 : 37;
+				if (BodySize(m, t) < minBodySize) {
 					return false;
 				}
 			}
 
-			// If this is a water-based resource, ensure it doesn't end up in the
-			// middle of the ocean.
+			// Spacing (`0x5f34ee`-`0x5f3610`). Only tiles on the candidate's own
+			// body count.
+			int spacingRank = ResourceSpacingRank(m, r);
+			foreach (Tile x in t.GetTilesWithinRankDistance(spacingRank)) {
+				if (x == t || x.continent != t.continent || !HasResource(x)) {
+					continue;
+				}
+
+				bool sameResource = x.Resource.Key == r.Key;
+				if (t.RankDistanceTo(x) <= 1) {
+					// Among the eight neighbours any other resource blocks
+					// every class, and holding this very resource blocks too
+					// only for a strategic one (`0x5f35bf`-`0x5f35d3`).
+					if (!sameResource || r.Category == ResourceCategory.STRATEGIC) {
+						return false;
+					}
+				} else if (r.Category == ResourceCategory.STRATEGIC) {
+					// Further out a strategic resource minds only its own kind
+					// (`0x5f35d5`-`0x5f35ea`).
+					if (sameResource) {
+						return false;
+					}
+				} else if (r.Category == ResourceCategory.LUXURY) {
+					// ... and a luxury only a different luxury
+					// (`0x5f35ec`-`0x5f360e`).
+					if (!sameResource && x.Resource.Category == ResourceCategory.LUXURY) {
+						return false;
+					}
+				}
+			}
+
+			// A water resource needs land inside its big fat cross - the first
+			// twenty positions of the spiral (`0x5f363e`-`0x5f370d`).
 			if (!t.IsLand() && !HasSufficientLandNeighborsForResource(wc, t)) {
 				return false;
 			}
@@ -1874,6 +1925,17 @@ namespace C7Engine {
 			return true;
 		}
 
+		// The area of the body a tile sits on, which the original reads through
+		// the world's body accessor at +0x84 (record field +0x24).
+		private static int BodySize(GameMap m, Tile t) {
+			HashSet<Tile> continent = m.continents.First(x => x.Contains(t));
+			return continent.Count;
+		}
+
+		// A water resource has to be near land: the last step of the candidacy
+		// predicate asks that at least one tile of the candidate's big fat cross
+		// be land (`0x5f365e`-`0x5f370d`). The rank the fork passes is the same
+		// rules value the original's cross is built from.
 		private static bool HasSufficientLandNeighborsForResource(WorldCharacteristics wc, Tile t) {
 			int landTiles = 0;
 
@@ -1886,32 +1948,113 @@ namespace C7Engine {
 			return landTiles >= 1;
 		}
 
-		private static void PlaceStrategicResourceType(Random rand, WorldCharacteristics wc, GameMap m, Resource r, List<int> tileIndicies) {
-			int targetCount = GetAppearance(wc, rand, r, minCount:2);
+		// The clumping guard of the luxury pass' spreading step
+		// (`0x5f26dd`-`0x5f278c`): how many of the candidate's eight neighbours
+		// already hold this resource, refused at three or more.
+		internal static bool ClumpGuardRefuses(Tile t, Resource r) {
+			int sameResourceNeighbours = 0;
+			foreach (Tile n in t.neighbors.Values) {
+				if (n != null && n != Tile.NONE && HasResource(n) && n.Resource.Key == r.Key) {
+					++sameResourceNeighbours;
+				}
+			}
+			return sameResourceNeighbours >= 3;
+		}
+
+		// The flag the luxury pass hands the candidacy predicate: the first two
+		// thirds of the shuffled tile walk ask for the bigger minimum body size
+		// (`0x5f256e`-`0x5f258b`).
+		private static bool DoubleMinBodySize(int tileOrderIndex, int tileCount) {
+			return (tileOrderIndex + 1) < (2 * tileCount / 3);
+		}
+
+		// The tile the luxury pass clumps onto: the first of the origin's eight
+		// neighbours, in the original's spiral order, that both the clumping
+		// guard and the candidacy predicate accept (`0x5f263a`-`0x5f27c3`).
+		internal static Tile FindClumpNeighbour(WorldCharacteristics wc, GameMap m, Resource r, Tile origin, bool doubleMinBodySize) {
+			for (int index = 1; index <= 8; ++index) {
+				(int dx, int dy) = Civ3SpiralOffset(index);
+				Tile n = m.tileAt(origin.XCoordinate + dx, origin.YCoordinate + dy);
+				if (n == null || n == Tile.NONE || n == origin) {
+					continue;
+				}
+
+				if (ClumpGuardRefuses(n, r)) {
+					continue;
+				}
+
+				if (CanPlaceResource(wc, m, r, n, doubleMinBodySize)) {
+					return n;
+				}
+			}
+
+			return null;
+		}
+
+		private static void PlaceResource(Tile t, Resource r) {
+			t.Resource = r;
+			t.ResourceKey = r.Key;
+		}
+
+		private static void PlaceLuxuryResourceType(Random rand, WorldCharacteristics wc, GameMap m, Resource r, List<int> tileIndicies, Dictionary<Resource, int> resourceToContinentPlacement) {
+			int targetCount = GetAppearance(wc, rand, r, TerrainWeight(wc, r));
 			int placed = 0;
+			resourceToContinentPlacement[r] = -1;
 
-			for (int i = 0; placed < targetCount && i < tileIndicies.Count; ++i) {
+			// The original walks the shuffled tiles from the start, and after
+			// every placement it walks them from the start again (`0x5f2505`
+			// is re-entered with its index reset). A walk that placed nothing
+			// cannot place anything on a re-walk of an unchanged map, so the
+			// walk is where the resource gives up.
+			int i = 0;
+			while (placed < targetCount && i < tileIndicies.Count) {
 				Tile t = m.tiles[tileIndicies[i]];
+				bool doubleMinBodySize = DoubleMinBodySize(i, tileIndicies.Count);
 
-				// Skip tiles where we can't place this resource.
-				if (!t.overlayTerrainType.allowedResources.Contains(r.Key)) {
+				// One body per luxury: once the first copy is down, only tiles
+				// on that body are considered (`0x5f2536`-`0x5f255d`).
+				if (resourceToContinentPlacement[r] != -1 && resourceToContinentPlacement[r] != t.continent) {
+					++i;
 					continue;
 				}
 
-				// Skip tiles that are already next to a resource.
-				if (IsNextToExistingResource(t)) {
-					continue;
-				}
-
-				// Skip tiles that don't need the strategic resource-specific criteria.
-				if (!IsValidForStrategicResourcePlacement(wc, m, r, t)) {
+				if (!CanPlaceResource(wc, m, r, t, doubleMinBodySize)) {
+					++i;
 					continue;
 				}
 
 				// Place the resource.
+				PlaceResource(t, r);
+				resourceToContinentPlacement[r] = t.continent;
+
+				// Then give ourselves the chance to place additional instances
+				// of this luxury in a clump. The original draws a coin before
+				// every pass over the eight neighbours and stops on its second
+				// face; a pass that places nothing is retried, which is what
+				// the original does too, so a retry only ever costs the coin
+				// draws. The eight neighbours are always those of the tile just
+				// placed, not of whatever the clump placed (`0x5f2612`-`0x5f2626`).
+				while (true) {
+					if (rand.Next(2) != 0) {
+						break;
+					}
+
+					Tile neighbour = FindClumpNeighbour(wc, m, r, t, doubleMinBodySize);
+					if (neighbour != null) {
+						PlaceResource(neighbour, r);
+						++placed;
+					}
+
+					if (placed >= targetCount) {
+						break;
+					}
+				}
+
+				// The original counts the tile it placed on after the clump
+				// loop, not before, so a fully successful clump can overshoot
+				// the target by one (`0x5f2809`-`0x5f2828`).
 				++placed;
-				t.Resource = r;
-				t.ResourceKey = r.Key;
+				i = 0;
 			}
 
 			if (placed < targetCount) {
@@ -1919,36 +2062,31 @@ namespace C7Engine {
 			}
 		}
 
-		private static bool IsValidForStrategicResourcePlacement(WorldCharacteristics wc, GameMap m, Resource r, Tile t) {
-			HashSet<Tile> continent = m.continents.First(x => x.Contains(t));
+		private static void PlaceStrategicResourceType(Random rand, WorldCharacteristics wc, GameMap m, Resource r, List<int> tileIndicies) {
+			int targetCount = GetAppearance(wc, rand, r, TerrainWeight(wc, r));
+			int placed = 0;
 
-			// Don't put strategic resources on super tiny islands - though
-			// putting them on small islands is ok.
-			if (continent.Count < MIN_TILES_PER_PLAYER_ISLAND / 2) {
-				return false;
-			}
+			// The original makes `target` attempts, and each attempt walks the
+			// shuffled tiles from the start and places on the first candidate
+			// it finds (`0x5f29a9`-`0x5f2a3e`). It hands the predicate the
+			// larger minimum body size, which the gate only applies to
+			// luxuries, so it has no effect on a strategic resource.
+			for (int attempt = 0; attempt < targetCount; ++attempt) {
+				for (int i = 0; i < tileIndicies.Count; ++i) {
+					Tile t = m.tiles[tileIndicies[i]];
+					if (!CanPlaceResource(wc, m, r, t, true)) {
+						continue;
+					}
 
-			int minSpacing = (m.numTilesTall + m.numTilesWide) / 30;
-			minSpacing = Math.Max(2, minSpacing);
-			minSpacing = Math.Min(minSpacing, 10);
-
-			// Ensure strategic resources of the same kind don't clump up.
-			foreach (Tile x in t.GetTilesWithinRankDistance(minSpacing)) {
-				if (x.Resource != null
-					&& x.Resource != Resource.NONE
-					&& x.Resource.Category == ResourceCategory.STRATEGIC
-					&& x.Resource.Key == r.Key) {
-					return false;
+					PlaceResource(t, r);
+					++placed;
+					break;
 				}
 			}
 
-			// If this is a water-based resource, ensure it doesn't end up in the
-			// middle of the ocean.
-			if (!t.IsLand() && !HasSufficientLandNeighborsForResource(wc, t)) {
-				return false;
+			if (placed < targetCount) {
+				log.Information($"Only placed {placed} of {targetCount} {r.Key}");
 			}
-
-			return true;
 		}
 
 		private static void PlaceBonusResources(Random rand, WorldCharacteristics wc, GameMap m,
@@ -1956,88 +2094,38 @@ namespace C7Engine {
 			int totalPossibleBonusResources = m.tiles.Count / 32;
 			int placed = 0;
 
-			Dictionary<Resource, int> terrainScores = CalculateBonusResourceTerrainScores(wc, bonusResources);
-
-			for (int pass = 0; pass < 32 && placed < totalPossibleBonusResources; ++pass) {
-				rand.Shuffle<Resource>(CollectionsMarshal.AsSpan(bonusResources));
+			// Each round offers every bonus resource one placement attempt, in
+			// record order, and a round that places nothing ends the pass
+			// (`0x5f2a7a`-`0x5f2c2e`).
+			while (true) {
+				int placedBeforeThisRound = placed;
 
 				foreach (Resource r in bonusResources) {
-					int terrainScore = terrainScores[r];
-
-					// Can't be placed anywhere.
-					if (terrainScore == 0) {
+					int terrainWeight = TerrainWeight(wc, r);
+					if (terrainWeight == 0) {
 						continue;
 					}
 
-					// Resources that can go in more places have a higher chance
-					// of being placed.
-					int placementProbability = 25;
-					if (terrainScore < 2) {
-						placementProbability = 16;
-					} else if (terrainScore > 3) {
-						placementProbability = 50;
-					}
-
-					if (rand.Next(100) >= placementProbability) {
+					if (rand.Next(BonusDieSides(terrainWeight)) >= 2) {
 						continue;
 					}
 
-					if (PlaceBonusResource(wc, m, r, tileIndicies)) {
-						++placed;
-					}
-				}
-			}
-		}
-
-		private static bool PlaceBonusResource(WorldCharacteristics wc, GameMap m, Resource r, List<int> tileIndicies) {
-			// We want to place this resource. Find the first valid tile
-			// we can stick it on.
-			//
-			// We don't want it next to other resources, and if it is a
-			// water resource (fish/whale/etc) don't stick it in the
-			// middle of the ocean.
-			foreach (int index in tileIndicies) {
-				Tile t = m.tiles[index];
-				if (!t.overlayTerrainType.allowedResources.Contains(r.Key)) {
-					continue;
-				}
-
-				bool hasResource = !(t.Resource == Resource.NONE || t.Resource == null);
-				if (hasResource || IsNextToExistingResource(t)) {
-					continue;
-				}
-
-				if (!t.IsLand() && !HasSufficientLandNeighborsForResource(wc, t)) {
-					continue;
-				}
-
-				t.Resource = r;
-				t.ResourceKey = r.Key;
-				return true;
-			}
-			return false;
-		}
-
-		private static Dictionary<Resource, int> CalculateBonusResourceTerrainScores(WorldCharacteristics wc, List<Resource> bonusResources) {
-			Dictionary<Resource, int> result = new();
-
-			foreach (Resource r in bonusResources) {
-				int score = 0;
-				foreach (TerrainType tt in wc.terrainTypes) {
-					if (tt.allowedResources.Contains(r.Key)) {
-						// Make water bonus resources get a higher score, since
-						// land bonus resources are generally more valuable.
-						if (tt.isWater()) {
-							score += 4;
-						} else {
-							score += 1;
+					foreach (int index in tileIndicies) {
+						Tile t = m.tiles[index];
+						if (!CanPlaceResource(wc, m, r, t, true)) {
+							continue;
 						}
+
+						PlaceResource(t, r);
+						++placed;
+						break;
 					}
 				}
-				result[r] = score;
-			}
 
-			return result;
+				if (placed == placedBeforeThisRound || placed >= totalPossibleBonusResources) {
+					break;
+				}
+			}
 		}
 
 		private static void AddBarbarianCamps(WorldCharacteristics wc, GameMap m) {
