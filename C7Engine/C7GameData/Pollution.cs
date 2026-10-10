@@ -189,9 +189,11 @@ namespace C7GameData {
 		/// 1): the total pollution of every city in the game plus the square of
 		/// the number of nuclear weapons used (the global at 0xa52698). Civ3
 		/// keeps this in a global and resets it on scenario load; here it is
-		/// recomputed from the game state each turn, which is equivalent while
-		/// the nuke counter is never incremented (no code launches a nuclear
-		/// weapon yet, so that term is always zero - see GameData.nukesUsed).
+		/// recomputed from the game state each turn. Since the nuclear launch
+		/// landed, the nuke term is live: see GameData.nukesUsed, which the
+		/// launch increments once per detonation, and note that an intercepted
+		/// launch does not increment it while the icbm reputation counter still
+		/// does. The meltdown path shares the same counter.
 		/// **[C]** for the sum and the nuke term (0x4f4380).
 		/// </summary>
 		public static int AccumulatedPollution(GameData gameData) {
