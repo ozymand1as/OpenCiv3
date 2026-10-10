@@ -3112,6 +3112,9 @@
     },
     {
       "name": "ICBM",
+      "flags": [
+        "immobile"
+      ],
       "ignoreMovementCost": ["sea"],
       "art": {
         "mainArt": {
@@ -4230,7 +4233,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "immobile"
       ],
       "aiStrategies": [
         "airDefense"
@@ -4310,7 +4314,8 @@
       "unproducible": false,
       "flags": [
         "lethalLandBombardment",
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "immobile"
       ],
       "aiStrategies": [
         "airBombard"
@@ -4389,7 +4394,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "canCarryFootUnitsOnly"
+        "canCarryFootUnitsOnly",
+        "immobile"
       ],
       "aiStrategies": [
         "airTransport"
@@ -4468,7 +4474,8 @@
       ],
       "unproducible": false,
       "flags": [
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "immobile"
       ],
       "aiStrategies": [
         "airDefense"
@@ -4549,7 +4556,8 @@
       "unproducible": false,
       "flags": [
         "lethalLandBombardment",
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "immobile"
       ],
       "aiStrategies": [
         "airBombard"
@@ -4630,7 +4638,8 @@
       "unproducible": false,
       "flags": [
         "lethalLandBombardment",
-        "lethalSeaBombardment"
+        "lethalSeaBombardment",
+        "immobile"
       ],
       "aiStrategies": [
         "airBombard"
@@ -5677,7 +5686,8 @@
       "flags": [
         "lethalLandBombardment",
         "lethalSeaBombardment",
-        "startsGoldenAge"
+        "startsGoldenAge",
+        "immobile"
       ],
       "aiStrategies": [
         "airBombard"
@@ -6379,6 +6389,9 @@
     },
     {
       "name": "Princess",
+      "flags": [
+        "immobile"
+      ],
       "art": {
         "mainArt": {
           "defaultName": "Princess"

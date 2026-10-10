@@ -42,6 +42,10 @@ namespace C7GameData.Save {
 			// (11_movement.md §6.2). This is not the AI-strategy bit of the same
 			// name, which lives in AIStrategy below.
 			CruiseMissile,
+			// The Immobile ability (PRTO ability 0xA, Flags1[1] bit 2): the type
+			// cannot take a step at all. The shipped rules set it on every air unit,
+			// on the ICBM and on the regicide Princess (11_movement.md §5 step 1).
+			Immobile,
 		}
 
 		// The AI-strategy bitmask of the Civ3 PRTO record (BIQ Flags1[4..6]). The
@@ -100,10 +104,10 @@ namespace C7GameData.Save {
 
 		// The terrain types this unit type ignores the movement cost of (the
 		// BIQ's PRTO.IgnoreMovementCost, one flag byte per Civ3 terrain). A set
-		// flag means a step onto that terrain costs one movement point instead
-		// of the terrain's MovementCost, after the road and railroad discounts
-		// have been ruled out (11_movement.md §3.6). Stored as terrain keys,
-		// like TerrainType.impassableTo, so a mod's terrain set is honoured.
+		// flag means a step onto that terrain costs one whole movement point
+		// instead of the terrain's MovementCost, after the road and railroad
+		// discounts have been ruled out (11_movement.md §3.6). Stored as terrain
+		// keys, like TerrainType.impassableTo, so a mod's terrain set is honoured.
 		public HashSet<string> ignoreMovementCost = [];
 
 		public HashSet<string> categories = new HashSet<string>();

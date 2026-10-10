@@ -77,9 +77,9 @@ namespace C7GameData {
 		public HashSet<SaveUnitPrototype.AIStrategy> aiStrategies = [];
 
 		// The terrain types this unit type ignores the movement cost of
-		// (PRTO.IgnoreMovementCost). A step onto one of them costs one movement
-		// point instead of the terrain's MovementCost, unless a road or railroad
-		// already discounted the step (11_movement.md §3.6).
+		// (PRTO.IgnoreMovementCost). A step onto one of them costs one whole
+		// movement point instead of the terrain's MovementCost, unless a road or
+		// railroad already discounted the step (11_movement.md §3.6).
 		public HashSet<string> ignoreMovementCost { get; set; } = [];
 
 		public bool IgnoresMovementCostOf(TerrainType terrain) => ignoreMovementCost.Contains(terrain.Key);
@@ -183,6 +183,14 @@ namespace C7GameData {
 		// contributes its bombard strength to a zone of control (11_movement.md
 		// §6.2). Distinct from the AI strategy of the same name.
 		public bool isCruiseMissile => flags.Contains(SaveUnitPrototype.Flag.CruiseMissile);
+
+		// The Immobile ability (PRTO ability 0xA, Flags1[1] bit 2): the type
+		// cannot take a step at all. The shipped rules set it on every air unit,
+		// on the ICBM and on the regicide Princess, so it is not inert - the ICBM
+		// and the Princess are land-classed and would otherwise walk. The step
+		// executor refuses the step before anything else (11_movement.md §5 step
+		// 1, 0x5b900a-0x5b9077).
+		public bool immobile => flags.Contains(SaveUnitPrototype.Flag.Immobile);
 
 		public HashSet<string> categories = new HashSet<string>();
 

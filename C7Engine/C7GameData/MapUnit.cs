@@ -59,6 +59,19 @@ namespace C7GameData {
 		// 12_combat.md §6.2).
 		public bool hasUsedAttack { get; set; }
 
+		// Civ3's `Unit.Status` bit 0x2: a battlefield-promotion roll has already
+		// failed for this unit this turn, so the next victory promotes it
+		// regardless of the roll. Unit_score_kill sets the bit when the roll fails
+		// and the game is not online (0x5bf0d1-0x5bf0d6: `movl 0x48(%unit),%eax` /
+		// `orb $0x2,%al` / store at 0x5bf7b3), reads it before the roll at
+		// 0x5bf08b (`testb $0x2, 0x48(%esi)`), and Unit_begin_turn clears it with
+		// the other per-turn status bits at 0x5c7e7e (`andb $-0x48,%al`, which
+		// masks off 0x1, 0x2, 0x4 and 0x40). The bit is a within-turn credit: it
+		// is not cleared by the promotion it forces, so a Blitz unit that has
+		// already failed one roll promotes on every later victory that turn until
+		// it reaches the elite level (11_movement.md §10.1).
+		public bool promotionPending { get; set; }
+
 		/// <summary>
 		/// The barbarian tribe this unit belongs to: a slot in the global tribe
 		/// table (spec 22 sections 3.2.6 and 6.1, unit field +0x3c). -1 for every
@@ -107,6 +120,35 @@ namespace C7GameData {
 		}
 		public bool IsAirUnit() {
 			return this.unitType.categories.Contains("Air");
+		}
+
+		// Civ3's Unit_ignores_terrain_move_cost @ 0x5bc830: the per-terrain flag is
+		// set on the unit's own type (0x5bc887, the non-army path) or - for an army
+		// - on its lead member's type (0x5bc862 reads the lead member's record and
+		// returns true when either record has the flag, 0x5bc87e). When the lead
+		// member lookup yields nothing (0x5bc838 sends it to the own-type-only
+		// exit at 0x5bc887) only the unit's own type is consulted, so an army with
+		// mixed members or with none keeps its own type's flags.
+		public bool IgnoresMovementCostOf(TerrainType terrain) {
+			if (unitType.IgnoresMovementCostOf(terrain))
+				return true;
+
+			return LeadMemberType()?.IgnoresMovementCostOf(terrain) ?? false;
+		}
+
+		// Whether the step executor's first gate refuses this unit: a unit type
+		// with the Immobile ability (0xA) cannot take a step, and neither can an
+		// army whose lead member's type is immobile (11_movement.md §5 step 1,
+		// 0x5b900a-0x5b9077). The shape is the same own-type-or-lead-member test
+		// as the ability predicate, with the same mixed-member and no-member
+		// fallback to the unit's own type.
+		public bool IsImmobile {
+			get {
+				if (unitType.immobile)
+					return true;
+
+				return LeadMemberType()?.immobile ?? false;
+			}
 		}
 
 		public bool CanDefendOnLand() {
@@ -451,10 +493,25 @@ namespace C7GameData {
 				promotionChance /= 2.0;
 			if (owner.civilization.traits.Contains(Civilization.Trait.Militaristic))
 				promotionChance *= 2;
-			if (GameData.rng.NextDouble() < promotionChance) {
+
+			// The pending-promotion status bit forces the promotion whatever the
+			// roll says: Unit_score_kill tests it before rolling
+			// (`testb $0x2, 0x48(%esi)` at 0x5bf08b, jumping straight to the
+			// promotion at 0x5bf0db). The bit is not cleared by the promotion it
+			// forces, so once a unit has failed one roll in a turn every later
+			// victory that turn promotes it, until it reaches the elite level where
+			// the great-leader branch takes over.
+			if (promotionPending || GameData.rng.NextDouble() < promotionChance) {
 				Promote();
 				animate(AnimatedAction.VICTORY);
+				return;
 			}
+
+			// The roll failed. Offline, the original records that so the unit's next
+			// victory this turn promotes it regardless (0x5bf0d1-0x5bf0d6: load the
+			// status word at unit+0x48, `orb $0x2`, store it back at 0x5bf7b3).
+			// OnBeginTurn clears the bit with the other per-turn status bits.
+			promotionPending = true;
 		}
 
 		public void Promote() {

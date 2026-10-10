@@ -1,3 +1,5 @@
+using System;
+
 namespace C7GameData {
 	public class Rules {
 		// The number of internal movement units in one whole movement point,
@@ -22,6 +24,19 @@ namespace C7GameData {
 		// different MovementAlongRoads still changes the step.
 		public const int RoadStepInternalUnits = 1;
 		public const int RailroadStepInternalUnits = 0;
+
+		// One whole movement point, in internal units, at the given movement
+		// scale. Three of the cost function's branches charge exactly this rather
+		// than a raw internal-unit constant: the per-terrain "ignore movement
+		// cost" rule and the air branch both load RULE.MovementAlongRoads into the
+		// cost register (0x58036f), and the sea-unit-into-a-city branch does the
+		// same (0x580336). By contrast the road branch (0x580282) and the
+		// all-terrain-as-roads branch (0x5802a9, 0x5802e7) load the raw constant
+		// 1, which is one third of a point at the shipped scale. The distinction
+		// matters: reading the ignore rule as "1 internal unit" is what made an
+		// earlier spec revision claim a third of a point (11_movement.md section
+		// 3.6).
+		public static int OneMovementPointInternalUnits(int scale) => Math.Max(1, scale);
 
 		// The technology a city or colony tile's owner must know before the tile
 		// participates in the road / railroad network at all (11_movement.md

@@ -51,6 +51,35 @@ public partial class MapUnit {
 		return location.unitsOnTile.Where(u => u.loadedOnUnitId == id).ToList();
 	}
 
+	// Civ3's "lead member type" lookup (FUN_005bc6d0 @ 0x5bc6d0). It walks the
+	// units whose container (unit object +0x60) is this army and keeps the first
+	// member's unit type, but returns -1 as soon as it meets a member of a
+	// different type (0x5bc7d3 compares the candidate's type id at +0x40 against
+	// the running one and bails out to the -1 exit at 0x5bc81a). So an army whose
+	// members are all of one type has that type as its lead member, while an army
+	// with mixed members - or with none - has none, and every caller then
+	// consults only the army's own type. A non-army has none either (the
+	// Unit_has_ability(0x12) test at 0x5bc6da sends it straight to the -1 exit).
+	//
+	// Null here is the binary's -1. The comparison is by prototype instance, the
+	// analogue of the binary's unit-type id: a game has exactly one prototype per
+	// type, and SaveUnit.ToMapUnit resolves a saved unit's type by name.
+	public UnitPrototype LeadMemberType() {
+		if (!IsArmy) {
+			return null;
+		}
+
+		UnitPrototype running = null;
+		foreach (MapUnit member in Members()) {
+			if (running == null) {
+				running = member.unitType;
+			} else if (running != member.unitType) {
+				return null;
+			}
+		}
+		return running;
+	}
+
 	// Civ3's Unit_get_max_move_points army branch (0x5be470): an army's maximum
 	// movement is the SMALLEST maximum among the units whose container is the
 	// army, plus RULE.MovementAlongRoads internal units. The comparison at

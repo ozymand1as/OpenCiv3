@@ -36,6 +36,14 @@ namespace C7Engine.Pathing {
 				}
 
 				float tileMovementCost = TilePath.GetMovementCost(unit.owner, node, direction, neighbor, unit);
+				// An illegal step has no edge at all: the original's pathfinder
+				// rejects the cost function's -1 sentinel (`testl %edi,%edi` /
+				// `jl` at 0x580b34-0x580b36, jumping out of the neighbour's
+				// update), and treating it as a number here would give the edge a
+				// negative weight.
+				if (tileMovementCost == TilePath.IllegalStepCost) {
+					continue;
+				}
 				// An army's per-turn budget is its slowest member's rate plus one
 				// point, not its own prototype's rate (11_movement.md §2.2).
 				float unitMovementPoints = unit.MaxMovementPoints;

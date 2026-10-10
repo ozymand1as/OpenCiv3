@@ -1734,6 +1734,9 @@ namespace C7GameData {
 				if (prto.King) prototype.flags.Add(SaveUnitPrototype.Flag.King);
 				if (prto.Blitz) prototype.flags.Add(SaveUnitPrototype.Flag.Blitz);
 				if (prto.Amphibious) prototype.flags.Add(SaveUnitPrototype.Flag.Amphibious);
+				// PRTO ability 0xA (Flags1[1] bit 2): the step executor refuses a step
+				// from a unit type that carries it (11_movement.md §5 step 1).
+				if (prto.Immobile) prototype.flags.Add(SaveUnitPrototype.Flag.Immobile);
 				// PRTO.ZoneOfControl is the record's own integer field at +0x04, not
 				// an ability bit; the cruise-missile ability zeroes a candidate's
 				// bombard term in the zone-of-control scan (11_movement.md §6).

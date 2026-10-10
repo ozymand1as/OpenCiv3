@@ -1159,6 +1159,11 @@ public class LeadersArmiesGoldenAgeTest : IClassFixture<SaveGameFixture> {
 		if (prto.Blitz) flags.Add(SaveUnitPrototype.Flag.Blitz);
 		if (prto.Amphibious) flags.Add(SaveUnitPrototype.Flag.Amphibious);
 		if (prto.Wheeled) flags.Add(SaveUnitPrototype.Flag.Wheeled);
+		// The Immobile ability (0xA, Flags1[1] bit 2), the step executor's first
+		// gate (11_movement.md §5 step 1). Added when that gate landed: the F-15
+		// and the other air carriers gained a flag, so the modelled set had to
+		// model the field they gained it from.
+		if (prto.Immobile) flags.Add(SaveUnitPrototype.Flag.Immobile);
 		// The record's own ZoneOfControl field (+0x04) and the cruise-missile
 		// ability, the two fields the zone-of-control scan reads
 		// (11_movement.md §6).

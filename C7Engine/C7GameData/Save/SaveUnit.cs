@@ -35,6 +35,13 @@ namespace C7GameData.Save {
 		// middle of a turn cannot hand the unit a second attack.
 		public bool hasUsedAttack;
 
+		// True when a battlefield-promotion roll has already failed for this unit
+		// this turn (Civ3's `Unit.Status` bit 0x2). The original's status word is
+		// part of the save, so the bit is persisted too: reloading a save in the
+		// middle of a turn must not lose the promotion the unit has already earned
+		// (11_movement.md §10.1).
+		public bool promotionPending;
+
 		// True for multiple types of automation, including worker automation
 		// and automated exploring.
 		public bool isAutomated;
@@ -55,6 +62,7 @@ namespace C7GameData.Save {
 			leaderKind = unit.leaderKind;
 			hasProducedLeader = unit.hasProducedLeader;
 			hasUsedAttack = unit.hasUsedAttack;
+			promotionPending = unit.promotionPending;
 			if (BarbarianTribes.IsValidSlot(unit.barbarianTribeId)) {
 				barbarianTribeId = unit.barbarianTribeId;
 			}
@@ -84,6 +92,7 @@ namespace C7GameData.Save {
 				leaderKind = leaderKind,
 				hasProducedLeader = hasProducedLeader,
 				hasUsedAttack = hasUsedAttack,
+				promotionPending = promotionPending,
 				barbarianTribeId = barbarianTribeId ?? BarbarianTribes.None,
 				previousLocation = currentLocation.X == - 1 ? Tile.NONE : map.tileAt(previousLocation.X, previousLocation.Y),
 				hitPointsRemaining = hitPointsRemaining,

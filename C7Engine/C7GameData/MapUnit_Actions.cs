@@ -31,6 +31,13 @@ public partial class MapUnit {
 		// (23_leaders_armies_golden_age.md §6.8).
 		hasUsedAttack = false;
 
+		// The pending-promotion status bit is cleared at the same point in the
+		// original: Unit_begin_turn's `andb $-0x48, %al` at 0x5c7e7e masks off
+		// bits 0x1, 0x2, 0x4 and 0x40 together with the `Unit.Moves := 0` store at
+		// 0x5c7e77, so a failed promotion roll is only remembered for the rest of
+		// the unit's own turn (11_movement.md §7 and §10.1).
+		promotionPending = false;
+
 		defensiveBombardsRemaining = 1;
 	}
 
@@ -213,6 +220,17 @@ public partial class MapUnit {
 	/// <returns>True if the unit is alive after the movement, false otherwise</returns>
 	/// <exception cref="Exception"></exception>
 	public async Task<bool> Move(TileDirection dir, bool wait = false) {
+		// Step 1 of the original's step executor: an immobile unit type cannot take
+		// a step at all, and neither can an army whose lead member's type is
+		// immobile. The test reads the unit type's ability 0xA at 0x5b902c, the
+		// lead member's type's at 0x5b9048 and the unit's own type alone at
+		// 0x5b9070 when there is no lead member; every hit returns 1 (refused) from
+		// 0x5b9051 before the destination is even resolved, so it precedes the
+		// zone-of-control call at 0x5b9434 and an immobile unit never pays a
+		// zone-of-control hit (11_movement.md §5 steps 1 and 5).
+		if (IsImmobile)
+			return false;
+
 		(int dx, int dy) = dir.ToCoordDiff();
 
 		Tile newLoc = EngineStorage.gameData.map.tileAt(dx + location.XCoordinate, dy + location.YCoordinate);
@@ -282,7 +300,13 @@ public partial class MapUnit {
 		}
 
 		facingDirection = dir;
-		float movementCost = TilePath.GetMovementCost(this.owner, location, dir, newLoc, this);
+		float? stepCost = StepCostForCharge(location, dir, newLoc);
+		if (stepCost is null) {
+			// The cost function called the step illegal and the legality predicate
+			// agreed: the step is refused, and the charge never happens (the
+			// original returns 1 from 0x5b9478, before the charge at 0x5b94b2).
+			return false;
+		}
 
 		// An amphibious assault is a land-classed unit stepping from water onto
 		// land. The original decides it from the two tiles' water flags, which it
@@ -324,7 +348,12 @@ public partial class MapUnit {
 		else
 			animate(MapUnit.AnimatedAction.RUN);
 
-		movementPoints.onUnitMove(movementCost);
+		// Step 8 of the original's step order: the charge is added to the spent
+		// field (0x5b94aa-0x5b94ba), and step 9's amphibious override then
+		// overwrites it. Both sit before the position write in the original and
+		// after it in the fork, which is why `stepCost` was computed above and is
+		// applied here.
+		movementPoints.onUnitMove(stepCost.Value);
 
 		// Step 9: the amphibious assault override. The original stores the charge
 		// first (0x5b94b2-0x5b94ba) and then overwrites the spent field with the
@@ -339,10 +368,50 @@ public partial class MapUnit {
 		// it survives the turn: OnBeginTurn resets the movement points to
 		// MaxMovementPoints and the spent field is gone (11_movement.md §5 step
 		// 9, §7).
+		//
+		// A step that took the step-6 whole-maximum charge ends here with the same
+		// outcome - no remainder either way - so the two rules cannot disagree:
+		// step 9 is a set, and it wins when both apply.
 		if (amphibiousAssault)
 			movementPoints.onConsumeAll();
 
 		return true;
+	}
+
+	// The step's cost stage: 11_movement.md §5 step 6 (the floors of step 7 are
+	// noted at the end of this comment).
+	//
+	// Trade_Net_get_movement_cost reports a step it considers illegal with the
+	// all-bits-set sentinel -1. The executor tests for it at 0x5b9467
+	// (`cmpl $-0x1, %eax`) and, when it sees it, consults
+	// Unit_can_move_to_adjacent_tile (0x5b9471): a refusal returns 1 from
+	// 0x5b9478 and the step never happens, while an allowed step falls through to
+	// Unit_get_max_move_points at 0x5b9480 and is charged the unit's WHOLE
+	// maximum movement. That is the rule the fork did not model.
+	//
+	// The sentinel is only reachable from the ordinary step in the cases listed
+	// on TilePath.IllegalStepCost; with the shipped mask the original's other -1
+	// sources are skipped, which is why the rule is an edge case rather than a
+	// common one.
+	//
+	// Returning null means "refused", the fork's shape of the executor's return 1.
+	// Step 7's two floors - a combat step costing at least one movement point,
+	// and the AI's zero-cost rail bump - are not applied here: the fork charges
+	// combat separately in Move (a flat point per fight, as the original's
+	// pre-cost jump does) and has no AI-issued flag, so neither floor is
+	// reachable from this method. The order that matters is preserved: this stage
+	// runs before the step-8 charge and before the step-9 amphibious override.
+	internal float? StepCostForCharge(Tile from, TileDirection dir, Tile to) {
+		float cost = TilePath.GetMovementCost(owner, from, dir, to, this);
+		if (cost != TilePath.IllegalStepCost)
+			return cost;
+
+		// The cost is illegal; the step is taken only if the legality predicate
+		// allows it, and then it costs the unit's whole maximum.
+		if (!CanEnter(to, from))
+			return null;
+
+		return MaxMovementPoints;
 	}
 
 	// The three conditions of the amphibious assault step-cost rule

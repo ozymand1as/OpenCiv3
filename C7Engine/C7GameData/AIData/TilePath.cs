@@ -46,8 +46,10 @@ namespace C7GameData {
 			movementPoints.reset(remainingMovementPoints);
 
 			foreach (Tile tile in path) {
-				// Subtract the cost of the next move.
+				// Subtract the cost of the next move. An illegal step means the path
+				// cannot be walked at all, the same answer an empty path gives.
 				float cost = GetMovementCost(player, from, from.DirectionTo(tile), tile);
+				if (cost == IllegalStepCost) { return -1; }
 				movementPoints.onUnitMove(cost);
 
 				// If we can't do any more moves, bump up the turn cost and reset
@@ -84,12 +86,41 @@ namespace C7GameData {
 		// Indicates no path was found to the requested destination.
 		public static TilePath NONE = new TilePath();
 
+		// The value Civ3's Trade_Net_get_movement_cost @ 0x57f360 returns for a
+		// step it considers illegal: every bit set, i.e. -1. The caller
+		// (Unit_move_to_adjacent_tile) tests for it at 0x5b9467, and when it sees
+		// it asks Unit_can_move_to_adjacent_tile and either refuses the step or
+		// charges the unit's whole maximum movement (11_movement.md §3, §5 step 6).
+		//
+		// The ordinary step reaches this value only from the function's first
+		// block: a destination outside the map, a direction index outside 1-8, or a
+		// pair of tiles that is not adjacent (0x57fe05, reached from 0x57f3ac and
+		// 0x57f3b8, from 0x57f407 and 0x57f40f, and from the adjacency test at
+		// 0x57f44a). The occupancy/territory/flag block that produces the
+		// function's other -1 returns is skipped whenever bit 31 of the flag
+		// bitmask is set (0x57f363 extracts it, 0x57f484 and 0x57faa2 test it), and
+		// the ordinary step's mask 0x80000080 (pushed at 0x5b9447) has it set, as
+		// does the path buffer pop's 0x80000000 (pushed at 0x5b335c).
+		public const float IllegalStepCost = -1f;
+
 		// A valid path of length 0
 		public static TilePath EmptyPath(Tile destination) {
 			return new TilePath(destination, new Queue<Tile>());
 		}
 
 		public static float GetMovementCost(Player player, Tile from, TileDirection dir, Tile newLocation, MapUnit unit = null) {
+			// A destination outside the map, or one that is not a neighbour of the
+			// source, is an illegal step: the original's cost function refuses it
+			// before looking at any terrain (11_movement.md §1.1 and §3). Its
+			// adjacency test is exactly `(xDist + yDist) / 2 == 1`, which is also
+			// what Tile.DistanceTo computes. The pathfinder only ever evaluates
+			// neighbouring tiles, so this cannot change a path's shape; it is the
+			// step executor that has to decide what an illegal cost means.
+			if (from == null || newLocation == null || from == Tile.NONE || newLocation == Tile.NONE)
+				return IllegalStepCost;
+			if (from.DistanceTo(newLocation) != 1)
+				return IllegalStepCost;
+
 			// If the player hasn't yet explored a tile, assume it's a generic tile
 			// and give back a generic cost, since we don't know yet what it is.
 			if (player.isHuman && !player.HasExploredTile(newLocation))
@@ -150,12 +181,24 @@ namespace C7GameData {
 			}
 
 			// Some unit types ignore the movement cost of particular terrains: the
-			// step costs one movement point instead of the terrain's MoveCost, but
-			// only when the road/railroad branch above did not already discount it
-			// (11_movement.md §3.6). This is what makes the Keshik's and the
-			// Chasqui Scout's hill and mountain steps cheap.
-			if (unit != null && unit.unitType.IgnoresMovementCostOf(newLocation.overlayTerrainType)) {
-				return 1f;
+			// step costs ONE WHOLE MOVEMENT POINT instead of the terrain's MoveCost,
+			// but only when the road/railroad branch above did not already discount
+			// it (11_movement.md §3.6). This is what makes the Keshik's and the
+			// Chasqui Scout's hill and mountain steps cheap - one point instead of
+			// the two or three the terrain itself charges.
+			//
+			// The original loads RULE.MovementAlongRoads into the cost register for
+			// this branch (0x58036f), the same register value the air branch loads at
+			// that address and the sea-into-a-city branch loads at 0x580336. It is
+			// NOT the raw 1 internal unit the road branch (0x580282) and the
+			// all-terrain-as-roads branch (0x5802a9, 0x5802e7) charge; an earlier
+			// reading of this rule as "1 internal unit = a third of a point" was
+			// wrong. Written in internal units over the scale so the branch reads the
+			// movement scale at runtime like its neighbours and a scenario with a
+			// different MovementAlongRoads still charges exactly one point.
+			if (unit != null && unit.IgnoresMovementCostOf(newLocation.overlayTerrainType)) {
+				int scale = MovementPointsScale;
+				return Rules.OneMovementPointInternalUnits(scale) / (float)scale;
 			}
 
 			return newLocation.MovementCost(); // terrain movement cost
