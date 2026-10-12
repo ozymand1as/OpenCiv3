@@ -392,36 +392,78 @@ namespace C7GameData {
 			return false;
 		}
 
-		// Which cell of Civ3's 4x4 flood plain vegetation sheet shows this tile's
-		// vegetation: the cell at column index % 4, row index / 4. The sheet
-		// identifies an edge by the quadrant it occupies on the tile, so bit 1 is
-		// the north-west edge, 2 the north-east, 4 the south-west and 8 the
-		// south-east. Any subset of the four edges can carry a river, and the
-		// vegetation for the chosen edges sits in the corresponding quadrants of
-		// the cell, so the bits combine by addition.
+		// The four river edges, with the bit Civ3's 4x4 river and flood plain
+		// sheets give each one.
+		private static readonly (TileDirection edge, int bit)[] riverSheetEdges = {
+			(TileDirection.NORTHWEST, 1),
+			(TileDirection.NORTHEAST, 2),
+			(TileDirection.SOUTHWEST, 4),
+			(TileDirection.SOUTHEAST, 8),
+		};
+
+		// Which cell of Civ3's 4x4 river sheet shows this tile's stretch of the
+		// river: the cell at column index % 4, row index / 4. The sheet holds one
+		// 128x64 cell per combination of the tile's four edges, and identifies an
+		// edge by the quadrant of the cell its artwork occupies, so bit 1 is the
+		// north-west edge, 2 the north-east, 4 the south-west and 8 the
+		// south-east, and the bits of the edges that carry a river combine by
+		// addition.
 		//
-		// The art fixes the direction of each bit: cell 1 (row 0, column 1) has
-		// its opaque pixels centred near (34, 23) of the 128x64 cell, the upper
-		// left quadrant, and cell 4 (row 1, column 0) near (34, 42), the lower
-		// left one. A river on the north-west edge therefore selects cell 1, not
-		// cell 4: the tile's own upper left corner, not the vertically mirrored
-		// lower left.
-		public int FloodPlainOverlayIndex() {
-			int index = 0;
-			if (HasRiverOnEdge(TileDirection.NORTHWEST)) {
-				index |= 1;
-			}
-			if (HasRiverOnEdge(TileDirection.NORTHEAST)) {
-				index |= 2;
-			}
-			if (HasRiverOnEdge(TileDirection.SOUTHWEST)) {
-				index |= 4;
-			}
-			if (HasRiverOnEdge(TileDirection.SOUTHEAST)) {
-				index |= 8;
+		// The art fixes the direction of each bit. Decoding mtnRivers.pcx and
+		// deltaRivers.pcx (512x256, 8bpp, a 4x4 grid of 128x64 cells) puts the
+		// opaque pixels of cell 1 against the cell's upper-left edge, cell 2
+		// against the upper-right, cell 4 the lower-left and cell 8 the
+		// lower-right, while cell 6's run of river goes from the lower-left edge
+		// midpoint through the cell centre to the upper-right one, and cell 12's
+		// from the lower-left midpoint to the lower-right one around the bottom
+		// corner. So the cell is the tile's own picture: a river on the north-west
+		// edge selects cell 1, not the vertically mirrored cell 4, and a tile the
+		// river crosses from its south-west edge to its north-east one selects cell
+		// 6, whose river runs the same way through the cell.
+		//
+		// An edge counts when both of the tiles that share it record the crossing.
+		// A river step writes the pair of bits of its diagonal on both of the
+		// tiles it passes (re/notes/civ3_map_generator_spec.md rule 2.9.19), so one
+		// of a tile's two bits can be the far end of a pair whose edge is on the
+		// other side of the tile - a river that ends here still carries the bit of
+		// the edge it does not cross. The neighbour's mark is what tells the two
+		// apart, and a frame built without it draws a river through a tile the
+		// river only reaches. A map that records every crossing on one side only
+		// has no edge recorded by both tiles, and then the records are taken as
+		// they stand, so that no river is lost.
+		public int RiverOverlayIndex() {
+			int shared = 0;
+			int recorded = 0;
+			foreach ((TileDirection edge, int bit) in riverSheetEdges) {
+				bool own = HasRiverCrossing(edge);
+				bool across = neighbors.TryGetValue(edge, out Tile neighbor) && neighbor != NONE &&
+					neighbor.HasRiverCrossing(edge.Reversed());
+
+				if (own && across) {
+					shared |= bit;
+				}
+				if (own || across) {
+					recorded |= bit;
+				}
 			}
 
-			return index;
+			return shared != 0 ? shared : recorded;
+		}
+
+		// Which cell of Civ3's 4x4 flood plain vegetation sheet shows this tile's
+		// vegetation. The vegetation sheet is indexed by the same four edges, in
+		// the same order, as the river sheet, and Civ3 draws the vegetation from
+		// the same call as the river segments, on the same cell. The two layers
+		// therefore have to select the same cell, or the vegetation for an edge
+		// lands across the tile from the water that edge carries.
+		//
+		// The vegetation art fixes the same bits as the river art does: decoding
+		// floodplains.pcx puts the centroid of cell 1 at (33.6, 22.5) of its
+		// 128x64 cell, the upper left quadrant, and cell 4 at (34.1, 41.6), the
+		// lower left one, so a river on the north-west edge is cell 1 and not the
+		// vertically mirrored cell 4.
+		public int FloodPlainOverlayIndex() {
+			return RiverOverlayIndex();
 		}
 
 		public bool IsLand() {

@@ -386,16 +386,10 @@ public partial class FloodPlainLayer : LooseLayer {
 		Rect2 spriteRectangle = new Rect2(column * floodPlainSpriteSize.X, row * floodPlainSpriteSize.Y, floodPlainSpriteSize);
 
 		// Civ3 draws the vegetation from the same call as the river segments,
-		// so it is anchored on the tile's own cell and has no offset of its own.
-		// The terrain layer's (0, -cellSize.Y) shift belongs to that layer alone;
-		// inheriting it would leave the vegetation half a cell from the water.
-		//
-		// This is the tile's cell origin, which is not the rectangle RiverLayer
-		// uses: RiverLayer centres on the four-tile junction east of the tile
-		// (riverCenterOffset = half a cell east), and whether its texture-index
-		// selection compensates for that is unresolved. The two layers therefore
-		// differ by that offset, and whether the vegetation lines up with the
-		// drawn water still needs a look at the running game.
+		// on the same cell, so it is anchored on the tile's own cell and has no
+		// offset of its own. The terrain layer's (0, -cellSize.Y) shift belongs to
+		// that layer alone; inheriting it would leave the vegetation half a cell
+		// from the water. RiverLayer anchors its cells on the same rectangle.
 		Rect2 screenTarget = new Rect2(tileCenter - (float)0.5 * floodPlainSpriteSize, floodPlainSpriteSize);
 		looseView.DrawTextureRectRegion(floodPlainTexture, screenTarget, spriteRectangle);
 	}
@@ -403,7 +397,6 @@ public partial class FloodPlainLayer : LooseLayer {
 
 public partial class RiverLayer : LooseLayer {
 	public static readonly Vector2 riverSize = new Vector2(128, 64);
-	public static readonly Vector2 riverCenterOffset = new Vector2(riverSize.X / 2, 0);
 	private ImageTexture narrowTexture;
 	private ImageTexture broadTexture;
 
@@ -416,72 +409,57 @@ public partial class RiverLayer : LooseLayer {
 	}
 
 	public override void drawObject(LooseView looseView, GameData gameData, Tile tile, Vector2 tileCenter) {
-		// The point where four terrain tiles meet and where we want to center our river texture.
-		// It is the easternmost point of the current tile.
-		Vector2 thePoint = tileCenter + riverCenterOffset;
-
-		// We draw the texture centered on the point by starting the draw from half of its width away  
-		Vector2 drawOffset = -0.5f * riverSize;
-
-		// The right river texture is calculated by evaluating the tiles around the point
-		Tile northOfPoint = tile.neighbors[TileDirection.NORTHEAST];
-		Tile eastOfPoint = tile.neighbors[TileDirection.EAST];
-		Tile southOfPoint = tile.neighbors[TileDirection.SOUTHEAST];
-		Tile westOfPoint = tile;
-
-		var (row, col, idx) = DeriveTextureIndex(northOfPoint, eastOfPoint, southOfPoint, westOfPoint);
-		if (row < 0 || col < 0 || idx < 0)
+		// The river sheet holds one 128x64 cell per combination of the tile's four
+		// river edges, and the original draws that cell on the tile's own cell:
+		// its inscribed diamond is the tile's diamond, so a river crossing one of
+		// the tile's edges meets the same edge of the neighbouring tile's cell.
+		// Centring the cell on the four-tile junction east of the tile instead -
+		// the shape this layer used to have - puts each segment half a cell across
+		// the run, so the drawn graphics end up across the river they belong to.
+		int index = tile.RiverOverlayIndex();
+		if (index == 0) {
+			// No edge of this tile carries a river, so there is nothing to draw.
 			return;
+		}
 
-		Rect2 riverRectangle = new Rect2(col * riverSize.X, row * riverSize.Y, riverSize);
-		Rect2 screenTarget = new Rect2(thePoint + drawOffset, riverSize);
+		// The sheet is cut four cells to a row, so a cell's row is its index / 4
+		// and its column index % 4.
+		int column = index % 4;
+		int row = index / 4;
+		Rect2 riverRectangle = new Rect2(column * riverSize.X, row * riverSize.Y, riverSize);
 
-		// Draw a river texture from one of the textures, depending on terrain.
-		// The placement calculation is the same for both river textures.
+		// The tile's own cell origin, which is where the original anchors the river
+		// and the same rectangle FloodPlainLayer draws its vegetation in, because
+		// Civ3 draws the two from one call.
+		Rect2 screenTarget = new Rect2(tileCenter - (float)0.5 * riverSize, riverSize);
 
-		if (idx is 1 or 2 or 4 or 8) {
-			// Narrow set has deltas at these indexes
-			if (HasWater(northOfPoint, eastOfPoint, southOfPoint, westOfPoint))
-				looseView.DrawTextureRectRegion(narrowTexture, screenTarget, riverRectangle);
-			else
-				looseView.DrawTextureRectRegion(broadTexture, screenTarget, riverRectangle);
+		// Both sheets hold the same sixteen pictures, one per combination of
+		// edges, but deltaRivers.pcx also paints a delta into the four
+		// single-edge cells. Which sheet the original picks for a tile is not
+		// established (re/specs/29_map_rendering.md section 7.3), so this keeps
+		// the fork's rule: a lone edge that reaches water is a river mouth and
+		// takes the delta sheet, any other lone edge the broad sheet, and a tile
+		// the river runs through the narrow sheet.
+		bool loneEdge = index is 1 or 2 or 4 or 8;
+		if (loneEdge && HasWaterNeighbour(tile)) {
+			looseView.DrawTextureRectRegion(narrowTexture, screenTarget, riverRectangle);
+		} else if (loneEdge) {
+			looseView.DrawTextureRectRegion(broadTexture, screenTarget, riverRectangle);
 		} else {
-			// TODO: When to draw from the broad texture? Is it semi-random? Is it based on elevation?
-
-			// Default: narrow rivers, less meandering
 			looseView.DrawTextureRectRegion(narrowTexture, screenTarget, riverRectangle);
 		}
 	}
 
-	private static (int, int, int) DeriveTextureIndex(Tile north, Tile east, Tile south, Tile west) {
-		var textureIndex = 0;
-
-		if (north.riverSouthwest || west.riverNortheast) {
-			textureIndex += 1;
-		}
-		if (east.riverNorthwest || north.riverSoutheast) {
-			textureIndex += 2;
-		}
-		if (west.riverSoutheast || south.riverNorthwest) {
-			textureIndex += 4;
-		}
-		if (south.riverNortheast || east.riverSouthwest) {
-			textureIndex += 8;
-		}
-
-		// Passes "The Point" only: an oasis
-		if (textureIndex == 0 && (north.riverSouth || east.riverWest || west.riverEast || south.riverNorth))
-			return (0, 0, 0);
-
-		if (textureIndex == 0)
-			return (-1, -1, -1);
-
-		// We will index into a 4x4 texture matrix
-		return (textureIndex / 4, textureIndex % 4, textureIndex);
+	// Whether one of the four tiles the river could run into is water, which is
+	// what makes a lone river edge a river mouth rather than a river that ends on
+	// land.
+	private static bool HasWaterNeighbour(Tile tile) {
+		return IsWater(tile, TileDirection.NORTHEAST) || IsWater(tile, TileDirection.SOUTHEAST) ||
+			IsWater(tile, TileDirection.SOUTHWEST) || IsWater(tile, TileDirection.NORTHWEST);
 	}
 
-	private bool HasWater(Tile north, Tile east, Tile south, Tile west) {
-		return north.IsWater() || east.IsWater() || south.IsWater() || west.IsWater();
+	private static bool IsWater(Tile tile, TileDirection dir) {
+		return tile.neighbors.TryGetValue(dir, out Tile neighbor) && neighbor != Tile.NONE && neighbor.IsWater();
 	}
 }
 

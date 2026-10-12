@@ -193,6 +193,46 @@ public class RiverGenerationTest : IClassFixture<SaveGameFixture> {
 		}
 	}
 
+	// The renderer draws one 128x64 river cell per tile, on the tile's own cell,
+	// so the two tiles that share a river edge have to select the cells that
+	// cross it: a tile that draws the edge meets the neighbour's cell at the same
+	// edge midpoint and the run is seamless. The bit each side uses is the
+	// mirrored one (the north-east edge of a tile is the south-west edge of the
+	// tile across it), and a tile whose only recorded edge is the far end of a
+	// step's pair draws nothing there, because no river crosses it.
+	[Fact]
+	public void BothTilesOfAGeneratedRiverEdgeDrawTheirSideOfIt() {
+		GameMap m = MapGenerator.GenerateMap(MakeWorldCharacteristics());
+
+		(TileDirection dir, int bit, int mirroredBit)[] edges = {
+			(TileDirection.NORTHWEST, 1, 8),
+			(TileDirection.NORTHEAST, 2, 4),
+			(TileDirection.SOUTHWEST, 4, 2),
+			(TileDirection.SOUTHEAST, 8, 1),
+		};
+
+		int riverTiles = 0;
+		foreach (Tile t in m.tiles.Where(t => t.BordersRiver())) {
+			++riverTiles;
+			int index = t.RiverOverlayIndex();
+			Assert.True(index != 0, $"({t.XCoordinate},{t.YCoordinate}) carries a river but draws no cell");
+
+			foreach ((TileDirection dir, int bit, int mirroredBit) in edges) {
+				if ((index & bit) == 0) {
+					continue;
+				}
+
+				Tile neighbor = t.neighbors[dir];
+				Assert.True(neighbor != Tile.NONE, $"({t.XCoordinate},{t.YCoordinate}) draws a river across an edge it has no neighbour on");
+				Assert.True((neighbor.RiverOverlayIndex() & mirroredBit) != 0,
+					$"({t.XCoordinate},{t.YCoordinate}) draws a river across its {dir} edge, " +
+					$"but ({neighbor.XCoordinate},{neighbor.YCoordinate}) does not draw the other side of it");
+			}
+		}
+
+		Assert.True(riverTiles > 0, "the fixture map should have rivers");
+	}
+
 	// Rule 2.9.17's divisor, read at `0x5f015c` (the counter-clockwise turn) and
 	// `0x5f01e7` (the clockwise one). The lateral counter falls with every
 	// counter-clockwise turn and rises with every clockwise one, and a sideways
