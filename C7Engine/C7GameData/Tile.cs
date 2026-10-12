@@ -412,14 +412,23 @@ namespace C7GameData {
 		// The art fixes the direction of each bit. Decoding mtnRivers.pcx and
 		// deltaRivers.pcx (512x256, 8bpp, a 4x4 grid of 128x64 cells) puts the
 		// opaque pixels of cell 1 against the cell's upper-left edge, cell 2
-		// against the upper-right, cell 4 the lower-left and cell 8 the
-		// lower-right, while cell 6's run of river goes from the lower-left edge
+		// against the upper-right, and cell 6's run of river goes from the lower-left edge
 		// midpoint through the cell centre to the upper-right one, and cell 12's
 		// from the lower-left midpoint to the lower-right one around the bottom
 		// corner. So the cell is the tile's own picture: a river on the north-west
 		// edge selects cell 1, not the vertically mirrored cell 4, and a tile the
 		// river crosses from its south-west edge to its north-east one selects cell
 		// 6, whose river runs the same way through the cell.
+		//
+		// The two sheets are NOT identical, and cells 4 and 8 are where they
+		// differ. In mtnRivers.pcx, cell 4 reaches TWO edges - the north-west and
+		// the south-west - and cell 8 reaches the north-east and the south-east,
+		// whereas the delta sheet's versions of those cells hug a single edge
+		// each. So a tile whose river ENDS here (mask 4 or 8) draws an extra arm
+		// up the north-west or north-east edge in the mountain sheet. That is not
+		// a frame-selection error: the original indexes its sprite as
+		// `2 * mask + sheet`, so it picks exactly these cells, and the extra arm
+		// is what its own art does.
 		//
 		// An edge counts when both of the tiles that share it record the crossing.
 		// A river step writes the pair of bits of its diagonal on both of the
